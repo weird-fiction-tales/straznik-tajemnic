@@ -59,6 +59,7 @@ graph TD
     beta_feedback_modal["Zgłoś błąd / uwagę / Report Issue / Feedback"]
     retro_portrait_gallery_modal["Kolekcja rycin noir z lat 20. / 1920s Noir Engravings Collection"]
     game_over_card["Kres postaci i diegetyczny epilog (d100 Weird Fiction) / Investigator end and diegetic epilogue (d100 Weird Fiction)"]
+    audio_handout["Handout audio / Audio handout"]
 
     welcome -->|Polski / Polish| home
     welcome -->|English / English| home
@@ -117,6 +118,8 @@ graph TD
     game -->|Rzut na umiejętność / Roll skill test| roll_test_modal
     game -->|Ponów zapis kroniki po błędzie / Retry chronicle save after error| game
     game -->|Oś Pościgu w nagłówku czatu / Chase header tracker| chase_card
+    game -->|Odkryj nagranie po zbadaniu nośnika / Discover recording after examining its carrier| audio_handout
+    audio_handout -->|Odtwórz lub wstrzymaj nagranie / Play or pause recording| audio_handout
 ```
 
 ## Routy
@@ -196,6 +199,8 @@ graph TD
 | Aktywna sesja | Rzut na umiejętność / Roll skill test | Tacka testu umiejętności d100 Weird Fiction | `src/components/dialogs/RollTestModal.tsx` |
 | Aktywna sesja | Ponów zapis kroniki po błędzie / Retry chronicle save after error | Aktywna sesja | `src/components/chat/chat-window/components/message-card.tsx` |
 | Aktywna sesja | Oś Pościgu w nagłówku czatu / Chase header tracker | Pościg narracyjny i tor przeszkód w czacie (Fiction First d100 Weird Fiction) | `src/components/chat/chat-window/components/chase-header-tracker.tsx` |
+| Aktywna sesja | Odkryj nagranie po zbadaniu nośnika / Discover recording after examining its carrier | Handout audio | `src/components/chat/narrative/render-handout.tsx` |
+| Handout audio | Odtwórz lub wstrzymaj nagranie / Play or pause recording | Handout audio | `src/components/ui/audio-reel-player.tsx` |
 
 ## Zasady aktualizacji
 

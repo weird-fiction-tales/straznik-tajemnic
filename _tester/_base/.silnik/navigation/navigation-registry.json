@@ -448,6 +448,15 @@
         "pl": "Kres postaci i diegetyczny epilog (d100 Weird Fiction)",
         "en": "Investigator end and diegetic epilogue (d100 Weird Fiction)"
       }
+    },
+    {
+      "id": "audio-handout",
+      "kind": "card",
+      "label": {
+        "pl": "Handout audio",
+        "en": "Audio handout"
+      },
+      "e2e": true
     }
   ],
   "actions": [
@@ -963,6 +972,24 @@
         "en": "Chase header tracker"
       },
       "component": "src/components/chat/chat-window/components/chase-header-tracker.tsx"
+    },
+    {
+      "source": "game",
+      "target": "audio-handout",
+      "label": {
+        "pl": "Odkryj nagranie po zbadaniu nośnika",
+        "en": "Discover recording after examining its carrier"
+      },
+      "component": "src/components/chat/narrative/render-handout.tsx"
+    },
+    {
+      "source": "audio-handout",
+      "target": "audio-handout",
+      "label": {
+        "pl": "Odtwórz lub wstrzymaj nagranie",
+        "en": "Play or pause recording"
+      },
+      "component": "src/components/ui/audio-reel-player.tsx"
     }
   ],
   "lastUpdated": "2026-10-09T19:20:00.000Z"
