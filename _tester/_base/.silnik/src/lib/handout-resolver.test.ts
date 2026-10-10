@@ -5,7 +5,7 @@
  */
 
 import { resolveHandoutBySlug } from './handout-resolver';
-import { getQuickSetupAdventures, type AdventureHandout, type AdventureContext } from './adventures-data';
+import { getQuickSetupAdventures, type AdventureContext } from './adventures-data';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 

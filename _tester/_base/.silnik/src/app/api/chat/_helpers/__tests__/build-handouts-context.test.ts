@@ -1,4 +1,4 @@
-import { getQuickSetupAdventures } from '@/lib/adventures-data';
+import { getAdventureById, getQuickSetupAdventures } from '@/lib/adventures-data';
 import { extractLatestTagLocation } from '@/lib/parsers/event-parser';
 import {
   buildHandoutsContext,
@@ -363,7 +363,6 @@ describe('audio node scoping #665', () => {
 });
 
 it('discovers audio after travel using the exact graph node name, not the stale starting node', () => {
- const { getAdventureById } = require('@/lib/adventures-data');
  const adventure = getAdventureById('cien-nad-prabutami');
  const tape = adventure.handouts.find((h: AdventureHandout) => h.audioUrl);
  const node = adventure.graph.nodes.find((n: { id: string }) => n.id === tape.nodeId);
