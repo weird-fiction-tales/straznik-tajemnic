@@ -82,7 +82,7 @@ export interface PresetModelInfo {
  */
 export const PRESET_MODELS: Record<PresetKey, PresetModelInfo> = {
   low: { chatModel: 'gemini-flash-lite-latest', ttsVoice: null },
-  mid: { chatModel: 'gemini-flash-latest', ttsVoice: 'Charon' },
+  mid: { chatModel: 'gemini-flash-latest', ttsVoice: null },
   high: { chatModel: 'gemini-3.8-flash', ttsVoice: 'Algenib' },
   ultra: { chatModel: 'gemini-3.1-pro-preview', ttsVoice: 'Gacrux' },
 };
