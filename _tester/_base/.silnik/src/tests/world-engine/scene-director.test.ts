@@ -1,3 +1,4 @@
+import { getNarrativeTurnCadence } from '@/lib/narrative-engine/scene-director';
 import {
   determineSceneState,
   getPacingMoodSuggestion,
@@ -261,4 +262,79 @@ describe('Dynamiczny Reżyser Pacingu i Selektor Technik (Issue #536)', () => {
       expect(avgMs).toBeLessThan(1.0); // Wymóg architektoniczny: < 1 ms (faktycznie < 0.05 ms)
     });
   });
+});
+
+describe('Issue #761: opening cadence', () => {
+  it.each([0, 1, 2, 3, 4, 5])('keeps turn %i in gear 0', (turnIndex) => {
+    expect(
+      getCadenceForSceneState('investigation', {
+        turnIndex,
+        playerMessage: 'Rozglądam się.',
+      })
+    ).toBe(0);
+  });
+  it('releases the opening at turn 6', () => {
+    expect(getCadenceForSceneState('investigation', { turnIndex: 6 })).toBe(2);
+  });
+  it.each([
+    'Strzelam do napastnika.',
+    'Atakuję strażnika.',
+    'Wyważam drzwi.',
+    'I shoot the attacker.',
+    'I kick down the door.',
+    'Strzelam do niego, nie czekam.',
+    'I shoot him, I do not wait.',
+  ])('interrupts the opening for %s', (playerMessage) => {
+    expect(
+      getCadenceForSceneState('action', { turnIndex: 0, playerMessage })
+    ).toBe(3);
+  });
+  it.each([
+    'Nie strzelam.',
+    'Pytam, czy on strzelał.',
+    'I do not shoot.',
+    'I run to the library.',
+  ])('does not mistake %s for aggression', (playerMessage) => {
+    expect(
+      getCadenceForSceneState('investigation', { turnIndex: 0, playerMessage })
+    ).toBe(0);
+  });
+  it('does not restart the opening after player aggression', () => {
+    expect(
+      getCadenceForSceneState('investigation', {
+        turnIndex: 2,
+        ordinaryWorldInterrupted: true,
+      })
+    ).toBe(2);
+  });
+});
+
+describe('Issue #761: request history boundaries', () => {
+  it('does not restart gear 0 on a truncated response continuation', () => {
+    expect(
+      getNarrativeTurnCadence('action', 'Continue the previous response', [
+        {
+          role: 'assistant',
+          content: 'The fight continues.',
+          continuationRequested: true,
+        },
+      ])
+    ).toBeUndefined();
+  });
+  it('keeps player aggression effective on subsequent ordinary requests', () => {
+    expect(
+      getNarrativeTurnCadence('investigation', 'Badam biurko.', [
+        { role: 'user', content: 'Strzelam do strażnika.' },
+        { role: 'assistant', content: 'Strażnik pada.' },
+      ])
+    ).toBe(2);
+  });
+});
+
+
+it('does not disable normal cadence after a historical continuation', () => {
+  expect(getNarrativeTurnCadence('action', 'Strzelam do napastnika.', [
+    { role: 'assistant', content: 'Earlier response.', continuationRequested: true },
+    { role: 'user', content: 'Strzelam do napastnika.' },
+  ])).toBe(3);
 });

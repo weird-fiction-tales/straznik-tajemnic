@@ -1,3 +1,6 @@
+import { buildNarrativeClueGate } from '@/lib/journal/apply-journal-tags';
+import { getNarrativeTurnCadence } from '@/lib/narrative-engine/scene-director';
+import { getOrdinaryWorldDirective } from '@/lib/pacing-controller';
 import { NextRequest, NextResponse } from 'next/server';
 import { loadAISettings, getGameMasterPrompt } from '@/lib/ai-settings';
 import { DEFAULT_GEMINI_MODEL } from '@/lib/ai-providers/constants';
@@ -585,6 +588,18 @@ export async function runChatPipeline({
     isNewMacroLocation,
   });
 
+  const narrativeCadence = getNarrativeTurnCadence(
+    dispatcherDecision.sceneState ?? 'investigation',
+    message,
+    messages ?? []
+  );
+  if (
+    dispatcherDecision.sceneTechniqueSelection &&
+    narrativeCadence !== undefined
+  ) {
+    dispatcherDecision.sceneTechniqueSelection.cadenceGear = narrativeCadence;
+  }
+
   // === R3 (latencja): trzy niezalezne galezi sieciowe ROWNOLEGLE ===
   // Cache promptu (OPT-26) NIE zalezy od sessionId; lancuch userId->sessionId->RAG
   // (OPT-09) NIE zalezy od cache. Immersja (Etap 3) NIE zalezy od zadnego z powyzszych.
@@ -891,6 +906,24 @@ export async function runChatPipeline({
       ? `\n## OUTPUT LANGUAGE: ENGLISH\nWrite every player-visible sentence, question, journal title, journal body, category and tag content in English only. Do not use Polish. Use only these canonical English structural tags: [JOURNAL:type:title]body[/JOURNAL] and [LOCATION: name: atmosphere]. Use English journal types such as clue, discovery, note, location, combat and item. End an opening scene with [What do you do?].`
       : `\n## JĘZYK WYJŚCIA: POLSKI\nPisz wszystkie zdania widoczne dla gracza, pytania, tytuły i treści dziennika wyłącznie po polsku. Używaj tagów [DZIENNIK:typ:tytuł]treść[/DZIENNIK] oraz [LOKACJA: nazwa: atmosfera]. Kończ scenę otwierającą znacznikiem [Co robisz?].`
   );
+
+  // Dynamic state stays outside cached system instructions. These guards outrank escalation directives.
+  const narrativeCharacter = character ?? characters?.[0];
+  if (narrativeCharacter) {
+    const participantIds = hotSeatConfig?.enabled
+      ? (hotSeatConfig.players?.map((player) => player.characterId) ?? [])
+      : [narrativeCharacter.id];
+    const narrativeParty = (characters ?? []).filter(
+      (member) =>
+        member.id === narrativeCharacter.id ||
+        participantIds.includes(member.id)
+    );
+    additionalContext.push(
+      buildNarrativeClueGate(narrativeCharacter, locale, narrativeParty)
+    );
+  }
+  if (narrativeCadence === 0)
+    additionalContext.push(getOrdinaryWorldDirective(locale));
 
   // === PDF STRATEGY (OPT-01) === - IND-183 micro 4/5
   const { fileAttachments } = buildPdfStrategy({
