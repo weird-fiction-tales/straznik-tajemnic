@@ -15,6 +15,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execFileSync } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -151,7 +152,53 @@ export const PREDEFINED_HANDOUTS = [
   }
 ];
 
+export function synchronizeHandoutAudio() {
+  const mirror = path.join(ROOT_DIR, 'public/audio/handouts');
+  let count = 0;
+  function visit(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const source = path.join(dir, entry.name);
+      if (entry.isDirectory()) { visit(source); continue; }
+      if (!entry.name.endsWith('.mp3')) continue;
+      const info = JSON.parse(execFileSync('ffprobe', [
+        '-v', 'error', '-select_streams', 'a:0', '-show_entries',
+        'stream=codec_name,bit_rate:format=duration', '-of', 'json', source,
+      ], { encoding: 'utf8' }));
+      const stream = info.streams?.[0];
+      if (stream?.codec_name !== 'mp3' || !(Number(info.format?.duration) > 0)) {
+        throw new Error(`Invalid MP3: ${path.relative(OUTPUT_DIR, source)}`);
+      }
+      const bitrate = Number(stream.bit_rate);
+      if (!Number.isFinite(bitrate) || bitrate < 64000 || bitrate > 96000) {
+        const temporary = `${source}.normalized.mp3`;
+        try {
+          execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', source,
+            '-codec:a', 'libmp3lame', '-b:a', '96k', temporary]);
+          fs.renameSync(temporary, source);
+        } finally {
+          if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+        }
+      }
+      if (fs.statSync(source).size > 1500000) {
+        throw new Error(`Recording exceeds 1.5 MB: ${path.relative(OUTPUT_DIR, source)}`);
+      }
+      // Decode the whole file, not only its header.
+      execFileSync('ffmpeg', ['-v', 'error', '-i', source, '-f', 'null', '-']);
+      const target = path.join(mirror, path.relative(OUTPUT_DIR, source));
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(source, target);
+      count += 1;
+    }
+  }
+  visit(OUTPUT_DIR);
+  console.log(`Validated and synchronized ${count} MP3 recordings (64-96 kbps, <=1.5 MB).`);
+}
+
 async function main() {
+  if (process.argv.includes('--sync-only')) {
+    synchronizeHandoutAudio();
+    return;
+  }
   const isDryRun = process.argv.includes('--dry-run');
   const isFallback = process.argv.includes('--generate-fallbacks');
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -247,7 +294,7 @@ async function main() {
           '-i', tempAiff,
           '-af', 'highpass=f=200,lowpass=f=3200,volume=1.3',
           '-codec:a', 'libmp3lame',
-          '-b:a', '128k',
+          '-b:a', '96k',
           targetFile,
         ], { stdio: 'ignore' });
         
@@ -264,5 +311,7 @@ async function main() {
   console.log('🎉 Generowanie zakończone.');
 }
 
-main().catch(console.error);
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+}
 

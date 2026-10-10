@@ -5,7 +5,9 @@
  */
 
 import { resolveHandoutBySlug } from './handout-resolver';
-import type { AdventureHandout, AdventureContext } from './adventures-data';
+import { getQuickSetupAdventures, type AdventureHandout, type AdventureContext } from './adventures-data';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 describe('resolveHandoutBySlug (Issue #649)', () => {
   const mockContext: AdventureContext = {
@@ -97,4 +99,60 @@ describe('resolveHandoutBySlug (Issue #649)', () => {
     expect(resolveHandoutBySlug(null as unknown as string, mockContext)).toBeNull();
     expect(resolveHandoutBySlug(undefined as unknown as string, mockContext)).toBeNull();
   });
+});
+
+
+describe('audio handouts #665', () => {
+  it.each([
+    ['audio-sb-wiretap-elblag', 'reel_to_reel'],
+    ['audio-broken-brakes-log', 'cassette'],
+    ['audio-stilon-c60-interview', 'cassette'],
+    ['audio-vhs-broadcast-anomaly', 'radio'],
+  ])('resolves both languages and the carrier for %s', (slug, reelType) => {
+    const handout = resolveHandoutBySlug(slug);
+    expect(handout?.audioUrlPl).toMatch(/\.mp3$/);
+    expect(handout?.audioUrlEn).toMatch(/-en\.mp3$/);
+    expect(handout?.reelType).toBe(reelType);
+  });
+});
+
+ it('does not borrow an audio recording from another active adventure', () => {
+   expect(resolveHandoutBySlug('audio-sb-wiretap-elblag', { id: 'other', handouts: [] } as unknown as AdventureContext)).toBeNull();
+ });
+
+it.each([
+ ['audio-edison-wax-cylinder', 'gramophone'],
+ ['audio-crowe-interrogation-disc', 'gramophone'],
+ ['audio-gillespie-1977-wiretap', 'cassette'],
+ ['audio-voicemail-in-a-field', 'radio'],
+])('resolves both languages for English Quick Setup %s', (slug, reelType) => {
+ const handout = resolveHandoutBySlug(slug);
+ expect(handout?.audioUrlPl).toMatch(/-pl\.mp3$/);
+ expect(handout?.audioUrlEn).toBe(handout?.audioUrl);
+ expect(handout?.reelType).toBe(reelType);
+});
+
+it('restores Starter evidence from its own abbreviated context', () => {
+ expect(resolveHandoutBySlug('clue-01-knott-keys', { id: 'nawiedzony-dom' } as AdventureContext)?.slug).toBe('clue-01-knott-keys');
+});
+
+
+it.each(['pl', 'en'])('ships both language assets for every %s Quick Setup in both public roots', (locale) => {
+  for (const adventure of getQuickSetupAdventures(locale)) {
+    const recordings = adventure.handouts?.filter(handout => handout.audioUrl) || [];
+    expect(recordings.length).toBeGreaterThan(0);
+    for (const recording of recordings) {
+      const handout = resolveHandoutBySlug(recording.slug, adventure);
+      expect(handout?.nodeId).toBe(recording.nodeId);
+      expect(adventure.graph?.nodes?.some(node => node.id === handout?.nodeId)).toBe(true);
+      for (const url of [handout?.audioUrlPl, handout?.audioUrlEn]) {
+        expect(url).toMatch(/^\/audio\/handouts\/.+\.mp3$/);
+        const runtime = readFileSync(resolve(process.cwd(), `public${url}`));
+        const mirror = readFileSync(resolve(process.cwd(), `../../../public${url}`));
+        expect(runtime.length).toBeGreaterThan(0);
+        expect(runtime.length).toBeLessThanOrEqual(1500000);
+        expect(runtime.equals(mirror)).toBe(true);
+      }
+    }
+  }
 });

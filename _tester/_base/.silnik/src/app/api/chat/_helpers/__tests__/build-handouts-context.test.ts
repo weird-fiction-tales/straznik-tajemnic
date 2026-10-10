@@ -1,3 +1,5 @@
+import { getQuickSetupAdventures } from '@/lib/adventures-data';
+import { extractLatestTagLocation } from '@/lib/parsers/event-parser';
 import {
   buildHandoutsContext,
   type BuildHandoutsContextOptions,
@@ -338,4 +340,53 @@ describe('buildHandoutsContext (Milestone M1: Scoping & Deterministic Serving)',
       expect(result).toContain('ZASADA FAIL-FORWARD');
     });
   });
+});
+
+
+describe('audio node scoping #665', () => {
+  const handout: AdventureHandout = {
+    slug: 'audio-sb-wiretap-elblag', title: 'Tape', image: '',
+    audioUrl: '/audio/handouts/cien-nad-prabutami/tasma-sb-elblag.mp3',
+    nodeId: 'node-msw-warszawa',
+  };
+  it.each([undefined, {}, { activeNodeId: 'node-msw' },
+    { currentLocation: 'node-msw-warszawa' },
+    { activeNodeId: 'node-msw-warszawa-annex' }])(
+    'does not offer audio without an exact active node: %j', (options) => {
+      expect(buildHandoutsContext([handout], [], options)).not.toContain('[HANDOUT:audio-sb-wiretap-elblag]');
+    });
+  it('offers the tape at its exact node only after examining the carrier', () => {
+    const context = buildHandoutsContext([handout], [], { activeNodeId: handout.nodeId });
+    expect(context).toContain('[HANDOUT:audio-sb-wiretap-elblag]');
+    expect(context).toContain('nośnik');
+  });
+});
+
+it('discovers audio after travel using the exact graph node name, not the stale starting node', () => {
+ const { getAdventureById } = require('@/lib/adventures-data');
+ const adventure = getAdventureById('cien-nad-prabutami');
+ const tape = adventure.handouts.find((h: AdventureHandout) => h.audioUrl);
+ const node = adventure.graph.nodes.find((n: { id: string }) => n.id === tape.nodeId);
+ expect(buildHandoutsContext([tape], [], {
+   adventureId: adventure.id, activeNodeId: 'node-warszawa-redakcja', currentLocation: node.name,
+ })).toContain(`[HANDOUT:${tape.slug}]`);
+ expect(buildHandoutsContext([tape], [], {
+   adventureId: adventure.id, activeNodeId: tape.nodeId, currentLocation: 'Elsewhere',
+ })).not.toContain(`[HANDOUT:${tape.slug}]`);
+});
+
+
+it.each(['pl', 'en'])('discovers audio after the actual location parser in %s Quick Setup', locale => {
+ for (const adventure of getQuickSetupAdventures(locale)) {
+   for (const tape of adventure.handouts?.filter(handout => handout.audioUrl) || []) {
+     const options = { adventureId: adventure.id, activeNodeId: 'old-node', currentLocation: 'Elsewhere' };
+     const before = buildHandoutsContext([tape], [], options);
+     expect(before).not.toContain(`[HANDOUT:${tape.slug}]`);
+     const tag = before.match(/\[LOKACJA:[^\]]+\]/)?.[0];
+     expect(tag).toBeDefined();
+     const location = extractLatestTagLocation(tag || '');
+     expect(location).not.toBeNull();
+     expect(buildHandoutsContext([tape], [], { ...options, currentLocation: location?.name })).toContain(`[HANDOUT:${tape.slug}]`);
+   }
+ }
 });

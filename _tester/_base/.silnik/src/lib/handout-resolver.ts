@@ -110,7 +110,7 @@ function findInList(
  * 3. Wszechswiat autorskich przygod STREFA_11_ADVENTURES
  * 4. Wbudowany katalog BUILT_IN_ADVENTURES
  */
-export function resolveHandoutBySlug(
+function findHandoutBySlug(
   slug: string,
   adventureContext?: AnyAdventureContext | null
 ): AdventureHandout | null {
@@ -131,12 +131,17 @@ export function resolveHandoutBySlug(
 
   // 2. Sprawdz przygode dopasowana po ID z kontekstu
   if (adventureContext?.id) {
-    const adventure = getAdventureById(adventureContext.id);
+    const adventure = adventureContext.id === STARTER_HAUNTING_ADVENTURE.id
+      ? STARTER_HAUNTING_ADVENTURE
+      : getAdventureById(adventureContext.id);
     if (adventure?.handouts && adventure.handouts.length > 0) {
       const match = findInList(adventure.handouts, cleanSlug);
       if (match) return match;
     }
   }
+
+  // An active adventure cannot borrow evidence from a different scenario.
+  if (adventureContext) return null;
 
   // 3. Przeszukaj wszystkie przygody STREFA_11_ADVENTURES, AMERICAN_COLD_CASES_ADVENTURES oraz Starter
   for (const adv of [...STREFA_11_ADVENTURES, ...AMERICAN_COLD_CASES_ADVENTURES, STARTER_HAUNTING_ADVENTURE]) {
@@ -155,4 +160,35 @@ export function resolveHandoutBySlug(
   }
 
   return null;
+}
+
+
+/** Only recordings verified on disk have a language/carrier override. */
+const AUDIO_VARIANTS: Record<string, { language: 'pl' | 'en'; reelType: NonNullable<AdventureHandout['reelType']> }> = {
+  '/audio/handouts/cien-nad-prabutami/tasma-sb-elblag.mp3': { language: 'pl', reelType: 'reel_to_reel' },
+  '/audio/handouts/tajemnica-pendnika-lagiewki/proba-zderzeniowa-kowary.mp3': { language: 'pl', reelType: 'cassette' },
+  '/audio/handouts/tajemnica-dzieci-z-traszyna/wywiad-dziecko-1983.mp3': { language: 'pl', reelType: 'cassette' },
+  '/audio/handouts/przybysz-z-matriksa-glogow/sygnal-vhs-glogow.mp3': { language: 'pl', reelType: 'radio' },
+  '/audio/handouts/englewood-murder-castle-1893/edison-wax-cylinder-1893.mp3': { language: 'en', reelType: 'gramophone' },
+  '/audio/handouts/almer-coe-spectacles-1924/crowe-interrogation-1924.mp3': { language: 'en', reelType: 'gramophone' },
+  '/audio/handouts/circleville-letters-1983/gillespie-wiretap-1977.mp3': { language: 'en', reelType: 'cassette' },
+  '/audio/handouts/ovidhall-lake-anomaly-2005/voicemail-in-a-field-2005.mp3': { language: 'en', reelType: 'radio' },
+};
+
+export function resolveHandoutBySlug(
+  slug: string,
+  adventureContext?: AnyAdventureContext | null
+): AdventureHandout | null {
+  const handout = findHandoutBySlug(slug, adventureContext);
+  if (!handout) return null;
+  const baseUrl = handout.audioUrl;
+  const audio = baseUrl && AUDIO_VARIANTS[baseUrl];
+  if (!audio || !baseUrl) return handout;
+  const translated = baseUrl.replace(/\.mp3$/, audio.language === 'pl' ? '-en.mp3' : '-pl.mp3');
+  return {
+    ...handout,
+    audioUrlPl: handout.audioUrlPl || (audio.language === 'pl' ? handout.audioUrl : translated),
+    audioUrlEn: handout.audioUrlEn || (audio.language === 'en' ? handout.audioUrl : translated),
+    reelType: handout.reelType || audio.reelType,
+  };
 }

@@ -710,6 +710,7 @@ export async function runChatPipeline({
       adventureContext?.handouts,
       adventureContext?.puzzles,
       {
+        adventureId: adventureContext?.id,
         activeChapterId:
           requestedActiveChapterId ??
           adventureContext?.activeChapterId ??

@@ -7,9 +7,10 @@
  *
  * Pure function, bez side effects. Pusty string gdy przygoda nie ma handoutów ani zagadek.
  */
-import type { AdventureHandout, AdventurePuzzle } from '@/lib/adventures-data';
+import { getAdventureById, type AdventureHandout, type AdventurePuzzle } from '@/lib/adventures-data';
 
 export interface BuildHandoutsContextOptions {
+  adventureId?: string;
   activeChapterId?: string | number | null;
   activeLocationId?: string | null;
   activeNodeId?: string | null;
@@ -44,10 +45,39 @@ function matchesChapter(
   return false;
 }
 
+function nodeLocationNames(adventureId: string, nodeId: string): string[] {
+  const graph = getAdventureById(adventureId)?.graph;
+  const node = graph?.nodes?.find(entry => entry.id === nodeId);
+  if (!node) return [];
+  const location = graph?.locations.find(entry => entry.id === node.locationId);
+  // Parenthetical addresses are descriptions, not part of the <=45-character location tag.
+  const shortName = node.name.replace(/\s*\([^)]*\)/g, '').trim();
+  return [node.id, node.name, location?.id, location?.name,
+    shortName.length <= 45 ? shortName : undefined].filter((name): name is string => Boolean(name));
+}
+
 function matchesLocation(
   handout: AdventureHandout,
   options?: BuildHandoutsContextOptions
 ): boolean {
+  // Audio evidence requires the exact physical node; unknown nodes fail closed.
+  if (handout.audioUrl || handout.audioUrlPl || handout.audioUrlEn) {
+    const nodeId = normalizeString(handout.nodeId);
+    if (!nodeId) return false;
+    const currentLocation = normalizeString(options?.currentLocation);
+    if (currentLocation) {
+      const adventureId = options?.adventureId;
+      if (!adventureId) return false;
+      const nodes = getAdventureById(adventureId)?.graph?.nodes || [];
+      const matches = nodes.filter(node =>
+        nodeLocationNames(adventureId, node.id).some(name => normalizeString(name) === currentLocation)
+      );
+      // Never keep offering evidence from a stale starting node after travel.
+      return matches.length === 1 && normalizeString(matches[0].id) === nodeId;
+    }
+    return nodeId === normalizeString(options?.activeNodeId);
+  }
+
   // Handout bez ograniczeń lokacji/węzła jest globalny
   if (!handout.locationId && !handout.nodeId) return true;
 
@@ -108,6 +138,19 @@ export function buildHandoutsContext(
     return matchesChapter(h.chapterId, options?.activeChapterId);
   });
 
+  // The location parser accepts short labels. Keep the graph-to-tag mapping explicit
+  // so a natural scene transition can identify the exact physical audio node.
+  if (options?.adventureId) {
+    const names = new Set<string>();
+    for (const handout of playerHandouts) {
+      if (!(handout.audioUrl || handout.audioUrlPl || handout.audioUrlEn) || !handout.nodeId) continue;
+      const labels = nodeLocationNames(options.adventureId, handout.nodeId);
+      const shortLabel = labels.find(label => label !== handout.nodeId && label.length <= 45 && !/[:|,\[\]]/.test(label) && !label.startsWith('loc-'));
+      if (shortLabel) names.add(`- ${handout.nodeId}: [LOKACJA:${shortLabel}]`);
+    }
+    if (names.size) context += `\n## NAZWY LOKACJI W GRAFIE\nPo faktycznym dotarciu do wskazanego węzła użyj jego dokładnej krótkiej nazwy lokacji. To nie jest polecenie podróży ani wręczenia rekwizytu:\n${[...names].join('\n')}\n`;
+  }
+
   // 4. Sekcja DOSTĘPNE HANDOUTY (materiały do wręczenia graczom)
   if (scopedPlayerHandouts.length > 0) {
     const list = scopedPlayerHandouts
@@ -120,6 +163,7 @@ export function buildHandoutsContext(
       `- Wstaw handout TYLKO gdy postacie fizycznie go widzą/otrzymują w fikcji (znajdują mapę, dostają kopertę).\n` +
       `- Gdy gracze fizycznie odnajdują lub otrzymują dokument, wstaw dokładnie tag: [HANDOUT:<slug>] w osobnej linii po opisie sceny. Nie parafrazuj ani nie zmyślaj treści dokumentu w narracji.\n` +
       `- Silnik gry automatycznie wyświetli graczom oryginalny, autentyczny dokument (100% RAW) na podstawie sluga.\n` +
+      `- Nagranie audio wręczaj dopiero gdy postacie zbadają nośnik lub urządzenie w bieżącym węźle. Nie odtwarzaj go automatycznie ani nie zdradzaj treści przed odsłuchem.\n` +
       `- NIE wymyślaj własnych ścieżek ani handoutów spoza tej listy. Każdy pokaż maksymalnie raz, w naturalnym momencie.\n\n` +
       list + '\n'
     );
