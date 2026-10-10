@@ -34,7 +34,7 @@ graph TD
     character_sheet["Karta badacza (Dark Art Déco d100 Weird Fiction) / Investigator sheet (Dark Art Déco d100 Weird Fiction)"]
     equipment["Ekwipunek (Broń, Wyposażenie, Fabularne) / Equipment (Weapons, Gear, Story Items)"]
     equipment_detail["Szczegóły przedmiotu / Equipment detail"]
-    journal["Kronika przygód i sesji / Chronicle of adventures and sessions"]
+    journal["Czytnik kroniki przygód i sesji / Reader for adventure and session chronicle"]
     idea_roll_modal["Test Pomysłu d100 Weird Fiction (Idea Roll) / Idea Roll d100 Weird Fiction"]
     dice["Rzuty kośćmi / Dice rolls"]
     gm_tools["Narzędzia MG / GM tools"]
@@ -164,8 +164,8 @@ graph TD
 | Aktywna sesja | Karta postaci / Character sheet | Karta badacza (Dark Art Déco d100 Weird Fiction) | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Aktywna sesja | Ekwipunek / Equipment | Ekwipunek (Broń, Wyposażenie, Fabularne) | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Ekwipunek (Broń, Wyposażenie, Fabularne) | Szczegóły przedmiotu / Equipment details | Szczegóły przedmiotu | `src/components/ui/equipment-detail-dialog.tsx` |
-| Aktywna sesja | Dziennik / Journal | Kronika przygód i sesji | `src/components/sidebar/CthulhuSidebar.tsx` |
-| Kronika przygód i sesji | Zamknij dziennik / Close journal | Aktywna sesja | `src/components/ui/session-journal.tsx` |
+| Aktywna sesja | Dziennik / Journal | Czytnik kroniki przygód i sesji | `src/components/sidebar/CthulhuSidebar.tsx` |
+| Czytnik kroniki przygód i sesji | Zamknij dziennik / Close journal | Aktywna sesja | `src/components/ui/session-journal.tsx` |
 | Aktywna sesja | Rzuć kośćmi / Roll dice | Rzuty kośćmi | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Aktywna sesja | Narzędzia MG / GM tools | Narzędzia MG | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Aktywna sesja | Faza rozwoju (po sesji) / Development phase (after session) | Faza rozwoju | `src/components/sidebar/CthulhuSidebar.tsx` |
