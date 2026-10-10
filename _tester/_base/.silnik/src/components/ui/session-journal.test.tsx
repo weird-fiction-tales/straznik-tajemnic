@@ -81,6 +81,28 @@ describe('SessionJournal reader', () => {
   beforeEach(() => { HTMLElement.prototype.scrollIntoView = scroll; scroll.mockClear(); });
   afterEach(() => { delete process.env.NEXT_INTL_TEST_LOCALE; jest.restoreAllMocks(); });
 
+  it('ukrywa instrukcję obrazu ze starego opisu lokacji, zachowując fabułę', () => {
+    const data = character();
+    data.journal = [{ id: 'old-location', tags: [], type: 'location', title: 'Gabinet Katedry Etnografii UW', timestamp: new Date(), isBookmarked: false,
+      content: 'subjective first-person camera POV, dim room lit by single desk lamp, archival noir photography 1970s\n\nRedaktor Bielski przyniósł taśmę z Prabut.' }];
+    render(<SessionJournal character={data} />);
+    expect(screen.queryByText(/camera POV/)).toBeNull();
+    expect(screen.getByText('Redaktor Bielski przyniósł taśmę z Prabut.')).toBeVisible();
+  });
+
+  it('zachowuje relację o aparacie i fotografii oraz fabułę po promptcie w jednym akapicie', () => {
+    process.env.NEXT_INTL_TEST_LOCALE = 'en';
+    const data = character();
+    data.journal = [
+      { id: 'photo', tags: [], type: 'location', title: 'Office', timestamp: new Date(), isBookmarked: false, content: 'We found a camera and a photograph of the missing man.' },
+      { id: 'mixed', tags: [], type: 'location', title: 'Archive', timestamp: new Date(), isBookmarked: false, content: 'subjective first-person camera POV, archival noir photography 1970s. Redaktor Bielski przyniósł taśmę z Prabut.' },
+    ];
+    render(<SessionJournal character={data} />);
+    expect(screen.getByText('We found a camera and a photograph of the missing man.')).toBeVisible();
+    expect(screen.getByText('Redaktor Bielski przyniósł taśmę z Prabut.')).toBeVisible();
+    expect(screen.queryByText(/camera POV/)).toBeNull();
+  });
+
   it.each(['pl', 'en'])('renderuje ciągły zapis i źródło plotki w %s', (locale) => {
     process.env.NEXT_INTL_TEST_LOCALE = locale;
     render(<SessionJournal character={character([scene(2), scene(1)])} onClose={jest.fn()} />);
@@ -212,7 +234,7 @@ describe('SessionJournal reader', () => {
       scene(4, { chronicleChapter: { ...chapter, adventureId: 'docks', adventureTitle: 'Doki', sessionId: 's3', sessionNumber: 3 } }),
     ])} />);
     expect(screen.getAllByTestId('journal-entry')).toHaveLength(4);
-    expect(screen.getByRole('heading', { name: locale === 'pl' ? 'Wcześniejszy zapis' : 'Earlier record' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: locale === 'pl' ? 'Wcześniejsze wpisy' : 'Earlier entries' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Archiwum' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Doki' })).toBeInTheDocument();
     expect(screen.getAllByTestId('journal-session-header').map((header) => header.textContent)).toEqual(locale === 'pl' ? ['Sesja 1', 'Sesja 2', 'Sesja 3'] : ['Session 1', 'Session 2', 'Session 3']);

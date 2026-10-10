@@ -140,14 +140,17 @@ export function SessionJournal({
     (character.sceneCards ?? []).forEach(addScene);
     journal.forEach((entry) => {
       if (entry.sceneData || entry.type === 'act_report' || map.has(entry.id)) return;
-      if (!entry.content?.trim()) return;
+      const content = entry.type === 'location'
+        ? (entry.content ?? '').split(/(?<=[.!?])\s+|\n+/).filter((fragment) => !/^\s*(?:subjective first-person camera POV|first-person camera POV|archival noir photography|35mm film photograph|octane render|unreal engine render|cinematic lighting)\b/i.test(fragment)).join('\n\n').trim()
+        : entry.content?.trim();
+      if (!content) return;
       map.set(entry.id, {
         chapter: entry.chronicleChapter,
         id: entry.id, title: entry.title, inGameDate: entry.inGameDate,
         timestamp: entry.timestamp,
         location: entry.metadata?.locationName,
         people: entry.metadata?.npcName ? [entry.metadata.npcName] : [],
-        findings: [], content: entry.content, pending: false, legacy: true,
+        findings: [], content, pending: false, legacy: true,
       });
     });
     return Array.from(map.values()).sort((a, b) => {
@@ -209,16 +212,17 @@ export function SessionJournal({
   };
 
   return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-0 backdrop-blur-sm md:p-6">
     <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="journal-reader-title"
       data-testid="session-journal"
-      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#0c0b09] text-[#e8dfcf]">
-      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-brass/25 px-5 py-4 md:px-8 md:py-5">
+      className="flex h-full w-full flex-col overflow-hidden bg-[#f6f2e9] font-sans text-[#272b30] shadow-2xl md:h-[92vh] md:max-h-[1100px] md:max-w-[1360px] md:rounded-2xl">
+      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 bg-[#18212b] px-5 py-4 text-[#f8f6f0] md:px-7 md:py-5">
         <div className="min-w-0">
-          <p className="mb-2 font-special-elite text-[10px] uppercase tracking-[0.24em] text-brass">{t('readerEyebrow')}</p>
-          <h1 id="journal-reader-title" className="flex items-center gap-3 font-display text-xl md:text-2xl">
+          <p className="mb-2 font-sans text-xs font-medium tracking-wide text-[#c5ced6]">{t('readerEyebrow')}</p>
+          <h1 id="journal-reader-title" className="flex items-center gap-3 font-sans text-2xl font-semibold md:text-3xl">
             <BookOpen aria-hidden="true" className="h-5 w-5 shrink-0 text-brass" />{t('readerTitle')}
           </h1>
-          <p className="mt-2 font-serif text-sm text-[#bbb09d]">
+          <p className="mt-2 text-sm text-[#c5ced6]">
             {sharedJournal !== undefined && participantNames.length > 0
               ? t('readerParty', { names: participantNames.join(', ') })
               : t('readerInvestigator', { name: character.name })}
@@ -226,7 +230,7 @@ export function SessionJournal({
           </p>
         </div>
         {onClose && <button type="button" onClick={onClose} aria-label={t('closeAriaLabel')}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brass/30 text-brass hover:bg-brass/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 text-[#f8f6f0] hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">
           <X aria-hidden="true" className="h-5 w-5" />
         </button>}
       </header>
@@ -235,31 +239,31 @@ export function SessionJournal({
         <main className="flex flex-1 items-center justify-center overflow-auto p-8">
           <div className="max-w-lg text-center">
             <BookOpen aria-hidden="true" className="mx-auto mb-5 h-10 w-10 text-brass/60" />
-            <h2 className="font-display text-xl">{t('readerEmptyTitle')}</h2>
-            <p className="mt-4 font-serif leading-relaxed text-[#bbb09d]">{t('readerEmptyDescription')}</p>
+            <h2 className="text-xl font-semibold">{t('readerEmptyTitle')}</h2>
+            <p className="mt-4 text-lg leading-8 text-[#59616a]">{t('readerEmptyDescription')}</p>
             {character.activeScene?.location && <p className="mt-6 font-serif text-sm">{t('readerCurrentLocation', { location: character.activeScene.location })}</p>}
           </div>
         </main>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <nav aria-label={t('readerContents')} data-testid="journal-contents"
-            className="min-w-0 shrink-0 border-b border-brass/20 bg-[#11100d] md:w-64 md:overflow-y-auto md:border-b-0 md:border-r lg:w-72">
-            <h2 className="px-5 pt-4 font-special-elite text-xs uppercase tracking-[0.16em] text-brass">{t('readerContents')}</h2>
+            className="min-w-0 shrink-0 border-b border-[#d8d1c4] bg-[#eae5dc] md:w-64 md:overflow-y-auto md:border-b-0 md:border-r lg:w-72">
+            <h2 className="px-5 pt-5 text-xs font-semibold uppercase tracking-wider text-[#555c64]">{t('readerContents')}</h2>
             <ol className="flex gap-2 overflow-x-auto p-3 md:flex-col md:gap-1">
               {sections.map((section, sectionIndex) => (
                 <li key={`${section.key}-${sectionIndex}`} className="shrink-0 md:shrink">
-                  <p className="px-3 pt-3 font-serif text-sm text-brass">{section.chapter?.adventureTitle || (section.chapter ? t('readerAdventure') : t('readerEarlierEntry'))}</p>
-                  {section.chapter && <p className="px-3 pb-2 pt-1 text-xs text-[#bbb09d]">{t('readerSession', { number: section.chapter.sessionNumber })}</p>}
+                  <p className="px-3 pt-3 text-sm font-semibold text-[#424a53]">{section.chapter?.adventureTitle || (section.chapter ? t('readerAdventure') : t('readerEarlierEntry'))}</p>
+                  {section.chapter && <p className="px-3 pb-2 pt-1 text-sm text-[#555c64]">{t('readerSession', { number: section.chapter.sessionNumber })}</p>}
                   <ol className="flex md:flex-col">
               {section.entries.map((entry) => (
                 <li key={entry.id} className="shrink-0 md:shrink">
                   <button type="button" onClick={() => navigate(entry.id)}
                     aria-current={(selectedId ?? latestId) === entry.id ? 'location' : undefined}
-                    className={cn('w-full max-w-56 rounded-sm border border-transparent px-3 py-3 text-left hover:bg-brass/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass md:max-w-none',
-                      (selectedId ?? latestId) === entry.id && 'border-brass/30 bg-brass/10')}>
-                    <span className="block font-special-elite text-[10px] uppercase tracking-wider text-brass">{entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : t('readerEarlierEntry')}</span>
-                    <span className="mt-1 block truncate font-serif text-sm">{entry.title}</span>
-                    {entry.inGameDate && <span className="mt-1 block text-xs text-[#aaa08e]">{entry.inGameDate}</span>}
+                    className={cn('w-full max-w-56 rounded-lg border border-transparent px-3 py-3 text-left hover:bg-white/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass md:max-w-none',
+                      (selectedId ?? latestId) === entry.id && 'border-[#b9c5d0] bg-[#dbe3ea]')}>
+                    <span className="block text-xs font-medium text-[#555c64]">{entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : null}</span>
+                    <span className="mt-1 block whitespace-normal text-[15px] font-medium leading-6">{entry.title}</span>
+                    {entry.inGameDate && <span className="mt-1 block text-xs text-[#555c64]">{entry.inGameDate}</span>}
                   </button>
                 </li>
               ))}
@@ -271,46 +275,47 @@ export function SessionJournal({
 
           <main data-testid="journal-reader" aria-label={t('readerTitle')}
             className="min-h-0 min-w-0 flex-1 overflow-y-auto scroll-smooth">
-            <div className="mx-auto max-w-3xl px-5 py-8 md:px-10 md:py-12">
-              <p className="mb-10 border-l border-brass/40 pl-4 font-serif text-sm italic leading-relaxed text-[#bbb09d]">{t('readerIntroduction')}</p>
+            <div className="mx-auto max-w-[880px] px-5 py-6 md:px-10 md:py-8">
+              <p className="mb-8 text-[15px] leading-6 text-[#59616a]">{t('readerIntroduction')}</p>
               {sections.map((section, sectionIndex) => (
-                <section key={`${section.key}-${sectionIndex}`} data-testid="journal-chapter" className="mb-12">
+                <section key={`${section.key}-${sectionIndex}`} data-testid="journal-chapter" className="mb-8">
                   {(sectionIndex === 0 || section.chapter?.adventureId !== sections[sectionIndex - 1].chapter?.adventureId || section.chapter?.playthroughId !== sections[sectionIndex - 1].chapter?.playthroughId) &&
-                    <h2 className="mb-3 font-display text-2xl text-brass md:text-3xl">{section.chapter?.adventureTitle || (section.chapter ? t('readerAdventure') : t('readerEarlierEntry'))}</h2>}
-                  {section.chapter && <h3 data-testid="journal-session-header" className="mb-8 border-b border-brass/30 pb-4 font-special-elite text-sm uppercase tracking-wider text-brass">{t('readerSession', { number: section.chapter.sessionNumber })}</h3>}
+                    <h2 className="mb-3 text-xl font-semibold leading-snug text-[#343b43] md:text-2xl">{section.chapter?.adventureTitle || (section.chapter ? t('readerAdventure') : t('readerEarlierEntry'))}</h2>}
+                  {section.chapter && <h3 data-testid="journal-session-header" className="mb-6 border-b border-[#d8d1c4] pb-3 text-base font-semibold text-[#555c64]">{t('readerSession', { number: section.chapter.sessionNumber })}</h3>}
               {section.entries.map((entry) => (
                 <article key={entry.id} tabIndex={-1} data-testid="journal-entry"
                   ref={(element) => { if (element) articleRefs.current.set(entry.id, element); else articleRefs.current.delete(entry.id); }}
                   aria-labelledby={`journal-entry-${encodeURIComponent(entry.id)}`}
-                  className="mb-10 scroll-mt-8 border-b border-brass/20 pb-10 outline-none last:mb-0 focus-visible:ring-1 focus-visible:ring-brass/40">
-                  <p className="mb-3 font-special-elite text-xs uppercase tracking-[0.16em] text-brass">
-                    {entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : t('readerEarlierEntry')}
-                    {entry.inGameDate && <span className="ml-3 normal-case tracking-normal text-[#bbb09d]">{entry.inGameDate}</span>}
-                  </p>
-                  <h4 id={`journal-entry-${encodeURIComponent(entry.id)}`} className="font-display text-2xl leading-snug md:text-3xl">{entry.title}</h4>
-                  {entry.location && entry.location !== entry.title && <p className="mt-2 font-serif text-sm text-[#bbb09d]">{entry.location}</p>}
-                  {entry.people.length > 0 && <p className="mt-3 font-serif text-sm leading-relaxed text-[#bbb09d]">
-                    <span className="text-brass">{t('readerPeople')}: </span>{entry.people.join(', ')}
+                  className="mb-7 scroll-mt-6 border-b border-[#d8d1c4] pb-7 outline-none last:mb-0 focus-visible:ring-1 focus-visible:ring-brass/40">
+                  {(entry.sceneNumber !== undefined || entry.inGameDate) && <p className="mb-2 text-sm font-medium text-[#59616a]">
+                    {entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : null}
+                    {entry.inGameDate && <span className="ml-3 normal-case tracking-normal text-[#59616a]">{entry.inGameDate}</span>}
                   </p>}
-                  {entry.pending ? <p className="mt-6 font-serif italic leading-relaxed text-[#bbb09d]">{t('chroniclePending')}</p>
-                    : <div data-testid={entry.legacy ? 'journal-legacy-record' : 'scene-chronicle-summary'} className="mt-6 whitespace-pre-line font-serif text-base leading-8 text-[#e8dfcf]">
+                  <h4 id={`journal-entry-${encodeURIComponent(entry.id)}`} className="text-xl font-semibold leading-snug md:text-2xl">{entry.title}</h4>
+                  {entry.location && entry.location !== entry.title && <p className="mt-2 text-base text-[#59616a]">{entry.location}</p>}
+                  {entry.people.length > 0 && <p className="mt-3 text-base leading-7 text-[#59616a]">
+                    <span className="font-medium text-[#424a53]">{t('readerPeople')}: </span>{entry.people.join(', ')}
+                  </p>}
+                  {entry.pending ? <p className="mt-4 text-lg italic leading-8 text-[#59616a]">{t('chroniclePending')}</p>
+                    : <div data-testid={entry.legacy ? 'journal-legacy-record' : 'scene-chronicle-summary'} className="mt-4 whitespace-pre-line text-lg leading-8 text-[#272b30] md:text-xl md:leading-9">
                       {entry.content || t('readerNoRecord')}
                     </div>}
-                  {entry.findings.length > 0 && <p className="mt-5 font-serif text-sm leading-relaxed text-[#bbb09d]">
-                    <span className="text-brass">{t('readerFindings')}: </span>{entry.findings.join(', ')}
+                  {entry.findings.length > 0 && <p className="mt-4 text-base leading-7 text-[#59616a]">
+                    <span className="font-medium text-[#424a53]">{t('readerFindings')}: </span>{entry.findings.join(', ')}
                   </p>}
                 </article>
               ))}
                 </section>
               ))}
-              {character.activeScene?.location && <section data-testid="journal-current-scene" className="mt-10 font-serif text-sm leading-relaxed text-[#bbb09d]">
-                <h2 className="mb-2 font-special-elite text-xs uppercase tracking-wider text-brass">{t('readerCurrentLocation', { location: character.activeScene.location })}</h2>
+              {character.activeScene?.location && <section data-testid="journal-current-scene" className="mt-7 rounded-lg bg-[#eae5dc] p-5 text-base leading-7 text-[#59616a]">
+                <h2 className="mb-2 text-base font-semibold text-[#424a53]">{t('readerCurrentLocation', { location: character.activeScene.location })}</h2>
                 <p>{t('readerCurrentDescription')}</p>
               </section>}
             </div>
           </main>
         </div>
       )}
+    </div>
     </div>
   );
 }
