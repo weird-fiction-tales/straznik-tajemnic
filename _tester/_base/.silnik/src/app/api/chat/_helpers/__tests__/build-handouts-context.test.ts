@@ -364,8 +364,11 @@ describe('audio node scoping #665', () => {
 
 it('discovers audio after travel using the exact graph node name, not the stale starting node', () => {
  const adventure = getAdventureById('cien-nad-prabutami');
+ if (!adventure?.handouts || !adventure.graph?.nodes) throw new Error('Missing Quick Setup graph');
  const tape = adventure.handouts.find((h: AdventureHandout) => h.audioUrl);
+ if (!tape) throw new Error('Missing Quick Setup tape');
  const node = adventure.graph.nodes.find((n: { id: string }) => n.id === tape.nodeId);
+ if (!node) throw new Error('Missing tape node');
  expect(buildHandoutsContext([tape], [], {
    adventureId: adventure.id, activeNodeId: 'node-warszawa-redakcja', currentLocation: node.name,
  })).toContain(`[HANDOUT:${tape.slug}]`);

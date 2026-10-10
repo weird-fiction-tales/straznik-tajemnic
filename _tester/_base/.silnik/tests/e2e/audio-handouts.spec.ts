@@ -32,6 +32,7 @@ for (const locale of ['pl', 'en'] as const) {
     await request;
     const play = page.getByRole('button', { name: locale === 'pl' ? 'Odtwórz' : 'Play', exact: true });
     await expect(play).toBeEnabled({ timeout: 30000 });
+    await expect(page.getByRole('heading', { name: locale === 'pl' ? 'Kaseta Stilon C-60: Wywiad z przerażonym dzieckiem (1983)' : 'Stilon C-60 cassette: Interview with a terrified child (1983)' })).toBeVisible();
     await play.click();
     await expect(page.getByRole('button', { name: locale === 'pl' ? 'Wstrzymaj' : 'Pause', exact: true })).toBeVisible();
     await page.screenshot({ path: `test-results/audio-handout-${locale}.png` });

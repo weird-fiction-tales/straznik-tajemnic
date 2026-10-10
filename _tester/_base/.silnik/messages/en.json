@@ -8739,5 +8739,24 @@
     "selectLightsTitle": "Select lights participating in session",
     "loadingLights": "Loading lights list...",
     "noLightsFound": "No registered lights found on the bridge."
+  },
+  "AudioHandouts": {
+    "recordingHeader": "AUDIO RECORDING",
+    "audio-sb-wiretap-elblag-title": "ZK-140 reel tape: Elbląg cell surveillance",
+    "audio-sb-wiretap-elblag-summary": "SB surveillance recording: tape hiss, a prayer and the sudden crack of glass.",
+    "audio-broken-brakes-log-title": "Cassette recording: Kowary crash test, 1996",
+    "audio-broken-brakes-log-summary": "Crash-test recording: the Fiat 126p engine, impact and rotor resonance.",
+    "audio-stilon-c60-interview-title": "Stilon C-60 cassette: Interview with a terrified child (1983)",
+    "audio-stilon-c60-interview-summary": "A hiss-filled recording: a trembling child describes a shadow beneath the barn rafters.",
+    "audio-vhs-broadcast-anomaly-title": "VHS tape: Intercepted broadcast from the future",
+    "audio-vhs-broadcast-anomaly-summary": "The intercepted transmission audio track: crackling interference and an alien voice.",
+    "audio-edison-wax-cylinder-title": "Edison wax cylinder: Recording from Holmes’s Castle",
+    "audio-edison-wax-cylinder-summary": "A phonograph cylinder recording: a voice and resonance inside the Castle.",
+    "audio-crowe-interrogation-disc-title": "Dictaphone cylinder: Englund and Leopold inquest (1924)",
+    "audio-crowe-interrogation-disc-summary": "An inquest recording of chauffeur Englund and Nathan Leopold.",
+    "audio-gillespie-1977-wiretap-title": "Micro-cassette: Ron Gillespie’s last phone call (1977)",
+    "audio-gillespie-1977-wiretap-summary": "A phone-call recording: rotary dial clicks, a hum and an unfamiliar voice.",
+    "audio-voicemail-in-a-field-title": "Voicemail: June 12, 2005, 00:51 AM",
+    "audio-voicemail-in-a-field-summary": "A recovered voicemail: breathing, a confused whisper and a metallic chime."
   }
 }
