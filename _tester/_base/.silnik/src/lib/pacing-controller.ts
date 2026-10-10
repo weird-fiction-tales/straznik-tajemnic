@@ -12,7 +12,7 @@
 
 import type { GameContext } from './prompt-section-parser';
 
-export type CadenceGear = 'staccato' | 'establishing' | 'hard_move' | 'void';
+export type CadenceGear = 'ordinary_world' | 'staccato' | 'establishing' | 'hard_move' | 'void';
 
 interface PacingConfig {
   gear: CadenceGear;
@@ -145,4 +145,11 @@ export function getPacingDirective(
   }
 
   return base;
+}
+
+/** Opening directives outrank all ambient horror and automatic hard moves. */
+export function getOrdinaryWorldDirective(locale: 'pl' | 'en'): string {
+  return locale === 'en'
+    ? 'GEAR 0 (ORDINARY WORLD): Calm investigation during turns 0-5. Let the player meet NPCs, explore and collect leads (70% ordinary rumours, 30% subtle unease). No physical attacks, monsters or sudden panic. Describe the present state, answer the player and wait: [What do you do?]. This overrides any instruction to force a twist, hostile move or climax. Only explicit physical violence initiated by the player interrupts this protection.'
+    : 'BIEG 0 (ORDINARY WORLD): Spokojne śledztwo w turach 0-5. Daj graczowi poznać NPC, teren i tropy (70% zwykłych plotek, 30% subtelnego niepokoju). Zakaz ataków fizycznych, potworów i nagłej paniki. Opisz stan obecny, odpowiedz graczowi i czekaj: [Co robisz?]. Ta zasada ma pierwszeństwo przed nakazami zwrotu, ruchu wroga i kulminacji. Ochronę przerywa wyłącznie jawna przemoc fizyczna zainicjowana przez gracza.';
 }

@@ -34,9 +34,12 @@ export interface SceneContext {
   currentLocation?: string | null;
   locationChanged?: boolean;
   turnIndex?: number;
+  ordinaryWorldInterrupted?: boolean;
 }
 
 export interface TechniqueSelectionParams {
+  turnIndex?: number;
+  ordinaryWorldInterrupted?: boolean;
   sceneState: SceneState;
   recentTechniqueIds?: TechniqueId[];
   playerMessage?: string | null;
@@ -196,7 +199,36 @@ export function getPacingMoodSuggestion(state: SceneState): {
 /**
  * Przypisuje dominujący bieg kadencji do stanu sceny
  */
-export function getCadenceForSceneState(state: SceneState): CadenceGear {
+/** Explicit player declarations, not NPC speech, movement or a mention of weapons. */
+export function isPlayerAggression(message: string): boolean {
+  const declaration = message.toLowerCase().replace(/"[^"]*"|„[^”]*”/g, '');
+  const clauses = declaration.split(/[,.!?;\n]|\b(?:ale|but)\b/);
+  return clauses.some((clause) => {
+    if (/\b(?:nie|don't|do not|won't|will not|czy|pytam|ask|if)\b/.test(clause))
+      return false;
+    return (
+      /\b(?:strzelam|strzelę|strzele|atakuję|atakuje|uderzam|biję|bije|wyważam|wywazam|oddaję strzał|oddaje strzal)(?=$|[^a-ząćęłńóśźż])/.test(
+        clause
+      ) ||
+      /\bi\s+(?:shoot|fire|attack|hit|strike|punch|kick down|break down|force open)\b/.test(
+        clause
+      )
+    );
+  });
+}
+
+export function getCadenceForSceneState(
+  state: SceneState,
+  context: SceneContext = {}
+): CadenceGear {
+  if (isPlayerAggression(context.playerMessage ?? '')) return 3;
+  if (
+    context.turnIndex !== undefined &&
+    context.turnIndex >= 0 &&
+    context.turnIndex < 6 &&
+    !context.ordinaryWorldInterrupted
+  )
+    return 0;
   switch (state) {
     case 'action':
       return 1; // Staccato
@@ -331,7 +363,7 @@ export function selectSceneTechniques(
 
   return {
     sceneState: params.sceneState,
-    cadenceGear: getCadenceForSceneState(params.sceneState),
+    cadenceGear: getCadenceForSceneState(params.sceneState, params),
     primaryTechnique,
     secondaryTechnique,
     pacingMoodSuggestion: getPacingMoodSuggestion(params.sceneState),
@@ -388,4 +420,26 @@ export function formatSceneDirective(
   }
 
   return directiveStr;
+}
+
+/** A continuation resumes an existing response; a history slice is not a new adventure. */
+export function getNarrativeTurnCadence(
+  state: SceneState,
+  playerMessage: string,
+  messages: ReadonlyArray<{
+    role: string;
+    content: string;
+    continuationRequested?: boolean;
+  }>
+): CadenceGear | undefined {
+  if (messages.length === 1 && messages[0].continuationRequested) return undefined;
+  return getCadenceForSceneState(state, {
+    playerMessage,
+    turnIndex: messages.filter((message) => message.role === 'assistant')
+      .length,
+    ordinaryWorldInterrupted: messages.some(
+      (message) =>
+        message.role === 'user' && isPlayerAggression(message.content)
+    ),
+  });
 }

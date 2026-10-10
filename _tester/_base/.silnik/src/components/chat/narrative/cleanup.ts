@@ -21,6 +21,7 @@ export const NESTED_TAG_BODY = '(?:[^\\[\\]]|\\[[^\\]]*\\])*';
 
 export function cleanupContent(content: string): string {
   // Usuń prefiksy AI z początku tekstu (MG: Assistant:, GM:, itp.)
+  content = content.replace(/\[PRZEJŚCIE_AKTU\s*:[^\]]*(?:\]|$)/gi, '');
   let cleanContent = content
     .replace(
       /^(MG|GM|AI|Assistant|Mistrz Gry|Game Master):\s*(Assistant:\s*)?/gi,

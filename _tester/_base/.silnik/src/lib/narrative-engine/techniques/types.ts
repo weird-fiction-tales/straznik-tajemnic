@@ -45,7 +45,7 @@ export type TechniqueCategory =
  * 3 = Przełamanie / Cios (Hard Move) - 30-70 słów
  * 4 = Zawieszenie / Pustka (The Void) - 40-90 słów
  */
-export type CadenceGear = 1 | 2 | 3 | 4;
+export type CadenceGear = 0 | 1 | 2 | 3 | 4;
 
 export type SceneState =
   | 'dialogue'
