@@ -150,8 +150,19 @@ export class HueClient {
 
       if (Array.isArray(data)) return [];
 
+      interface HueV1LightItem {
+        name?: string;
+        type?: string;
+        state?: {
+          on?: boolean;
+          bri?: number;
+          ct?: number;
+          xy?: [number, number];
+        };
+      }
+
       // Oficjalny format Hue API v1 LAN: { "1": { name, state: { on, bri, ct, xy, ... } } }
-      return Object.entries(data).map(([id, item]: [string, any]) => ({
+      return Object.entries(data as Record<string, HueV1LightItem>).map(([id, item]) => ({
         id,
         metadata: {
           name: item.name || `Światło ${id}`,
