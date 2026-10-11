@@ -8805,5 +8805,13 @@
     "audio-gillespie-1977-wiretap-summary": "A phone-call recording: rotary dial clicks, a hum and an unfamiliar voice.",
     "audio-voicemail-in-a-field-title": "Voicemail: June 12, 2005, 00:51 AM",
     "audio-voicemail-in-a-field-summary": "A recovered voicemail: breathing, a confused whisper and a metallic chime."
+  },
+  "NarrativePacer": {
+    "phase0": "Reading the Investigator's intent...",
+    "phase1": "Listening for footsteps in the dark...",
+    "phase2": "Framing the scene...",
+    "phase3": "Recording the investigative chronicle...",
+    "phase4": "The Game Master weighs their words in silence..."
   }
 }
+

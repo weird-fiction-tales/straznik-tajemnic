@@ -8805,5 +8805,13 @@
     "audio-gillespie-1977-wiretap-summary": "Nagranie rozmowy telefonicznej: impulsy wybierania numeru, szum i obcy głos.",
     "audio-voicemail-in-a-field-title": "Poczta głosowa: 12 czerwca 2005, godz. 00:51",
     "audio-voicemail-in-a-field-summary": "Odzyskana wiadomość głosowa: oddech, zdezorientowany szept i metaliczny dźwięk."
+  },
+  "NarrativePacer": {
+    "phase0": "Odczytywanie intencji Badacza...",
+    "phase1": "Nadsłuchiwanie kroków w mroku...",
+    "phase2": "Układanie scenerii w kadrze...",
+    "phase3": "Spisywanie kroniki zdarzeń...",
+    "phase4": "Mistrz Gry waży słowa w ciszy..."
   }
 }
+
