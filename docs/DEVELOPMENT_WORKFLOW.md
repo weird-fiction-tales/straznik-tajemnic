@@ -45,7 +45,8 @@ Przedstawienie zwięzłego raportu decyzyjnego dla Product Ownera (PO) z jedną 
 1. Modyfikowane są wyłącznie pliki z zatwierdzonej Allowlisty.
 2. **Zasada Ponytail (Search before Write):** Zakaz tworzenia zduplikowanych funkcji pomocniczych bez uprzedniego przeszukania `src/lib/`.
 3. **Symetria językowa:** Zmiany UI muszą równolegle zaktualizować `messages/pl.json` i `messages/en.json`.
-4. **Rejestr nawigacji:** Zmiany w ekranach lub modalach wymagają aktualizacji `navigation/navigation-registry.json`.
+4. **Standard modali:** Każdy nowy lub przebudowywany modal spełnia [standard Art Deco](DESIGN-SYSTEM-ART-DECO.md#6-standard-każdego-nowego-i-przebudowywanego-modalu), w tym mosiężne ornamenty i szmaragdowe stany aktywne. Karta Badacza stanowi wzorzec do porównania renderu.
+5. **Rejestr nawigacji:** Zmiany w ekranach lub modalach wymagają aktualizacji `navigation/navigation-registry.json`.
 
 ### Faza 4: Weryfikacja Anty-Regresyjna & Bezpiecznik CPI
 1. **Bezpiecznik CPI (Circuit Breaker):** Limit 2 prób naprawy. W razie niepowodzenia: natychmiastowy STOP, rollback i raport blokady.

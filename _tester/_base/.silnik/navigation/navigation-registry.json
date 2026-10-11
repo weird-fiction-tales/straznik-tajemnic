@@ -249,8 +249,8 @@
       "id": "journal",
       "kind": "modal",
       "label": {
-        "pl": "Dziennik drużyny - teczka sprawy",
-        "en": "Party journal - case file"
+        "pl": "Akta sprawy - styl Karty Badacza, najnowsze wpisy na górze",
+        "en": "Case Files - Character Sheet style, newest entries first"
       }
     },
     {
@@ -689,8 +689,8 @@
       "source": "game",
       "target": "journal",
       "label": {
-        "pl": "Dziennik",
-        "en": "Journal"
+        "pl": "Akta sprawy",
+        "en": "Case Files"
       },
       "component": "src/components/sidebar/CthulhuSidebar.tsx"
     },
@@ -698,8 +698,8 @@
       "source": "journal",
       "target": "game",
       "label": {
-        "pl": "Zamknij dziennik",
-        "en": "Close journal"
+        "pl": "Zamknij akta sprawy",
+        "en": "Close Case Files"
       },
       "component": "src/components/ui/session-journal.tsx"
     },

@@ -279,7 +279,7 @@ test.describe('Visual Player Simulation - Obowiązkowy Test Gracza E2E', () => {
       'Stanisław twierdził, że list wysłano z doków.'
     );
     await page.screenshot({ path: 'test-results/player-journal-pl.png' });
-    await journal.getByRole('button', { name: 'Zamknij dziennik' }).click();
+    await journal.getByRole('button', { name: 'Zamknij akta sprawy' }).click();
 
     // Zapis i wczytanie pełnej gry zachowuje obie wersje językowe wpisu.
     await page.getByRole('button', { name: 'Zapisz', exact: true }).click();
@@ -308,7 +308,7 @@ test.describe('Visual Player Simulation - Obowiązkowy Test Gracza E2E', () => {
     await expect(journal.getByTestId('journal-entry').filter({ has: page.getByRole('heading', { name: 'Archiwum', exact: true }) }).getByTestId('scene-chronicle-summary')).toContainText(
       'Stanisław twierdził, że list wysłano z doków.'
     );
-    await journal.getByRole('button', { name: 'Zamknij dziennik' }).click();
+    await journal.getByRole('button', { name: 'Zamknij akta sprawy' }).click();
 
     // Potwierdzony koniec domyka ostatnią scenę przed autozapisem.
     await chatInput.fill('Kończymy dzisiejsze spotkanie.');
@@ -332,9 +332,9 @@ test.describe('Visual Player Simulation - Obowiązkowy Test Gracza E2E', () => {
     await page.getByTestId('btn-open-journal').click();
     journal = page.getByTestId('session-journal');
     await journal.getByRole('button', { name: /^Kronika/ }).click();
-    await expect(journal.getByTestId('journal-session-header')).toHaveText(['Sesja 1', 'Sesja 2']);
+    await expect(journal.getByTestId('journal-session-header')).toHaveText(['Sesja 2', 'Sesja 1']);
     await page.screenshot({ path: 'test-results/journal-chapters-pl.png' });
-    await journal.getByRole('button', { name: 'Zamknij dziennik' }).click();
+    await journal.getByRole('button', { name: 'Zamknij akta sprawy' }).click();
 
     // 6. Otwarcie panelu bocznego (Ekwipunek)
     const eqBtn = page.locator('[data-testid="btn-open-equipment"]');
@@ -369,7 +369,7 @@ test.describe('Visual Player Simulation - Obowiązkowy Test Gracza E2E', () => {
     await page.locator('[data-testid="btn-open-journal"]').click();
     journal = page.locator('[data-testid="session-journal"]');
     await journal.getByRole('button', { name: /^Chronicle/ }).click();
-    await expect(journal.getByTestId('journal-session-header')).toHaveText(['Session 1', 'Session 2']);
+    await expect(journal.getByTestId('journal-session-header')).toHaveText(['Session 2', 'Session 1']);
     await journal.getByRole('button', { name: /Scene #\d+ Archiwum/i }).click();
     await expect(journal.getByTestId('journal-entry').filter({ has: page.getByRole('heading', { name: 'Archiwum', exact: true }) }).getByTestId('scene-chronicle-summary')).toContainText(
       'Stanisław claimed the letter had been sent from the docks.'

@@ -68,13 +68,21 @@ for (const locale of ['pl', 'en'] as const) {
       await page.route('**/api/pdf/ingest-local*', (route) => route.fulfill({ status: 200, json: { recordCount: 150, rulebookProfile: { profile: 'starter-d100', title: 'Starter CoC 7e' } } }));
       await page.route('**/api/desktop/update/status', (route) => route.fulfill({ status: 200, json: { id: 'none', state: 'idle', updatedAt: '1970-01-01T00:00:00.000Z' } }));
       await page.route('**/api/desktop/update/check', (route) => route.fulfill({ status: 200, json: { available: false, currentVersion: '0.9.5' } }));
+      await page.route('**/api/chat-test', (route) => route.fulfill({ status: 200, json: { success: true } }));
       await page.goto(`/${locale}`);
       const trigger = page.getByTestId('btn-open-journal');
       await expect(trigger).toBeVisible({ timeout: 15000 });
       await trigger.click();
       const dialog = page.getByTestId('session-journal');
-      await expect(dialog).toHaveAccessibleName(locale === 'pl' ? 'Dziennik drużyny' : 'Party Journal');
+      await expect(dialog).toHaveAccessibleName(locale === 'pl' ? 'Akta sprawy' : 'Case Files');
       await expect(dialog.getByTestId('journal-overview')).toBeVisible();
+      const activeTab = dialog.getByTestId('journal-contents').locator('button[aria-current="page"]');
+      await expect(activeTab).toHaveClass(/border-primary\/50/);
+      const activeColor = await activeTab.locator('svg').evaluate((element) => getComputedStyle(element).color);
+      const channels = activeColor.match(/\d+/g)!.map(Number);
+      expect(channels[1]).toBeGreaterThan(channels[0] * 2);
+      expect(channels[2]).toBeGreaterThan(channels[0] * 2);
+
       if (archive) {
         await dialog.getByRole('button', { name: locale === 'pl' ? /^Postacie/ : /^People/ }).click();
         const portrait = dialog.getByRole('img');
@@ -119,22 +127,25 @@ for (const locale of ['pl', 'en'] as const) {
       expect(await dialog.evaluate((element) => element.getBoundingClientRect().width)).toBeLessThanOrEqual(1360);
       await expect(dialog).not.toContainText('camera POV');
       if (!wide) {
-      await expect(dialog.getByTestId('journal-session-header')).toHaveText(locale === 'pl' ? ['Sesja 1', 'Sesja 2', 'Sesja 3'] : ['Session 1', 'Session 2', 'Session 3']);
+      await expect(dialog.getByTestId('journal-session-header')).toHaveText(locale === 'pl' ? ['Sesja 3', 'Sesja 2', 'Sesja 1'] : ['Session 3', 'Session 2', 'Session 1']);
       await expect(dialog.getByRole('heading', { name: 'Archiwum miejskie', exact: true, level: 3 })).toHaveCount(1);
       await expect(dialog.getByRole('heading', { name: 'Doki', exact: true, level: 3 })).toHaveCount(1);
       }
-      if (!wide) await expect.poll(() => dialog.getByTestId('journal-reader').evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      await expect(dialog.getByTestId('journal-entry').first()).toContainText(wide ? (locale === 'pl' ? 'Początek śledztwa' : 'The investigation begins') : 'Archiwum 60');
+      await expect.poll(() => dialog.getByTestId('journal-reader').evaluate((element) => element.scrollTop)).toBe(0);
+      await page.screenshot({ path: `test-results/journal-newest-${locale}-${layout}.png` });
       await dialog.getByTestId('journal-contents').getByRole('button', { name: wide ? /Janusz Bielski$/ : /(?:Scena|Scene) #1 Archiwum 1$/ }).click();
-      const first = dialog.getByTestId('journal-entry').first();
+      const first = dialog.getByTestId('journal-entry').last();
       await expect(first).toBeFocused();
       await expect(first).toContainText(wide ? (locale === 'pl' ? 'Zmęczony dziennikarz' : 'A tired television reporter') : (locale === 'pl' ? 'Stanisław twierdził' : 'Stanisław claimed'));
       expect(await first.locator('[data-testid=scene-chronicle-summary], [data-testid=journal-legacy-record]').evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(18);
-      await expect.poll(() => dialog.getByTestId('journal-reader').evaluate((element) => element.scrollTop)).toBeLessThan(400);
+      await expect(first).toBeInViewport();
       expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
       await expect(dialog.getByRole('textbox')).toHaveCount(0);
       await page.screenshot({ path: `test-results/journal-reader-${locale}-${layout}.png` });
       await page.keyboard.press('Tab');
       await expect(dialog.getByRole('button').first()).toBeFocused();
+      expect(await dialog.getByRole('button').first().evaluate((element) => getComputedStyle(element).outlineColor)).toBe(activeColor);
       await page.keyboard.press('Escape');
       await expect(dialog).toHaveCount(0);
       await expect(trigger).toBeFocused();
