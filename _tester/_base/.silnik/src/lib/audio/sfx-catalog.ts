@@ -106,11 +106,35 @@ export function releaseSFXAudioElement(audio: HTMLAudioElement | null): void {
 
 /**
  * Globalny odtwarzacz SFX offline z kalibracją głośności.
- *
- * Issue #504: Efekty dźwiękowe SFX są całkowicie wyłączone (infrastruktura
- * ukryta w kodzie bez przełączników w UI, pliki MP3 odseparowane do assets/).
  */
-export const SFX_ENABLED = false;
+export const SFX_ENABLED = true;
+export const SFX_VOLUME_STORAGE_KEY = 'sfx_volume';
+export const SFX_MUTED_STORAGE_KEY = 'sfx_muted';
+
+export function getSFXVolume(): number {
+  if (typeof window === 'undefined') return 1.0;
+  try {
+    const muted = window.localStorage.getItem(SFX_MUTED_STORAGE_KEY);
+    if (muted === 'true') return 0;
+    const val = window.localStorage.getItem(SFX_VOLUME_STORAGE_KEY);
+    if (val !== null) {
+      const parsed = parseInt(val, 10);
+      if (!isNaN(parsed)) return Math.max(0, Math.min(100, parsed)) / 100;
+    }
+  } catch {
+    // fallback
+  }
+  return 1.0;
+}
+
+export function setSFXVolume(volume0to100: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SFX_VOLUME_STORAGE_KEY, String(Math.max(0, Math.min(100, volume0to100))));
+  } catch {
+    // fallback
+  }
+}
 
 let currentSFXAudio: HTMLAudioElement | null = null;
 const lastPlayedTimestamps: Record<string, number> = {};
@@ -129,6 +153,11 @@ export function playSFX(presetId: string, customVolumeMultiplier: number = 1.0):
   const sfxDef = SFX_CATALOG[presetId];
   if (!sfxDef) {
     console.warn(`[SFX] Nieznany preset SFX: "${presetId}"`);
+    return;
+  }
+
+  const userVolume = getSFXVolume();
+  if (userVolume <= 0) {
     return;
   }
 
@@ -151,8 +180,17 @@ export function playSFX(presetId: string, customVolumeMultiplier: number = 1.0):
     }
 
     const audio = new Audio(sfxDef.file);
-    const targetVolume = Math.min(1.0, Math.max(0.05, sfxDef.volume * customVolumeMultiplier));
+    const targetVolume = Math.min(1.0, Math.max(0.01, sfxDef.volume * customVolumeMultiplier * userVolume));
     audio.volume = targetVolume;
+
+    // Audio Ducking: przyciszenie muzyki i lektora dla głośnych efektów uderzeniowych
+    if (sfxDef.category === 'weapons' || sfxDef.category === 'combat' || presetId === 'thunder' || presetId === 'explosion') {
+      window.dispatchEvent(
+        new CustomEvent('zew:sfx-ducking', {
+          detail: { durationMs: 1500 },
+        })
+      );
+    }
 
     const cleanupThisAudio = () => {
       releaseSFXAudioElement(audio);

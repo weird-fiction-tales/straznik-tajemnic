@@ -336,6 +336,30 @@ export function YouTubePlayer({ isTTSPlaying = false }: YouTubePlayerProps) {
     }
   }, [isTTSPlaying, isReady, volume]);
 
+  // SFX Ducking - proporcjonalne przyciszenie muzyki na czas trwania efektu uderzeniowego (Issue #789)
+  useEffect(() => {
+    let duckTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleSFXDucking = (e: Event) => {
+      const customEvt = e as CustomEvent<{ durationMs?: number }>;
+      const duration = customEvt.detail?.durationMs ?? 1500;
+      if (playerRef.current && isReady) {
+        const duckedVolume = Math.round(volume * 0.4);
+        playerRef.current.setVolume(duckedVolume);
+        if (duckTimer) clearTimeout(duckTimer);
+        duckTimer = setTimeout(() => {
+          if (playerRef.current && isReady && !isTTSPlaying) {
+            playerRef.current.setVolume(volume);
+          }
+        }, duration);
+      }
+    };
+    window.addEventListener('zew:sfx-ducking', handleSFXDucking);
+    return () => {
+      window.removeEventListener('zew:sfx-ducking', handleSFXDucking);
+      if (duckTimer) clearTimeout(duckTimer);
+    };
+  }, [isReady, volume, isTTSPlaying]);
+
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume);
     if (typeof window !== 'undefined') {

@@ -5718,6 +5718,8 @@
     "geminiDesc": "Tani (~50× taniej od ElevenLabs), preview",
     "volumeLabel": "Głośność",
     "volumeHelp": "Głośność narracji od 0 (cisza) do 100 (maksymalna głośność)",
+    "sfxVolumeLabel": "Efekty dźwiękowe (SFX)",
+    "sfxVolumeHelp": "Głośność efektów dźwiękowych (wystrzały, pioruny, kości, rekwizyty) od 0 (wyciszone) do 100.",
     "speedLabel": "Prędkość mówienia",
     "speedHelp": "Szybkość czytania tekstu. 1.0x = normalnie.",
     "modeLabel": "Format narracji",
