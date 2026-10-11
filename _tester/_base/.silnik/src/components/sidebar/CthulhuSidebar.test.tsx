@@ -263,5 +263,34 @@ describe('CthulhuSidebar player tools', () => {
 
     expect(mockOnSwitch).toHaveBeenCalledWith(mockChar2);
   });
+
+  it('renderuje kontrolkę oświetlenia Hue w Ustawieniach i obsługuje szybki toggle oraz światło awaryjne', () => {
+    process.env.NEXT_INTL_TEST_LOCALE = 'pl';
+    localStorage.setItem(
+      'straznik_hue_config',
+      JSON.stringify({
+        enabled: true,
+        bridgeIp: '192.168.1.10',
+        appKey: 'test-app-key',
+        selectedLightIds: ['1'],
+      })
+    );
+
+    render(<CthulhuSidebar />);
+
+    // Kontrolka Hue powinna być widoczna ze stanem Wł
+    expect(screen.getByText(/Światło Hue:\s*Wł/i)).toBeInTheDocument();
+    // Przycisk światła awaryjnego 100%
+    const emergencyBtn = screen.getByTitle(/Światło Awaryjne 100%/i);
+    expect(emergencyBtn).toBeInTheDocument();
+
+    // Kliknięcie toggle Hue przełącza na Wył
+    const hueToggleBtn = screen.getByTitle(/Włącz lub wyłącz nastrojowe oświetlenie Philips Hue/i);
+    act(() => {
+      fireEvent.click(hueToggleBtn);
+    });
+
+    expect(screen.getByText(/Światło Hue:\s*Wył/i)).toBeInTheDocument();
+  });
 });
 

@@ -4714,6 +4714,9 @@
     "narratorToggleTitle": "Włącz lub wyłącz automatyczny lektor narracji MG",
     "images": "Obrazy",
     "imagesToggleTitle": "Włącz lub wyłącz generowanie ilustracji w czacie",
+    "hueLighting": "Światło Hue",
+    "hueLightingToggleTitle": "Włącz lub wyłącz nastrojowe oświetlenie Philips Hue w pokoju",
+    "emergencyLightTitle": "Światło Awaryjne 100% - natychmiast zapala jasne, bezpieczne światło",
     "on": "Wł",
     "off": "Wył",
     "coldStart": "Zimny Start",
@@ -8775,7 +8778,15 @@
     "pairBridgeButton": "Paruj z mostkiem",
     "selectLightsTitle": "Wybierz lampy biorące udział w sesji",
     "loadingLights": "Wczytywanie listy lamp...",
-    "noLightsFound": "Nie znaleziono zarejestrowanych lamp na mostku."
+    "noLightsFound": "Nie znaleziono zarejestrowanych lamp na mostku.",
+    "pressButtonInstructionWithCountdown": "Podejdź do mostka Hue i wciśnij duży okrągły przycisk (zostało: {seconds}s)...",
+    "linkTimeout": "Czas minął (30s). Przycisk na mostku nie został wciśnięty.",
+    "linkAborted": "Przerwano parowanie z mostkiem.",
+    "cancel": "Anuluj",
+    "retryPairing": "Spróbuj ponownie",
+    "emergencyLight": "Światło Awaryjne 100%",
+    "testLighting": "Przetestuj oświetlenie",
+    "testLightingSuccess": "Wysłano sygnał testowy do wybranych lamp."
   },
   "StartQualityPresets": {
     "title": "Oprawa rozgrywki",

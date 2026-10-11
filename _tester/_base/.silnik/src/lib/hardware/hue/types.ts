@@ -76,4 +76,10 @@ export type SceneLightingMood =
   | 'police_interrogation'
   | 'abyssal_deep'
   | 'raging_fire'
-  | 'asylum_solitary';
+  | 'asylum_solitary'
+  | 'colour_out_of_space'
+  | 'bloody_ritual'
+  | 'frozen_rlyeh'
+  | 'speakeasy_jazz'
+  | 'prl_fluorescent'
+  | 'investigator_study';

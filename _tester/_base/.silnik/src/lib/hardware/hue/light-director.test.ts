@@ -26,12 +26,19 @@ describe('LightDirector (Reżyser Światła CoC 7e)', () => {
     jest.clearAllMocks();
   });
 
-  it('wczytuje definicje presetów z pliku konfiguracyjnego', () => {
+  it('wczytuje definicje presetów z pliku konfiguracyjnego (24 kanoniczne presety)', () => {
     const presets = director.getPresets();
+    expect(Object.keys(presets)).toHaveLength(24);
     expect(presets.kerosene_lamp).toBeDefined();
     expect(presets.new_england_fog).toBeDefined();
     expect(presets.subterranean_dark).toBeDefined();
     expect(presets.cosmic_horror).toBeDefined();
+    expect(presets.colour_out_of_space).toBeDefined();
+    expect(presets.bloody_ritual).toBeDefined();
+    expect(presets.frozen_rlyeh).toBeDefined();
+    expect(presets.speakeasy_jazz).toBeDefined();
+    expect(presets.prl_fluorescent).toBeDefined();
+    expect(presets.investigator_study).toBeDefined();
     expect(presets.kerosene_lamp.brightness).toBe(35);
   });
 
@@ -111,6 +118,12 @@ describe('LightDirector (Reżyser Światła CoC 7e)', () => {
     expect(director.evaluateEnvironmentMood({ locationText: 'Zatopione ruiny w morskiej głębinie' })).toBe('abyssal_deep');
     expect(director.evaluateEnvironmentMood({ locationText: 'Płonący dwór i szalejący pożar' })).toBe('raging_fire');
     expect(director.evaluateEnvironmentMood({ locationText: 'Zamknięta izolatka szpitala psychiatrycznego' })).toBe('asylum_solitary');
+    expect(director.evaluateEnvironmentMood({ locationText: 'Uderzył dziwny meteoryt i blask z kosmosu, kolor z innego świata' })).toBe('colour_out_of_space');
+    expect(director.evaluateEnvironmentMood({ locationText: 'Krwawy ołtarz ofiarny i bluźnierczy rytuał' })).toBe('bloody_ritual');
+    expect(director.evaluateEnvironmentMood({ locationText: 'Cyklopowe mury i lodowata otchłań zatopionego R\'lyeh' })).toBe('frozen_rlyeh');
+    expect(director.evaluateEnvironmentMood({ locationText: 'Dym tytoniowy, nielegalny klub jazzowy i speakeasy' })).toBe('speakeasy_jazz');
+    expect(director.evaluateEnvironmentMood({ locationText: 'Brzęcząca świetlówka na korytarzu milicji' })).toBe('prl_fluorescent');
+    expect(director.evaluateEnvironmentMood({ locationText: 'Bezpieczny gabinet badaczy i narada przy biurku' })).toBe('investigator_study');
   });
 
   it('daje pierwszeństwo jawnemu wyborowi explicitMood przed tekstem lokacji', () => {
