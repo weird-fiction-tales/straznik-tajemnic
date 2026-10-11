@@ -26,6 +26,13 @@ import type { AnyAdventureContext } from '@/lib/handout-resolver';
 import { resolveHandoutBySlug } from '@/lib/handout-resolver';
 import { useSettingsSubscription } from '@/hooks/use-settings-subscription';
 
+const LOCALIZED_AUDIO_SLUGS = [
+  'audio-sb-wiretap-elblag', 'audio-broken-brakes-log',
+  'audio-stilon-c60-interview', 'audio-vhs-broadcast-anomaly',
+  'audio-edison-wax-cylinder', 'audio-crowe-interrogation-disc',
+  'audio-gillespie-1977-wiretap', 'audio-voicemail-in-a-field',
+] as const;
+
 export function HandoutAudioPlayer({ audioUrl }: { audioUrl: string }) {
   const t = useTranslations('NarrativeFormatter');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -111,6 +118,7 @@ function HandoutCard({
   adventureContext?: AnyAdventureContext | null;
 }) {
   const t = useTranslations('NarrativeFormatter');
+  const tAudio = useTranslations('AudioHandouts');
   const settings = useSettingsSubscription();
   let locale = 'pl';
   try {
@@ -124,13 +132,12 @@ function HandoutCard({
     ? resolveHandoutBySlug(section.handoutSlug, adventureContext)
     : null;
 
-  const effectiveTitle =
-    resolved?.title ||
-    section.title ||
-    (section.handoutSlug ? section.handoutSlug : undefined);
-  const effectiveContent = resolved?.textContent || section.content || '';
-  const effectiveType: HandoutType =
-    resolved?.handoutType || section.handoutType || 'note';
+  const localizedAudio = resolved?.audioUrl
+    ? LOCALIZED_AUDIO_SLUGS.find(slug => slug === resolved.slug)
+    : undefined;
+  const effectiveTitle = localizedAudio ? tAudio(`${localizedAudio}-title`) : resolved?.title || section.title || (section.handoutSlug ? section.handoutSlug : undefined);
+  const effectiveContent = localizedAudio ? tAudio(`${localizedAudio}-summary`) : resolved?.textContent || section.content || '';
+  const effectiveType: HandoutType = resolved?.handoutType || section.handoutType || 'note';
   const effectiveImageUrl = resolved?.image || section.imageUrl;
 
   // Wielojęzyczny dobór ścieżki audio (PL vs EN) z graceful fallbackiem
@@ -141,6 +148,7 @@ function HandoutCard({
   const effectiveAudioUrl = rawAudioUrl;
   const effectiveReelType = resolved?.reelType || 'reel_to_reel';
   const styles = getHandoutStyles(effectiveType);
+  if (localizedAudio) styles.header = tAudio('recordingHeader');
 
   const hasStickyNote = Boolean(section.stickyNote);
   const isLongDocument =

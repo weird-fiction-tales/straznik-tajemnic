@@ -8749,5 +8749,24 @@
       "high": "Lektor, handouty i ilustracje ważnych scen.",
       "ultra": "Pełne słuchowisko, handouty oraz ilustracje scen, postaci i znalezisk."
     }
+  },
+  "AudioHandouts": {
+    "recordingHeader": "NAGRANIE AUDIO",
+    "audio-sb-wiretap-elblag-title": "Taśma szpulowa ZK-140: Podsłuch celi w Elblągu",
+    "audio-sb-wiretap-elblag-summary": "Nagranie operacyjne SB: szum taśmy, modlitwa i nagły trzask szkła.",
+    "audio-broken-brakes-log-title": "Nagranie magnetofonowe: Próba zderzeniowa Kowary 1996",
+    "audio-broken-brakes-log-summary": "Nagranie próby zderzeniowej: silnik Fiata 126p, uderzenie i rezonans wirnika.",
+    "audio-stilon-c60-interview-title": "Kaseta Stilon C-60: Wywiad z przerażonym dzieckiem (1983)",
+    "audio-stilon-c60-interview-summary": "Zaszumione nagranie: drżący dziecięcy głos opisuje cień pod powałą stodoły.",
+    "audio-vhs-broadcast-anomaly-title": "Taśma VHS: Przechwycona audycja z przyszłości",
+    "audio-vhs-broadcast-anomaly-summary": "Ścieżka dźwiękowa przechwyconej transmisji: trzaski i obcy głos.",
+    "audio-edison-wax-cylinder-title": "Wałek Edisona: Nagranie z zamku Holmesa",
+    "audio-edison-wax-cylinder-summary": "Nagranie z wałka fonograficznego: głos i rezonans wewnątrz zamku.",
+    "audio-crowe-interrogation-disc-title": "Wałek Dictaphone: Przesłuchanie Englunda i Leopolda (1924)",
+    "audio-crowe-interrogation-disc-summary": "Nagranie przesłuchania szofera Englunda i Nathana Leopolda.",
+    "audio-gillespie-1977-wiretap-title": "Mikrokaseta: Ostatni telefon Rona Gillespiego (1977)",
+    "audio-gillespie-1977-wiretap-summary": "Nagranie rozmowy telefonicznej: impulsy wybierania numeru, szum i obcy głos.",
+    "audio-voicemail-in-a-field-title": "Poczta głosowa: 12 czerwca 2005, godz. 00:51",
+    "audio-voicemail-in-a-field-summary": "Odzyskana wiadomość głosowa: oddech, zdezorientowany szept i metaliczny dźwięk."
   }
 }
