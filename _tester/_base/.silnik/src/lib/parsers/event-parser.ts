@@ -283,3 +283,76 @@ export function extractChaseEndTag(text: string): ParsedChaseEndTag | null {
   return { outcome: 'ucieczka' };
 }
 
+export interface ParsedDreamTag {
+  variantId: string; // 'restless-night' | 'dark-cabin' | 'forest-path' | 'thing-in-lake'
+  investigatorName?: string;
+  nightNumber?: number;
+}
+
+/**
+ * Wyłuskuje znacznik wizji sennej [SEN: wariant | badacz | noc] z narracji MG.
+ * Przykłady:
+ * - [SEN: dark-cabin | Thomas]
+ * - [SEN: 2 | Thomas | noc=2]
+ * - [SENNE_WEZWANIE: Chata w ciemnościach]
+ * - [DREAM: restless-night]
+ */
+export function extractDreamVisionTag(text: string): ParsedDreamTag | null {
+  if (!text) return null;
+  const match = text.match(
+    /\[(?:SEN|SENNE_WEZWANIE|DREAM|DREAM_VISION):\s*([^\]]+)\]/i
+  );
+  if (!match) return null;
+
+  const content = match[1].trim();
+  const parts = content.split(/[|;]/).map((p) => p.trim());
+  const rawVariant = parts[0].toLowerCase();
+
+  let variantId = 'restless-night';
+  if (
+    rawVariant.includes('cabin') ||
+    rawVariant.includes('chata') ||
+    rawVariant === '2' ||
+    rawVariant.includes('dark-cabin')
+  ) {
+    variantId = 'dark-cabin';
+  } else if (
+    rawVariant.includes('path') ||
+    rawVariant.includes('ścieżka') ||
+    rawVariant.includes('sciezka') ||
+    rawVariant === '3' ||
+    rawVariant.includes('forest-path')
+  ) {
+    variantId = 'forest-path';
+  } else if (
+    rawVariant.includes('lake') ||
+    rawVariant.includes('jezior') ||
+    rawVariant === '4' ||
+    rawVariant.includes('thing-in-lake')
+  ) {
+    variantId = 'thing-in-lake';
+  } else {
+    variantId = 'restless-night';
+  }
+
+  let investigatorName: string | undefined;
+  let nightNumber: number | undefined;
+
+  for (let i = 1; i < parts.length; i++) {
+    const p = parts[i];
+    const nightMatch = p.match(/(?:noc|night)\s*=\s*(\d+)/i);
+    if (nightMatch) {
+      nightNumber = parseInt(nightMatch[1], 10);
+      continue;
+    }
+    if (!investigatorName) {
+      investigatorName = p;
+    }
+  }
+
+  return {
+    variantId,
+    investigatorName,
+    nightNumber: nightNumber || 1,
+  };
+}

@@ -53,6 +53,7 @@ import {
   sanitizeLocationName,
   extractChaseTag,
   extractChaseEndTag,
+  extractDreamVisionTag,
 } from '@/lib/parsers/event-parser';
 import {
   fetchWithApiKeys,
@@ -112,6 +113,7 @@ import {
   saveCombatJournal,
   type CombatRoundJournal,
 } from '@/lib/combat/combat-transaction';
+import { ANCIENT_TREES_DREAM_VARIANTS } from '@/lib/adventures/dreams/ancient-trees-dreams';
 import {
   getCombatDefenseWeapons,
   type CombatDefenseWeaponOption,
@@ -2217,6 +2219,41 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
 
         const currentChase = activeChaseStateRef.current;
+
+        // Senne Wezwania CoC 7e RAW (Issue #787: diegetyczne okno snu w czacie)
+        const dreamTag = extractDreamVisionTag(fullText);
+        let dreamVisionEvent: import('@/lib/types').DreamVisionEventData | undefined;
+        if (dreamTag) {
+          const variant =
+            ANCIENT_TREES_DREAM_VARIANTS[dreamTag.variantId] ||
+            ANCIENT_TREES_DREAM_VARIANTS['restless-night'];
+          const targetChar =
+            (dreamTag.investigatorName
+              ? characters.find(
+                  (c) =>
+                    c.name.toLowerCase().trim() ===
+                    dreamTag.investigatorName?.toLowerCase().trim()
+                )
+              : null) || (finalActiveChar ?? activeCharacter);
+
+          dreamVisionEvent = {
+            id: `dream_${assistantMessageId}_${variant.id}`,
+            variantId: variant.id,
+            number: variant.number,
+            title: locale === 'en' ? variant.titleEn : variant.titlePl,
+            narrative: locale === 'en' ? variant.narrativeEn : variant.narrativePl,
+            investigatorName: targetChar?.name,
+            nightNumber: dreamTag.nightNumber || 1,
+            status: 'active',
+            mechanicalEffect: {
+              sanityCheckRequired: variant.mechanicalResolution.sanityCheckRequired,
+              sanityLossFormula: variant.mechanicalResolution.sanityLossFormula,
+              conPenaltyDice: variant.mechanicalResolution.conPenaltyDice,
+              subsequentTriggerLocation: variant.mechanicalResolution.subsequentTriggerLocation,
+            },
+          };
+        }
+
         if (
           hazardEvents.length > 0 ||
           spellCastEvents.length > 0 ||
@@ -2226,7 +2263,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           firearmsAttackEvents.length > 0 ||
           refereeVetoEvents.length > 0 ||
           gameOverEvents.length > 0 ||
-          currentChase
+          currentChase ||
+          dreamVisionEvent
         ) {
           setMessages((prev) =>
             prev.map((message) =>
@@ -2242,6 +2280,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                     ...(refereeVetoEvents.length > 0 ? { refereeVetoEvents } : {}),
                     ...(gameOverEvents.length > 0 ? { gameOverEvents } : {}),
                     ...(currentChase ? { chaseState: currentChase } : {}),
+                    ...(dreamVisionEvent ? { dreamVisionEvent } : {}),
                   }
                 : message
             )

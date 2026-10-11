@@ -4938,6 +4938,13 @@
     "itemAcquiredToast": "Zdobyto przedmiot",
     "itemAcquiredDesc": "{itemName}"
   },
+  "DreamCard": {
+    "dreamVisionHeader": "Wizja Senna",
+    "nightLabel": "Noc {number}",
+    "lingeringFearHint": "Ciało przeszywa zimny pot, a w uszach wciąż dudni obcy zew.",
+    "awakenedStatus": "Przebudzono się z koszmaru",
+    "awakenButton": "Obudź się"
+  },
   "MessageCard": {
     "playerPortraitAlt": "Portret gracza",
     "resumeReading": "Wznów czytanie",

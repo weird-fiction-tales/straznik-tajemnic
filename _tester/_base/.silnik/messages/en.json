@@ -4938,6 +4938,13 @@
     "itemAcquiredToast": "Item Acquired",
     "itemAcquiredDesc": "{itemName}"
   },
+  "DreamCard": {
+    "dreamVisionHeader": "Dream Vision",
+    "nightLabel": "Night {number}",
+    "lingeringFearHint": "Cold sweat drenches your skin as an alien summons still echoes in your ears.",
+    "awakenedStatus": "Awakened from the nightmare",
+    "awakenButton": "Wake Up"
+  },
   "MessageCard": {
     "playerPortraitAlt": "Player portrait",
     "resumeReading": "Resume reading",

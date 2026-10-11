@@ -3,6 +3,7 @@ import {
   sanitizeLocationName,
   extractLatestTagLocation,
   extractLocations,
+  extractDreamVisionTag,
 } from './event-parser';
 
 describe('event-parser (Visual Prompt Leak & Location Sanitization)', () => {
@@ -84,6 +85,40 @@ describe('event-parser (Visual Prompt Leak & Location Sanitization)', () => {
         'Przybywasz do Kowary Mountain Cafe, 1990s authentic Poland, 35mm film photograph.';
       const locs = extractLocations(text);
       expect(locs).toHaveLength(0);
+    });
+  });
+
+  describe('extractDreamVisionTag', () => {
+    it('wyłuskuje znacznik [SEN: dark-cabin | Thomas] z poprawnymi polami', () => {
+      const text =
+        'Zapadła głęboka noc. [SEN: dark-cabin | Thomas] Budzisz się zlany potem.';
+      const res = extractDreamVisionTag(text);
+      expect(res).not.toBeNull();
+      expect(res?.variantId).toBe('dark-cabin');
+      expect(res?.investigatorName).toBe('Thomas');
+      expect(res?.nightNumber).toBe(1);
+    });
+
+    it('obsługuje alternatywne prefiksy [SENNE_WEZWANIE: ...] i numery nocy', () => {
+      const text =
+        '[SENNE_WEZWANIE: Coś w jeziorze | Arthur | noc=2] Woda bulgocze w ciemności.';
+      const res = extractDreamVisionTag(text);
+      expect(res).not.toBeNull();
+      expect(res?.variantId).toBe('thing-in-lake');
+      expect(res?.investigatorName).toBe('Arthur');
+      expect(res?.nightNumber).toBe(2);
+    });
+
+    it('obsługuje wariant 3 (Ścieżka przez las)', () => {
+      const text = '[DREAM: 3] Widzisz zarośniętą ścieżkę.';
+      const res = extractDreamVisionTag(text);
+      expect(res).not.toBeNull();
+      expect(res?.variantId).toBe('forest-path');
+    });
+
+    it('zwraca null gdy w tekście nie ma znacznika snu', () => {
+      const text = 'Siedzicie przy ognisku, rozmawiając o dalszych planach.';
+      expect(extractDreamVisionTag(text)).toBeNull();
     });
   });
 });

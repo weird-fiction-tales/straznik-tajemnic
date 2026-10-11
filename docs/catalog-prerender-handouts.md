@@ -167,7 +167,7 @@ Zgodnie z zasadą orkiestracji `aios-vibe-coder`, każda przygoda z poniższego 
 - **Katalog A (Grafika & Dokumenty):**
   - `[KANON-PDF]` Mapa #1: Hrabstwo Bennington i obóz poszukiwawczy Jane Collins.
   - `[KANON-PDF]` Mapa #2: Rejon jeziora i zalanego kamieniołomu.
-  - `[KANON-PDF]` Pomoce dla graczy: Senne Wezwania (trzy warianty koszmaru sennego o zielonym kryształowym słupie).
+  - `[KANON-PDF / NARRACJA]` Pomoce dla graczy: Senne Wezwania (cztery warianty onirycznej narracji w diegetycznym oknie czatu: Niespokojna noc, Chata w ciemnościach, Ścieżka przez las, Coś w jeziorze; bez stanu przedmiotu w ekwipunku).
   - `[AI-EXPANDED]` List gończy za porywaczami i fotografia zaginionej Jane Collins.
   - `[AI-EXPANDED]` Portrety NPC: Szeryf Baker, przywódca porywaczy Harris, ranny geolog Otis.
   - `[AI-EXPANDED]` Kadry lokacji 16:9: Gęsty, prastary las sosnowy w gęstej mgle, czarna tafla zalanego kamieniołomu z wystającym żelaznym słupem.

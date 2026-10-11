@@ -27,6 +27,7 @@ import {
   validateAndEnforceThreeClueRule,
   ThreeClueRuleValidator,
 } from './three-clue-rule-validator';
+import { ANCIENT_TREES_DREAM_VARIANTS } from '@/lib/adventures/dreams/ancient-trees-dreams';
 import type { DocumentType } from '@/types/adventure';
 import type {
   OverlayDescriptor,
@@ -1667,40 +1668,9 @@ export function extractCoreRulebookScenarios(
       },
     ];
 
-    const defaultHandouts: AdventureHandout[] = [
-      {
-        slug: 'posrod-pradawnych-drzew-senne-wezwania-1',
-        title: isEn ? 'Dream Pull 1: Restless Night' : 'Senne Wezwania 1: Niespokojna noc',
-        image: '/handouts/placeholder-letter.webp',
-        handoutType: 'letter',
-        textContent:
-          'Wizja senna z Rozdziału 15.1: Ciemne drzewa, chorobliwie pożółkłe liście i wrażenie, że coś w głębi lasu patrzy i czeka.',
-      },
-      {
-        slug: 'posrod-pradawnych-drzew-senne-wezwania-2',
-        title: isEn ? 'Dream Pull 2: Cabin in the Dark' : 'Senne Wezwania 2: Chata w ciemnościach',
-        image: '/handouts/placeholder-letter.webp',
-        handoutType: 'letter',
-        textContent:
-          'Wizja senna z Rozdziału 15.1: Rozpadająca się chata z bali i blade postacie z ciemnozielonym śladem rozkładu wzywające do służby.',
-      },
-      {
-        slug: 'posrod-pradawnych-drzew-senne-wezwania-3',
-        title: isEn ? 'Dream Pull 3: Path Through the Woods' : 'Senne Wezwania 3: Ścieżka przez las',
-        image: '/handouts/placeholder-letter.webp',
-        handoutType: 'letter',
-        textContent:
-          'Wizja senna z Rozdziału 15.1: Martwa cisza na leśnej dróżce, żółte światło odbijające się od tafli wody i nagłe ukłucie w piersi.',
-      },
-      {
-        slug: 'posrod-pradawnych-drzew-senne-wezwania-4',
-        title: isEn ? 'Dream Pull 4: Something in the Lake' : 'Senne Wezwania 4: Coś w jeziorze',
-        image: '/handouts/placeholder-letter.webp',
-        handoutType: 'letter',
-        textContent:
-          'Wizja senna z Rozdziału 15.1: Czarna, oleista woda jeziora, unoszące się wici z oczami i metaliczne kolce Gla’akiego.',
-      },
-    ];
+    // Issue #787: Sny Wezwania nie są handoutami ani przedmiotami ze stanem w ekwipunku.
+    // Są prezentowane w oknie wizji sennej i rozliczane przez moduł ancient-trees-dreams.
+    const defaultHandouts: AdventureHandout[] = [];
 
     const handouts = sliceMeta?.handouts?.length
       ? [...defaultHandouts, ...sliceMeta.handouts]
@@ -1751,6 +1721,7 @@ export function extractCoreRulebookScenarios(
       sourceBookId: 'core-d100',
       recommendedForBeginners: true,
       attachedLorebookIds: [],
+      dreamCalls: Object.values(ANCIENT_TREES_DREAM_VARIANTS),
     });
   }
 
