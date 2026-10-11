@@ -14,9 +14,8 @@
  */
 export const QUALITY_PRESETS = {
   low: {
-    name: 'LOW COST',
-    description:
-      'Gemini Flash-Lite, bez lektora, bez obrazów - najtańszy (~$0.02-0.05/sesja)',
+    name: 'LOW',
+    description: 'Tylko tekst, bez lektora i ilustracji AI',
     settings: {
       // Gemini settings - Gemini Flash-Lite Latest
       model: 'gemini-flash-lite-latest' as const, // Ultra-szybki i tani
@@ -50,9 +49,8 @@ export const QUALITY_PRESETS = {
   },
 
   mid: {
-    name: 'MID COST',
-    description:
-      'Gemini Flash Latest + lektor Charon (Gemini TTS) + obrazy Imagen (~$0.20/sesja)',
+    name: 'MID',
+    description: 'Tekst i handouty, bez lektora i ilustracji AI',
     settings: {
       // Gemini settings - Gemini Flash Latest
       model: 'gemini-flash-latest' as const,
@@ -71,14 +69,14 @@ export const QUALITY_PRESETS = {
       enableCache: true,
       cacheTTL: 2 * 60 * 60 * 1000, // 2h (OPT-C04)
       // TTS settings - Charon jako jeden stabilny lektor
-      ttsEnabled: true,
+      ttsEnabled: false,
       ttsProvider: 'gemini' as const,
-      ttsVoice: 'Charon',
+      ttsVoice: null,
       narratorOnly: true,
       volume: 85,
       speed: 0.92,
       // Image settings - Imagen standard
-      imagesEnabled: true,
+      imagesEnabled: false,
       imageProvider: 'vertex' as const,
       imageQuality: 'medium' as const,
       // Narration style
@@ -89,9 +87,8 @@ export const QUALITY_PRESETS = {
   },
 
   high: {
-    name: 'HIGH COST',
-    description:
-      'Gemini 3.8 Flash + lektor Algenib (słuchowisko) + obrazy Imagen (~$0.50/sesja)',
+    name: 'HIGH',
+    description: 'Lektor, handouty i ilustracje ważnych scen',
     settings: {
       // === GEMINI SETTINGS ===
       model: 'gemini-3.8-flash' as const, // Gemini 3.8 Flash
@@ -115,7 +112,7 @@ export const QUALITY_PRESETS = {
       ttsEnabled: true,
       ttsProvider: 'gemini' as const,
       ttsVoice: 'Algenib',
-      narratorOnly: false,
+      narratorOnly: true,
       volume: 85,
       speed: 1.0,
 
@@ -140,8 +137,7 @@ export const QUALITY_PRESETS = {
 
   ultra: {
     name: 'ULTRA',
-    description:
-      'Gemini 3.1 Pro + lektor Gacrux (pełne słuchowisko multi-voice) + obrazy Imagen HD (~$1.00/sesja)',
+    description: 'Pełne słuchowisko, handouty i ilustracje',
     settings: {
       // Gemini settings - maksymalna jakość
       model: 'gemini-3.1-pro-preview' as const,

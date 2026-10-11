@@ -33,6 +33,7 @@ export interface StickyNote {
 export interface Section {
   type: SectionType;
   content: string;
+  title?: string;
   speaker?: string;
   handoutType?: HandoutType;
   handoutSlug?: string;

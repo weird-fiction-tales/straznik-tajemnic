@@ -5563,16 +5563,16 @@
     "imagesLabel": "Obrazy:",
     "presets": {
       "low": {
-        "description": "Gemini 3.6 Flash, bez lektora, bez obrazów - najtańszy (~$0.02-0.05/sesja)"
+        "description": "Tylko tekst."
       },
       "mid": {
-        "description": "Gemini 3.6 Flash + lektor (Gemini TTS) + obrazy Gemini (~$0.20/sesja)"
+        "description": "Tekst i handouty."
       },
       "high": {
-        "description": "Gemini 3.8 Flash (High) + lektor + obrazy Imagen 4 (~$0.50/sesja)"
+        "description": "Lektor, handouty i ilustracje ważnych scen."
       },
       "ultra": {
-        "description": "Gemini 3.1 Pro High + multi-voice słuchowisko + obrazy HD (~$1.00/sesja)"
+        "description": "Pełne słuchowisko, handouty oraz ilustracje scen, postaci i znalezisk."
       },
       "custom": {
         "description": "Własna konfiguracja wszystkich parametrów"
@@ -7666,17 +7666,17 @@
   "SessionJournal": {
     "readerAdventure": "Przygoda",
     "readerSession": "Sesja {number}",
-    "readerEyebrow": "Zapis naszej drogi",
+    "readerEyebrow": "Dziennik drużyny",
     "readerTitle": "Kronika",
     "readerParty": "Drużyna: {names}",
     "readerInvestigator": "Zapis Badacza: {name}",
     "readerContents": "Spis wpisów",
-    "readerEarlierEntry": "Wcześniejszy zapis",
+    "readerEarlierEntry": "Wcześniejsze wpisy",
     "readerEmptyTitle": "Pierwszy wpis jest jeszcze przed nami",
     "readerEmptyDescription": "Po zakończeniu sceny pojawi się tutaj zapis tego, co się wydarzyło, kogo spotkaliśmy i co usłyszeliśmy.",
     "readerCurrentLocation": "Teraz: {location}",
     "readerCurrentDescription": "Zapis tej sceny pojawi się po jej zakończeniu.",
-    "readerIntroduction": "Kolejne zapisy zachowują wydarzenia tak, jak je poznaliśmy. Usłyszane twierdzenia pozostają słowami ich autorów.",
+    "readerIntroduction": "Wydarzenia i relacje zapisane tak, jak je poznaliśmy. Plotki pozostają słowami ich autorów.",
     "readerPeople": "Spotkane osoby",
     "readerFindings": "Zapisane znaleziska",
     "readerNoRecord": "Nie zachował się opis tej sceny.",
@@ -8739,6 +8739,16 @@
     "selectLightsTitle": "Wybierz lampy biorące udział w sesji",
     "loadingLights": "Wczytywanie listy lamp...",
     "noLightsFound": "Nie znaleziono zarejestrowanych lamp na mostku."
+  },
+  "StartQualityPresets": {
+    "title": "Oprawa rozgrywki",
+    "custom": "Zachowano własne ustawienia. Wybierz kafelek, aby zastosować gotowy preset.",
+    "presets": {
+      "low": "Tylko tekst.",
+      "mid": "Tekst i handouty.",
+      "high": "Lektor, handouty i ilustracje ważnych scen.",
+      "ultra": "Pełne słuchowisko, handouty oraz ilustracje scen, postaci i znalezisk."
+    }
   },
   "AudioHandouts": {
     "recordingHeader": "NAGRANIE AUDIO",

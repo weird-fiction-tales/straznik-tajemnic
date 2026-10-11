@@ -5563,16 +5563,16 @@
     "imagesLabel": "Images:",
     "presets": {
       "low": {
-        "description": "Gemini 3.6 Flash, no voice, no images - most affordable (~$0.02-0.05/session)"
+        "description": "Text only."
       },
       "mid": {
-        "description": "Gemini 3.6 Flash + voice (Gemini TTS) + Gemini images (~$0.20/session)"
+        "description": "Text and handouts."
       },
       "high": {
-        "description": "Gemini 3.8 Flash (High) + voice + Imagen 4 images (~$0.50/session)"
+        "description": "Narrator, handouts and illustrations of key scenes."
       },
       "ultra": {
-        "description": "Gemini 3.1 Pro High + multi-voice radio drama + HD images (~$1.00/session)"
+        "description": "Full voice cast, handouts and illustrations of scenes, characters and discoveries."
       },
       "custom": {
         "description": "Custom configuration of all parameters"
@@ -7666,17 +7666,17 @@
   "SessionJournal": {
     "readerAdventure": "Adventure",
     "readerSession": "Session {number}",
-    "readerEyebrow": "A record of our journey",
+    "readerEyebrow": "Party journal",
     "readerTitle": "Chronicle",
     "readerParty": "Party: {names}",
     "readerInvestigator": "Investigator’s record: {name}",
     "readerContents": "Contents",
-    "readerEarlierEntry": "Earlier record",
+    "readerEarlierEntry": "Earlier entries",
     "readerEmptyTitle": "Our first entry is still ahead",
     "readerEmptyDescription": "When a scene ends, its record will appear here: what happened, whom we met, and what we heard.",
     "readerCurrentLocation": "Now: {location}",
     "readerCurrentDescription": "The record of this scene will appear after it ends.",
-    "readerIntroduction": "These entries preserve events as we experienced them. The claims we heard remain the words of their speakers.",
+    "readerIntroduction": "Events and accounts as we experienced them. Rumors remain the words of their speakers.",
     "readerPeople": "People met",
     "readerFindings": "Recorded finds",
     "readerNoRecord": "No account of this scene was preserved.",
@@ -8739,6 +8739,16 @@
     "selectLightsTitle": "Select lights participating in session",
     "loadingLights": "Loading lights list...",
     "noLightsFound": "No registered lights found on the bridge."
+  },
+  "StartQualityPresets": {
+    "title": "Game presentation",
+    "custom": "Your custom settings are preserved. Choose a tile to apply a preset.",
+    "presets": {
+      "low": "Text only.",
+      "mid": "Text and handouts.",
+      "high": "Narrator, handouts and illustrations of key scenes.",
+      "ultra": "Full voice cast, handouts and illustrations of scenes, characters and discoveries."
+    }
   },
   "AudioHandouts": {
     "recordingHeader": "AUDIO RECORDING",

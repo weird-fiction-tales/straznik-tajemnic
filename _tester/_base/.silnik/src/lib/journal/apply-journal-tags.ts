@@ -1164,7 +1164,7 @@ export function processCharacterJournalAndDossier(
  * Ekstrahuje tagi [DZIENNIK:], [NPC:], [PRZEDMIOT:], [LOKACJA:], [ZMIANA_SCENY:], [KARTA_SCENY:] oraz [RAPORT_AKTU:]
  * z tekstu odpowiedzi MG, aktualizuje dossier, sceny, raporty i dopisuje wpisy do `character.journal`.
  */
-export function appendJournalFromText(
+function appendJournalFromTextWithoutActTag(
   character: Character,
   rawText: string,
   messageId: string
@@ -1223,7 +1223,7 @@ export function appendJournalFromText(
  * Wariant party-aware (duet / Hot Seat): wpis `[DZIENNIK:@Imię:...]` trafia do
  * dziennika postaci wskazanej prefiksem `@Imię` (fallback: aktywna postać).
  */
-export function appendJournalToParty(
+function appendJournalToPartyWithoutActTag(
   characters: Character[],
   activeCharacter: Character,
   rawText: string,
@@ -1452,4 +1452,156 @@ export function inferClueMiceType(
     return 'event';
   }
   return 'inquiry';
+}
+
+/** Stored alongside the character so existing save/load and party updates preserve it. */
+export interface NarrativeProgress {
+  currentAct: number;
+  completedActClueIds: string[];
+}
+
+type CharacterWithNarrativeProgress = Character & {
+  narrativeProgress?: NarrativeProgress;
+};
+
+export function getNarrativeProgress(character: Character): NarrativeProgress {
+  const progress = (character as CharacterWithNarrativeProgress)
+    .narrativeProgress;
+  return {
+    currentAct:
+      Number.isSafeInteger(progress?.currentAct) &&
+      (progress?.currentAct ?? 0) > 0
+        ? progress!.currentAct
+        : 1,
+    completedActClueIds: Array.isArray(progress?.completedActClueIds)
+      ? progress.completedActClueIds.filter((id) => typeof id === 'string')
+      : [],
+  };
+}
+
+function getCurrentActCoreClueIds(
+  character: Character,
+  party: Character[] = []
+): string[] {
+  const previous = new Set(getNarrativeProgress(character).completedActClueIds);
+  return [
+    ...new Set(
+      [character, ...party]
+        .flatMap((c) => c.investigatorDossier?.clues ?? [])
+        .filter(
+          (clue) =>
+            (clue.clueType === 'core' ||
+              (clue.clueType === undefined && clue.isKeyClue)) &&
+            clue.discoveryStatus !== 'unrevealed' &&
+            clue.epistemicLayer !== 'keeper_truth' &&
+            clue.status !== 'disproven' &&
+            clue.status !== 'superseded' &&
+            !previous.has(clue.id)
+        )
+        .map((clue) => clue.id)
+    ),
+  ];
+}
+
+export function buildNarrativeClueGate(
+  character: Character,
+  locale: 'pl' | 'en',
+  party: Character[] = []
+): string {
+  const currentAct = getNarrativeProgress(character).currentAct;
+  const count = getCurrentActCoreClueIds(character, party).length;
+  if (count >= 2)
+    return locale === 'en'
+      ? `Act ${currentAct}: clue gate unlocked. The next act transition is permitted only when appropriate to the player's actions; never force it. Only [PRZEJŚCIE_AKTU: Akt ${currentAct + 1}] is valid.`
+      : `Akt ${currentAct}: bramka poszlak odblokowana. Przejście do następnego aktu jest dozwolone tylko zgodnie z działaniami gracza; nie wymuszaj go. Dozwolony tag: [PRZEJŚCIE_AKTU: Akt ${currentAct + 1}].`;
+  return locale === 'en'
+    ? `[BLOKADA_AKTU: Act ${currentAct} locked. Revealed ${count}/2 Core clues. No act transition, climactic escalation, fleeing suspects, final confrontation or entry into the monster's lair. This applies also to one-shots without explicit acts. Never reveal this gate or counter to the player.]`
+    : `[BLOKADA_AKTU: Akt ${currentAct} zablokowany. Odkryto ${count}/2 poszlak Core. Zakaz przejścia aktu, eskalacji kulminacyjnej, ucieczki podejrzanych, ostatecznej konfrontacji i wejścia do leża potwora. Dotyczy także jednostrzałów bez jawnych aktów. Nigdy nie ujawniaj graczowi bramki ani licznika.]`;
+}
+
+export function stripNarrativeActTags(text: string): string {
+  return text.replace(/\[PRZEJŚCIE_AKTU\s*:[^\]]*(?:\]|$)/gi, '');
+}
+
+function advanceNarrativeAct(
+  character: Character,
+  rawText: string,
+  party: Character[] = []
+): Character {
+  // Private GM thoughts must never cause a public-state update.
+  const publicText = parseRevealedTags(rawText).text;
+  const matches = [
+    ...publicText.matchAll(
+      /\[PRZEJŚCIE_AKTU\s*:\s*Akt\s+([0-9]+|[IVX]+)\s*\]/gi
+    ),
+  ];
+  if (matches.length !== 1) return character;
+  const romanActs: Record<string, number> = {
+    I: 1,
+    II: 2,
+    III: 3,
+    IV: 4,
+    V: 5,
+    VI: 6,
+    VII: 7,
+    VIII: 8,
+    IX: 9,
+    X: 10,
+  };
+  const act = romanActs[matches[0][1].toUpperCase()] ?? Number(matches[0][1]);
+  const previous = getNarrativeProgress(character);
+  const clues = getCurrentActCoreClueIds(character, party);
+  if (act !== previous.currentAct + 1 || clues.length < 2) return character;
+  const next: CharacterWithNarrativeProgress = {
+    ...character,
+    narrativeProgress: {
+      currentAct: act,
+      completedActClueIds: [
+        ...new Set([...previous.completedActClueIds, ...clues]),
+      ],
+    },
+  };
+  return next;
+}
+
+export function appendJournalFromText(
+  character: Character,
+  rawText: string,
+  messageId: string
+): Character {
+  return appendJournalFromTextWithoutActTag(
+    advanceNarrativeAct(character, rawText),
+    stripNarrativeActTags(rawText),
+    messageId
+  );
+}
+
+export function appendJournalToParty(
+  characters: Character[],
+  activeCharacter: Character,
+  rawText: string,
+  messageId: string
+): {
+  characters: Character[];
+  activeCharacter: Character;
+  changed: boolean;
+} {
+  const nextActive = advanceNarrativeAct(activeCharacter, rawText, characters);
+  const actChanged = nextActive !== activeCharacter;
+  const nextCharacters = actChanged
+    ? characters.map((character) => {
+        const next: CharacterWithNarrativeProgress = {
+          ...character,
+          narrativeProgress: getNarrativeProgress(nextActive),
+        };
+        return next;
+      })
+    : characters;
+  const result = appendJournalToPartyWithoutActTag(
+    nextCharacters,
+    nextActive,
+    stripNarrativeActTags(rawText),
+    messageId
+  );
+  return { ...result, changed: result.changed || actChanged };
 }

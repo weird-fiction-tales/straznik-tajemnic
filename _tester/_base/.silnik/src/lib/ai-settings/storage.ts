@@ -1,13 +1,15 @@
-import {
-  AISettings,
-  normalizeSessionZeroSettings,
-} from './types';
+import { AISettings, normalizeSessionZeroSettings } from './types';
 import { defaultAISettings } from './defaults';
+import { applyPreset } from '../ai-presets';
 
 // Funkcje pomocnicze
 export const saveAISettings = (settings: AISettings) => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('ai_settings', JSON.stringify(settings));
+    try {
+      localStorage.setItem('ai_settings', JSON.stringify(settings));
+    } catch (e) {
+      console.warn('Failed to save AI settings to localStorage:', e);
+    }
 
     // === REACTIVE SETTINGS: Emituj event dla wszystkich subskrybentów ===
     // Import dynamiczny aby uniknąć circular dependency
@@ -33,20 +35,20 @@ export const withVoiceEnabled = (
 
 export const loadAISettings = (): AISettings => {
   if (typeof window !== 'undefined') {
-    // IND-103: jednorazowy cleanup sierot localStorage po drop dead code
-    // (voice-matcher/npc-voice-service/initiative-tracker-manager - 0 callerów).
-    // Idempotent guard zapobiega multiple-run przy każdym loadAISettings().
-    const IND103_MIGRATION_KEY = 'ind103_migration_done';
-    if (!localStorage.getItem(IND103_MIGRATION_KEY)) {
-      localStorage.removeItem('npc_voices_unified');
-      localStorage.removeItem('npc_voice_assignments');
-      localStorage.removeItem('initiative_tracker_state');
-      localStorage.setItem(IND103_MIGRATION_KEY, '1');
-    }
+    try {
+      // IND-103: jednorazowy cleanup sierot localStorage po drop dead code
+      // (voice-matcher/npc-voice-service/initiative-tracker-manager - 0 callerów).
+      // Idempotent guard zapobiega multiple-run przy każdym loadAISettings().
+      const IND103_MIGRATION_KEY = 'ind103_migration_done';
+      if (!localStorage.getItem(IND103_MIGRATION_KEY)) {
+        localStorage.removeItem('npc_voices_unified');
+        localStorage.removeItem('npc_voice_assignments');
+        localStorage.removeItem('initiative_tracker_state');
+        localStorage.setItem(IND103_MIGRATION_KEY, '1');
+      }
 
-    const saved = localStorage.getItem('ai_settings');
-    if (saved) {
-      try {
+      const saved = localStorage.getItem('ai_settings');
+      if (saved) {
         const parsedSettings = JSON.parse(saved);
         // Migracja ustawień - upewnij się, że wszystkie nowe pola są obecne.
         // IND-46: tolerant parse - extra fields w localStorage (legacy
@@ -117,16 +119,16 @@ export const loadAISettings = (): AISettings => {
           customCommands:
             parsedSettings.customCommands || defaultAISettings.customCommands,
         };
-      } catch (e) {
-        console.error('Error loading AI settings:', e);
       }
+    } catch (e) {
+      console.error('Error loading AI settings:', e);
     }
   }
-  return defaultAISettings;
+  return applyPreset('ultra', defaultAISettings);
 };
 
 export const resetAISettings = (): AISettings => {
-  const settings = defaultAISettings;
+  const settings = applyPreset('ultra', defaultAISettings);
   saveAISettings(settings);
   return settings;
 };

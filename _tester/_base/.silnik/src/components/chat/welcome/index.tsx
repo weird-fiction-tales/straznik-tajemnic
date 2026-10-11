@@ -16,6 +16,7 @@ import type { WelcomeScreenProps } from './types';
 import { WELCOME_QUOTES, WELCOME_QUOTES_EN } from './data/quotes';
 import { useTypewriterSound } from './hooks/use-typewriter-sound';
 import { StartModeCards } from './components/start-mode-cards';
+import { StartQualityPresets } from './components/start-quality-presets';
 import { ManualSetupPanel } from './components/manual-setup-panel';
 import { BottomLinks } from './components/bottom-links';
 import { FullGameSaveManager } from '@/lib/full-game-save-manager';
@@ -72,12 +73,15 @@ function relativeTime(iso: string): string {
 }
 
 /** Karta wznowienia ostatniej sesji (styl déco z makiety karta 06). */
-const ResumeCard: FC<{ save: RecentSave; onResume?: () => void; t: ReturnType<typeof useTranslations> }> = ({
-  save,
-  onResume,
-  t,
-}) => (
-  <div data-testid="welcome-screen" className="deco-corners relative w-[min(420px,90vw)] mb-6 p-4 border border-brass/50 bg-gradient-to-br from-[#1a1610] to-[#100d09] shadow-[0_0_22px_rgba(13,148,136,0.08)] z-20">
+const ResumeCard: FC<{
+  save: RecentSave;
+  onResume?: () => void;
+  t: ReturnType<typeof useTranslations>;
+}> = ({ save, onResume, t }) => (
+  <div
+    data-testid="welcome-screen"
+    className="deco-corners relative w-[min(420px,90vw)] mb-6 p-4 border border-brass/50 bg-gradient-to-br from-[#1a1610] to-[#100d09] shadow-[0_0_22px_rgba(13,148,136,0.08)] z-20"
+  >
     <div className="font-special-elite text-[14px] text-primary tracking-[0.22em] uppercase mb-1">
       ● {t('lastSession')}
     </div>
@@ -86,7 +90,9 @@ const ResumeCard: FC<{ save: RecentSave; onResume?: () => void; t: ReturnType<ty
     </div>
     <div className="flex items-center gap-4 mt-2 font-special-elite text-[14px] text-muted-foreground tracking-[0.06em]">
       <span>{t('entries', { count: save.messageCount })}</span>
-      {save.imageCount > 0 && <span>{t('images', { count: save.imageCount })}</span>}
+      {save.imageCount > 0 && (
+        <span>{t('images', { count: save.imageCount })}</span>
+      )}
       <span className="text-brass/90">{relativeTime(save.lastUpdated)}</span>
     </div>
     {onResume && (
@@ -134,12 +140,10 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
 }) => {
   const t = useTranslations('WelcomeStart');
   const locale = useLocale();
-  const [quote] = useState(
-    () => {
-      const quotes = locale === 'en' ? WELCOME_QUOTES_EN : WELCOME_QUOTES;
-      return quotes[Math.floor(Math.random() * quotes.length)];
-    }
-  );
+  const [quote] = useState(() => {
+    const quotes = locale === 'en' ? WELCOME_QUOTES_EN : WELCOME_QUOTES;
+    return quotes[Math.floor(Math.random() * quotes.length)];
+  });
   // Quick-winy (read-only, po mount - unika hydration mismatch):
   const [gameYear, setGameYear] = useState<number | null>(null);
   const [recentSave, setRecentSave] = useState<RecentSave | null>(null);
@@ -150,7 +154,10 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
   const [isManualMode, setIsManualMode] = useState<boolean>(false);
 
   const isQuoteVisible = Boolean(quoteActive && hasKey && !isManualMode);
-  const { displayedText, isTyping } = useTypewriterSound(quote.greeting, isQuoteVisible);
+  const { displayedText, isTyping } = useTypewriterSound(
+    quote.greeting,
+    isQuoteVisible
+  );
 
   const handleSetManualMode = useCallback((manual: boolean) => {
     setIsManualMode(manual);
@@ -175,7 +182,7 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
     } catch {
       /* brak dostępu do storage */
     }
-    
+
     // Nasłuchuj na zmiany kluczy by automatycznie odświeżyć ekran po zapisie
     const onKeysChanged = () => setHasKey(hasRequiredKeys());
     window.addEventListener('api-keys-changed', onKeysChanged);
@@ -228,7 +235,10 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
     : Boolean(manualActiveCharacter);
 
   return (
-    <div data-testid="welcome-screen" className="relative h-full w-full overflow-hidden bg-background">
+    <div
+      data-testid="welcome-screen"
+      className="relative h-full w-full overflow-hidden bg-background"
+    >
       {/* === Warstwy tła (makieta karta 02) === */}
       <div className="absolute inset-0 pointer-events-none" aria-hidden>
         <div
@@ -255,7 +265,9 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
       {/* === Centrum === */}
       <div
         className={`relative z-20 h-full flex flex-col items-center py-6 px-4 md:px-8 text-center overflow-y-auto journal-scroll ${
-          isManualMode ? 'justify-start pb-16' : 'justify-start md:justify-center pb-28'
+          isManualMode
+            ? 'justify-start pb-16'
+            : 'justify-start md:justify-center pb-28'
         }`}
       >
         {!isManualMode && (
@@ -302,8 +314,10 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
         <div
           id="start-mode-cards-container"
           className={cn(
-            'flex flex-col md:flex-row gap-6 w-full justify-center items-center z-20 mt-2',
-            isManualMode ? 'w-full max-w-none px-2 md:px-4' : 'max-w-5xl'
+            'gap-6 w-full justify-center z-20 mt-2',
+            isManualMode
+              ? 'flex flex-col items-center max-w-none px-2 md:px-4'
+              : 'grid grid-cols-1 md:grid-cols-2 items-stretch max-w-5xl'
           )}
         >
           {!hasKey ? (
@@ -365,13 +379,18 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
               startStatus={startStatus}
             />
           ) : (
-            <StartModeCards 
-              onQuickStart={(adv, char, mode, p2) => onQuickStart?.(adv, char, mode, p2)} 
-              onManualStart={() => handleSetManualMode(true)} 
-              isStarting={isStarting}
-              startProgress={startProgress}
-              startStatus={startStatus}
-            />
+            <>
+              <StartModeCards
+                onQuickStart={(adv, char, mode, p2) =>
+                  onQuickStart?.(adv, char, mode, p2)
+                }
+                onManualStart={() => handleSetManualMode(true)}
+                isStarting={isStarting}
+                startProgress={startProgress}
+                startStatus={startStatus}
+              />
+              <StartQualityPresets disabled={isStarting} />
+            </>
           )}
         </div>
 

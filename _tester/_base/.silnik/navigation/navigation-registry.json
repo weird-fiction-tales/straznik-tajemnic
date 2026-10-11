@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "version": "0.9.5",
-  "updatedAt": "2026-10-10T17:05:00.000Z",
+  "updatedAt": "2026-10-10T22:49:00.000Z",
   "locales": [
     "pl",
     "en"
@@ -249,8 +249,8 @@
       "id": "journal",
       "kind": "modal",
       "label": {
-        "pl": "Kronika przygód i sesji",
-        "en": "Chronicle of adventures and sessions"
+        "pl": "Czytnik kroniki przygód i sesji",
+        "en": "Reader for adventure and session chronicle"
       }
     },
     {
