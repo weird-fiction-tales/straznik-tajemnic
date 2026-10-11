@@ -97,6 +97,7 @@ import {
 } from '@/lib/equipment-prompt-builder';
 import { resolveEraVisualProfile } from '@/lib/era-visual-style';
 import { isCheatCommand, executeCheatCommand } from '@/lib/cheats/cheat-engine';
+import { getGlobalLightDirector } from '@/lib/hardware/hue/light-director-service';
 import type {
   CombatResolution,
   PendingMeleeAttack,
@@ -620,6 +621,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const lastSentUserMessageRef = useRef<string | null>(null);
   const currentAssistantMessageIdRef = useRef<string | null>(null);
   const currentUserMessageIdRef = useRef<string | null>(null);
+  const lastHueLocationChangeTimeRef = useRef<number>(0);
+  const hasTriggeredSanShockThisTurnRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const director = getGlobalLightDirector();
+      director.onSessionStart().catch(() => {});
+    }
+  }, []);
 
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -1386,6 +1396,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       }
       setMessages((prev) => [...prev, userMessage]);
       setIsLoading(true);
+      hasTriggeredSanShockThisTurnRef.current = false;
 
       const sessionStartedAt =
         typeof window !== 'undefined'
@@ -1548,6 +1559,40 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               setIsSessionEnded(true);
               setSessionSaveStatus('saving');
               hasSessionEndConfirmation = true;
+              if (typeof window !== 'undefined') {
+                const director = getGlobalLightDirector();
+                director.onSessionEnd().catch(() => {});
+              }
+            }
+
+            // Reżyseria oświetlenia Philips Hue w locie (Q1 -> A)
+            if (typeof window !== 'undefined') {
+              const locMatch = extractLatestTagLocation(text);
+              if (
+                locMatch &&
+                locMatch.name.length <= 45 &&
+                !isVisualPromptLeak(locMatch.name)
+              ) {
+                const now = Date.now();
+                if (now - lastHueLocationChangeTimeRef.current >= 10000) {
+                  lastHueLocationChangeTimeRef.current = now;
+                  const director = getGlobalLightDirector();
+                  const mood = director.evaluateEnvironmentMood({
+                    locationText: locMatch.name,
+                    hour: typeof currentGameTime?.hour === 'number' ? currentGameTime.hour : undefined,
+                  });
+                  director.applyPreset(mood).catch(() => {});
+                }
+              }
+
+              if (
+                !hasTriggeredSanShockThisTurnRef.current &&
+                /\[SANITY:\s*(?:@[^:]+:\s*)?-\d+/i.test(text)
+              ) {
+                hasTriggeredSanShockThisTurnRef.current = true;
+                const director = getGlobalLightDirector();
+                director.triggerSanityShock().catch(() => {});
+              }
             }
             streamedFullText = cleanText;
             setMessages((prev) =>

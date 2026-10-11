@@ -23,6 +23,10 @@ export class LightDirector {
     this.presets = (presetsData as unknown as { presets: Record<string, LightPreset> }).presets;
   }
 
+  public getClient(): HueClient {
+    return this.client;
+  }
+
   public getPresets(): Record<string, LightPreset> {
     return this.presets;
   }
@@ -188,7 +192,19 @@ export class LightDirector {
     // 2. Klasyfikacja semantyczna z nazwy/opisu lokacji
     if (params.locationText) {
       const txt = params.locationText.toLowerCase();
-      if (txt.includes('las') || txt.includes('bor') || txt.includes('sad') || txt.includes('drzew')) {
+      // Priorytet 1: Anomalie Mitów i nadnaturalne zjawiska
+      if (txt.includes('kolor z innego') || txt.includes('meteoryt') || txt.includes('anomali') || txt.includes('nieziemsk')) {
+        return 'colour_out_of_space';
+      }
+      if (txt.includes('rytuał') || txt.includes('ołtarz') || txt.includes('krwaw') || txt.includes('ofiarn')) {
+        return 'bloody_ritual';
+      }
+      if (txt.includes("r'lyeh") || txt.includes('rlyeh') || txt.includes('cyklopow') || txt.includes('lodowat')) {
+        return 'frozen_rlyeh';
+      }
+
+      // Priorytet 2: Specyficzne lokacje fabularne
+      if (/\b(las\w*|leśn\w*|bór|boru|puszcz\w*|drzew\w*)\b/i.test(txt) || /\bsad\b/i.test(txt)) {
         return 'deep_forest';
       }
       if (txt.includes('bagn') || txt.includes('moczar') || txt.includes('torf')) {
@@ -215,7 +231,7 @@ export class LightDirector {
       if (txt.includes('areszt') || txt.includes('przesłuch') || txt.includes('komisariat') || txt.includes('cel')) {
         return 'police_interrogation';
       }
-      if (txt.includes('głębin') || txt.includes('dno') || txt.includes('zatopion') || txt.includes('ton')) {
+      if (txt.includes('głębin') || /\b(toń|toni|dno)\b/i.test(txt) || txt.includes('zatopion')) {
         return 'abyssal_deep';
       }
       if (txt.includes('pożar') || txt.includes('płon') || txt.includes('ogień') || txt.includes('płomien')) {
@@ -223,6 +239,15 @@ export class LightDirector {
       }
       if (txt.includes('izolatk') || txt.includes('sanator') || txt.includes('psychiatr') || txt.includes('szpital')) {
         return 'asylum_solitary';
+      }
+      if (txt.includes('speakeasy') || txt.includes('jazz') || txt.includes('klub') || txt.includes('szynk') || txt.includes('melin')) {
+        return 'speakeasy_jazz';
+      }
+      if (txt.includes('jarzeniówk') || txt.includes('świetlówk') || txt.includes('komitet') || txt.includes('milicj')) {
+        return 'prl_fluorescent';
+      }
+      if (txt.includes('gabinet') || txt.includes('narad') || txt.includes('odpoczynek') || txt.includes('pokój badacz')) {
+        return 'investigator_study';
       }
     }
 

@@ -92,25 +92,85 @@ export class HueClient {
   }
 
   /**
-   * Pobiera listę zasobów oświetlenia z mostka (CLIP v2 API)
+   * Procedura parowania (Pushlink) z 30-sekundowym odpytywaniem w tle.
+   * Użytkownik ma czas podejść do mostka i wcisnąć przycisk.
+   */
+  public async linkBridgeWithPolling(
+    bridgeIp: string,
+    onCountdown?: (secondsLeft: number) => void,
+    abortSignal?: AbortSignal,
+    timeoutSec = 30
+  ): Promise<{ success: boolean; appKey?: string; error?: string }> {
+    let secondsLeft = timeoutSec;
+    if (onCountdown) onCountdown(secondsLeft);
+
+    while (secondsLeft > 0) {
+      if (abortSignal?.aborted) {
+        return { success: false, error: 'ABORTED' };
+      }
+
+      const res = await this.linkBridge(bridgeIp);
+      if (res.success && res.appKey) {
+        return res;
+      }
+
+      if (res.error && res.error.toLowerCase().includes('link button not pressed')) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        secondsLeft -= 1;
+        if (onCountdown) onCountdown(secondsLeft);
+      } else {
+        return res;
+      }
+    }
+
+    return { success: false, error: 'TIMEOUT' };
+  }
+
+  /**
+   * Pobiera listę zasobów oświetlenia z mostka (oficjalne Hue API v1 LAN na porcie 80)
    */
   public async getLights(): Promise<HueLightResource[]> {
     if (!this.config.bridgeIp || !this.config.appKey) return [];
 
     try {
-      const url = `http://${this.config.bridgeIp}/clip/v2/resource/light`;
+      const url = `http://${this.config.bridgeIp}/api/${this.config.appKey}/lights`;
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'hue-application-key': this.config.appKey,
-          Accept: 'application/json',
-        },
+        headers: { Accept: 'application/json' },
       });
 
       if (!response.ok) return [];
       const data = await response.json();
-      if (!data.data || !Array.isArray(data.data)) return [];
-      return data.data as HueLightResource[];
+      if (!data || typeof data !== 'object') return [];
+
+      // Kompatybilność z formatem CLIP v2 (jeśli mostek go zwraca)
+      if (Array.isArray(data.data)) {
+        return data.data as HueLightResource[];
+      }
+
+      if (Array.isArray(data)) return [];
+
+      // Oficjalny format Hue API v1 LAN: { "1": { name, state: { on, bri, ct, xy, ... } } }
+      return Object.entries(data).map(([id, item]: [string, any]) => ({
+        id,
+        metadata: {
+          name: item.name || `Światło ${id}`,
+          archetype: item.type || 'light',
+        },
+        on: {
+          on: !!item.state?.on,
+        },
+        dimming: {
+          brightness: Math.round(((item.state?.bri ?? 254) / 254) * 100),
+        },
+        color_temperature: {
+          mirek: typeof item.state?.ct === 'number' ? item.state.ct : null,
+        },
+        color:
+          Array.isArray(item.state?.xy) && item.state.xy.length === 2
+            ? { xy: { x: item.state.xy[0], y: item.state.xy[1] } }
+            : undefined,
+      }));
     } catch {
       return [];
     }
@@ -166,7 +226,7 @@ export class HueClient {
   }
 
   /**
-   * Ustawia stan pojedynczego światła przez CLIP v2
+   * Ustawia stan pojedynczego światła przez Hue API v1 LAN
    */
   public async setLightState(
     lightId: string,
@@ -175,14 +235,52 @@ export class HueClient {
     if (!this.config.bridgeIp || !this.config.appKey) return false;
 
     try {
-      const url = `http://${this.config.bridgeIp}/clip/v2/resource/light/${lightId}`;
+      const v1Body: Record<string, unknown> = {};
+
+      if (payload.on && typeof payload.on === 'object' && 'on' in payload.on) {
+        v1Body.on = (payload.on as { on: boolean }).on;
+      }
+
+      if (
+        payload.dimming &&
+        typeof payload.dimming === 'object' &&
+        'brightness' in payload.dimming
+      ) {
+        const b = (payload.dimming as { brightness: number }).brightness;
+        v1Body.bri = Math.max(1, Math.min(254, Math.round((b / 100) * 254)));
+      }
+
+      if (
+        payload.color_temperature &&
+        typeof payload.color_temperature === 'object' &&
+        'mirek' in payload.color_temperature
+      ) {
+        v1Body.ct = (payload.color_temperature as { mirek: number }).mirek;
+      } else if (
+        payload.color &&
+        typeof payload.color === 'object' &&
+        'xy' in payload.color
+      ) {
+        const xy = (payload.color as { xy: { x: number; y: number } }).xy;
+        v1Body.xy = [xy.x, xy.y];
+      }
+
+      if (
+        payload.dynamics &&
+        typeof payload.dynamics === 'object' &&
+        'duration' in payload.dynamics
+      ) {
+        const durationMs = (payload.dynamics as { duration: number }).duration;
+        v1Body.transitiontime = Math.round(durationMs / 100);
+      }
+
+      const url = `http://${this.config.bridgeIp}/api/${this.config.appKey}/lights/${lightId}/state`;
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
-          'hue-application-key': this.config.appKey,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(v1Body),
       });
 
       return response.ok;

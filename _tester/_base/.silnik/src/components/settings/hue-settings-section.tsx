@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { HueClient } from '@/lib/hardware/hue/hue-client';
@@ -9,40 +9,29 @@ import {
   HueBridgeDiscoveryResult,
   HueLightResource,
 } from '@/lib/hardware/hue/types';
-
-const STORAGE_KEY = 'straznik_hue_config';
-
-function loadStoredConfig(): HueBridgeConfig {
-  if (typeof window === 'undefined') {
-    return { enabled: false, bridgeIp: '', appKey: '', selectedLightIds: [] };
-  }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { enabled: false, bridgeIp: '', appKey: '', selectedLightIds: [] };
-    return JSON.parse(raw);
-  } catch {
-    return { enabled: false, bridgeIp: '', appKey: '', selectedLightIds: [] };
-  }
-}
-
-function saveStoredConfig(cfg: HueBridgeConfig) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
-}
+import {
+  loadStoredHueConfig,
+  saveStoredHueConfig,
+  getGlobalLightDirector,
+} from '@/lib/hardware/hue/light-director-service';
 
 export function HueSettingsSection() {
   const t = useTranslations('HueSettings');
-  const [config, setConfig] = useState<HueBridgeConfig>(loadStoredConfig);
+  const [config, setConfig] = useState<HueBridgeConfig>(loadStoredHueConfig);
   const [isExpanded, setIsExpanded] = useState(false);
   const [status, setStatus] = useState<string>('');
   const [isScanning, setIsScanning] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isTimedOut, setIsTimedOut] = useState(false);
   const [discoveredBridges, setDiscoveredBridges] = useState<HueBridgeDiscoveryResult[]>([]);
   const [lights, setLights] = useState<HueLightResource[]>([]);
   const [isLoadingLights, setIsLoadingLights] = useState(false);
+  const [testStatus, setTestStatus] = useState<string>('');
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    saveStoredConfig(config);
+    saveStoredHueConfig(config);
   }, [config]);
 
   // Pobierz listę lamp, jeśli mostek jest skonfigurowany
@@ -91,10 +80,26 @@ export function HueSettingsSection() {
       setStatus(t('provideIpFirst'));
       return;
     }
+
     setIsLinking(true);
-    setStatus(t('pressButtonInstruction'));
+    setIsTimedOut(false);
+    setCountdown(30);
+    setStatus(t('pressButtonInstructionWithCountdown', { seconds: 30 }));
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     const client = new HueClient();
-    const res = await client.linkBridge(config.bridgeIp);
+    const res = await client.linkBridgeWithPolling(
+      config.bridgeIp,
+      (sec) => {
+        setCountdown(sec);
+        setStatus(t('pressButtonInstructionWithCountdown', { seconds: sec }));
+      },
+      controller.signal,
+      30
+    );
+
     if (res.success && res.appKey) {
       setConfig((prev) => ({
         ...prev,
@@ -103,10 +108,32 @@ export function HueSettingsSection() {
         appKey: res.appKey!,
       }));
       setStatus(t('linkSuccess'));
+      setCountdown(null);
+      setIsTimedOut(false);
+    } else if (res.error === 'TIMEOUT') {
+      setStatus(t('linkTimeout'));
+      setIsTimedOut(true);
+      setCountdown(null);
+    } else if (res.error === 'ABORTED') {
+      setStatus(t('linkAborted'));
+      setIsTimedOut(false);
+      setCountdown(null);
     } else {
       setStatus(res.error || t('linkFailed'));
+      setIsTimedOut(false);
+      setCountdown(null);
     }
     setIsLinking(false);
+  };
+
+  const handleCancelLink = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsLinking(false);
+    setCountdown(null);
+    setIsTimedOut(false);
+    setStatus(t('linkAborted'));
   };
 
   const handleToggleLight = (lightId: string) => {
@@ -117,6 +144,20 @@ export function HueSettingsSection() {
         : [...prev.selectedLightIds, lightId];
       return { ...prev, selectedLightIds: updated };
     });
+  };
+
+  const handleTestLight = async () => {
+    const director = getGlobalLightDirector();
+    setTestStatus(t('testLightingSuccess'));
+    await director.applyPreset('kerosene_lamp', 1500);
+    setTimeout(() => setTestStatus(''), 4000);
+  };
+
+  const handleEmergencyLight = async () => {
+    const director = getGlobalLightDirector();
+    setTestStatus('100%');
+    await director.triggerEmergencyLight();
+    setTimeout(() => setTestStatus(''), 4000);
   };
 
   const statusBadge = config.enabled && config.appKey
@@ -158,7 +199,7 @@ export function HueSettingsSection() {
               {config.enabled ? t('enabled') : t('disabled')}
             </Button>
             {!config.appKey && (
-              <span className="text-xs text-amber-400">{t('pairRequiredBeforeEnabling')}</span>
+              <span className="text-xs text-brass">{t('pairRequiredBeforeEnabling')}</span>
             )}
           </div>
 
@@ -178,7 +219,7 @@ export function HueSettingsSection() {
                 variant="outline"
                 size="sm"
                 onClick={handleScanBridges}
-                disabled={isScanning}
+                disabled={isScanning || isLinking}
                 className="border-brass/40 text-xs"
               >
                 {isScanning ? t('scanning') : t('scanLan')}
@@ -200,17 +241,86 @@ export function HueSettingsSection() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleLinkBridge}
-              disabled={isLinking || !config.bridgeIp}
-              size="sm"
-              className="bg-primary text-[#04110f] text-xs font-semibold uppercase tracking-wider hover:brightness-110"
-            >
-              {isLinking ? t('linking') : t('pairBridgeButton')}
-            </Button>
-            {status && <span className="text-xs text-brass/90">{status}</span>}
+          {/* Procedura Pushlink (odliczanie 30s / przyciski) */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {!isLinking && !isTimedOut && (
+                <Button
+                  onClick={handleLinkBridge}
+                  disabled={!config.bridgeIp}
+                  size="sm"
+                  className="bg-primary text-[#04110f] text-xs font-semibold uppercase tracking-wider hover:brightness-110"
+                >
+                  {t('pairBridgeButton')}
+                </Button>
+              )}
+
+              {isLinking && (
+                <>
+                  <Button
+                    disabled
+                    size="sm"
+                    className="bg-primary/80 text-[#04110f] text-xs font-mono font-semibold"
+                  >
+                    ⏳ {countdown !== null ? `${countdown}s` : t('linking')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelLink}
+                    className="border-destructive text-destructive text-xs hover:bg-destructive/10"
+                  >
+                    {t('cancel')}
+                  </Button>
+                </>
+              )}
+
+              {isTimedOut && !isLinking && (
+                <Button
+                  onClick={handleLinkBridge}
+                  size="sm"
+                  className="bg-primary text-[#04110f] text-xs font-semibold uppercase tracking-wider"
+                >
+                  🔄 {t('retryPairing')}
+                </Button>
+              )}
+
+              {status && <span className="text-xs text-brass/90">{status}</span>}
+            </div>
+
+            {/* Wizualny pasek odliczania 30s */}
+            {isLinking && countdown !== null && (
+              <div className="w-full bg-black/40 h-1.5 border border-brass/20 overflow-hidden">
+                <div
+                  className="bg-primary h-full transition-all duration-1000 ease-linear"
+                  style={{ width: `${Math.round((countdown / 30) * 100)}%` }}
+                />
+              </div>
+            )}
           </div>
+
+          {/* Akcje testowe i awaryjne */}
+          {config.appKey && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-brass/10">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTestLight}
+                className="border-brass/40 text-xs text-brass hover:text-foreground"
+              >
+                🕯️ {t('testLighting')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEmergencyLight}
+                className="border-primary/50 text-xs text-primary hover:bg-primary/10"
+              >
+                🛡️ {t('emergencyLight')}
+              </Button>
+              {testStatus && <span className="text-xs text-primary font-mono">{testStatus}</span>}
+            </div>
+          )}
 
           {/* Selektor żarówek do gry */}
           {config.appKey && (

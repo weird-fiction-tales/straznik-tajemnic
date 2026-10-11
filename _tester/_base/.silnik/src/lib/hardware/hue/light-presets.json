@@ -143,6 +143,54 @@
       "xy": [0.28, 0.38],
       "brightness": 20,
       "transitionMs": 2500
+    },
+    "colour_out_of_space": {
+      "id": "colour_out_of_space",
+      "name": "Kolor z Innego Wszechświata",
+      "description": "Fluorescencyjny róż i magenta, nieziemska anomalia z głębi kosmosu",
+      "xy": [0.38, 0.15],
+      "brightness": 60,
+      "transitionMs": 3000
+    },
+    "bloody_ritual": {
+      "id": "bloody_ritual",
+      "name": "Krwawy Rytuał",
+      "description": "Złowieszczy szkarłat i pulsujący cynober bluźnierczego ołtarza",
+      "xy": [0.68, 0.31],
+      "brightness": 45,
+      "transitionMs": 2500
+    },
+    "frozen_rlyeh": {
+      "id": "frozen_rlyeh",
+      "name": "Lodowata Pustka R'lyeh",
+      "description": "Trupi, zimny błękit i cyjan zatopionych cyklopowych ruin",
+      "xy": [0.15, 0.22],
+      "brightness": 35,
+      "transitionMs": 4000
+    },
+    "speakeasy_jazz": {
+      "id": "speakeasy_jazz",
+      "name": "Klub Jazzowy / Speakeasy",
+      "description": "Przytłumiony rubin i zadymiony bursztyn nielegalnego lokalu lat 20.",
+      "xy": [0.55, 0.38],
+      "brightness": 40,
+      "transitionMs": 3000
+    },
+    "prl_fluorescent": {
+      "id": "prl_fluorescent",
+      "name": "Świetlówka PRL",
+      "description": "Zimny, blady seledyn migoczącej starej jarzeniówki w urzędzie",
+      "xy": [0.28, 0.38],
+      "brightness": 50,
+      "transitionMs": 1500
+    },
+    "investigator_study": {
+      "id": "investigator_study",
+      "name": "Bezpieczny Gabinet Badaczy",
+      "description": "Bardzo ciepłe światło 2200K na bezpieczną naradę, lekturę ksiąg i odpoczynek",
+      "mirek": 454,
+      "brightness": 65,
+      "transitionMs": 3000
     }
   }
 }

@@ -24,7 +24,14 @@ import {
   Bug,
   Eye,
   EyeOff,
+  Lightbulb,
+  ShieldAlert,
 } from 'lucide-react';
+import {
+  loadStoredHueConfig,
+  saveStoredHueConfig,
+  getGlobalLightDirector,
+} from '@/lib/hardware/hue/light-director-service';
 import type { SessionEndStatus } from '@/hooks/useChat';
 import NextImage from 'next/image';
 import { Button } from '../ui/button';
@@ -239,6 +246,36 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
     window.addEventListener('director-mode-changed', handleDirectorModeChange);
     return () => window.removeEventListener('director-mode-changed', handleDirectorModeChange);
   }, []);
+
+  const [hueConfig, setHueConfig] = useState(loadStoredHueConfig);
+
+  useEffect(() => {
+    const handleHueChange = (e: Event) => {
+      const custom = e as CustomEvent;
+      if (custom.detail) {
+        setHueConfig(custom.detail);
+      } else {
+        setHueConfig(loadStoredHueConfig());
+      }
+    };
+    window.addEventListener('straznik_hue_config_changed', handleHueChange);
+    window.addEventListener('storage', handleHueChange);
+    return () => {
+      window.removeEventListener('straznik_hue_config_changed', handleHueChange);
+      window.removeEventListener('storage', handleHueChange);
+    };
+  }, []);
+
+  const handleToggleHue = () => {
+    const updated = { ...hueConfig, enabled: !hueConfig.enabled };
+    setHueConfig(updated);
+    saveStoredHueConfig(updated);
+  };
+
+  const handleTriggerEmergencyLight = async () => {
+    const director = getGlobalLightDirector();
+    await director.triggerEmergencyLight();
+  };
 
   // Portret do panelu postaci - dociągany z IndexedDB gdy portraitUrl pusty
   // (wyścig hydratacji po starcie/wczytaniu gry, IND-262). Wspólna logika z
@@ -818,6 +855,32 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                   {t('images')}: {aiSettings.imageGenerationEnabled ? t('on') : t('off')}
                 </Button>
               )}
+              {/* Szybki toggle oświetlenia Philips Hue w pokoju */}
+              <div className="flex items-center gap-1 w-full">
+                <Button
+                  variant="ghost"
+                  className="flex-1 justify-start hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  onClick={handleToggleHue}
+                  title={t('hueLightingToggleTitle')}
+                >
+                  <Lightbulb
+                    className={`w-4 h-4 mr-3 ${hueConfig.enabled ? 'text-primary' : 'text-muted-foreground'}`}
+                  />
+                  {t('hueLighting')}: {hueConfig.enabled ? t('on') : t('off')}
+                </Button>
+                {hueConfig.enabled && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="px-2 text-xs font-mono text-primary hover:bg-primary/20"
+                    onClick={handleTriggerEmergencyLight}
+                    title={t('emergencyLightTitle')}
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-primary" />
+                    <span className="ml-1 text-[10px] font-bold">100%</span>
+                  </Button>
+                )}
+              </div>
               {/* Przycisk Zimny Start - czyszczenie danych podręcznych i restart do stanu początkowego */}
               <Button
                 variant="ghost"

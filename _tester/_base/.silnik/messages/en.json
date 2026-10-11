@@ -4714,6 +4714,9 @@
     "narratorToggleTitle": "Toggle the automatic Game Master narration",
     "images": "Images",
     "imagesToggleTitle": "Toggle chat illustration generation",
+    "hueLighting": "Hue Light",
+    "hueLightingToggleTitle": "Toggle atmospheric Philips Hue room lighting",
+    "emergencyLightTitle": "Emergency Light 100% - immediately illuminates bright, safe light",
     "on": "On",
     "off": "Off",
     "coldStart": "Cold Start",
@@ -8775,7 +8778,15 @@
     "pairBridgeButton": "Pair with Bridge",
     "selectLightsTitle": "Select lights participating in session",
     "loadingLights": "Loading lights list...",
-    "noLightsFound": "No registered lights found on the bridge."
+    "noLightsFound": "No registered lights found on the bridge.",
+    "pressButtonInstructionWithCountdown": "Approach the Hue bridge and press the large round button (remaining: {seconds}s)...",
+    "linkTimeout": "Time expired (30s). The button on the bridge was not pressed.",
+    "linkAborted": "Pairing with bridge was cancelled.",
+    "cancel": "Cancel",
+    "retryPairing": "Try again",
+    "emergencyLight": "Emergency Light 100%",
+    "testLighting": "Test lighting",
+    "testLightingSuccess": "Test signal sent to selected lights."
   },
   "StartQualityPresets": {
     "title": "Game presentation",
