@@ -486,9 +486,9 @@ describe('Challenger M3-1 Empirical Stress Tests', () => {
         'mapa-podziemi',
         '12345',
         'slug-with-unicode-zażółć',
-        'clue-photo-prabuty-1947', // from STREFA_11_ADVENTURES
-        'audio-sb-wiretap-elblag', // from STREFA_11_ADVENTURES
-        'nonexistent-slug-benchmark-404', // missing slug (worst case full scan)
+        'clue-photo-prabuty-1947', // belongs to another adventure, excluded from mockContext
+        'audio-sb-wiretap-elblag', // belongs to another adventure, excluded from mockContext
+        'nonexistent-slug-benchmark-404', // missing slug in the active adventure
       ];
 
       const iterations = 1000;
@@ -515,8 +515,14 @@ describe('Challenger M3-1 Empirical Stress Tests', () => {
       // In practice in-memory search takes < 0.05 ms per query
       expect(totalTimeMs).toBeLessThan(100);
 
-      expect(matchCount).toBe(900);
-      expect(missCount).toBe(100);
+      expect(matchCount).toBe(700);
+      expect(missCount).toBe(300);
+
+      // Global lookup remains available without an active adventure.
+      for (const foreignSlug of testQueries.slice(7, 9)) {
+        expect(resolveHandoutBySlug(foreignSlug, mockContext)).toBeNull();
+        expect(resolveHandoutBySlug(foreignSlug)).not.toBeNull();
+      }
     });
 
     it('4.2: getHandoutStyles returns valid Dark Art Deco styles for all 7 types plus map', () => {

@@ -34,12 +34,17 @@ describe('Empirical Challenger 2: M1 Backward Compatibility & Boundary Testing',
         expect(result).toBeDefined();
         expect(typeof result).toBe('string');
 
-        // All legacy predefined handouts are player-facing documents
+        // Paper handouts retain legacy visibility; audio needs a known physical node.
         expect(result).toContain('## DOSTĘPNE HANDOUTY (realne dokumenty tej przygody)');
         expect(result).not.toContain('## MATERIAŁY I PLANY STRAŻNIKA');
 
-        // Verify every single handout from scenario is rendered
+        // Preserve paper evidence and forbid premature audio discovery.
         scenario.handouts.forEach((h: AdventureHandout) => {
+          if (h.audioUrl) {
+            expect(result).not.toContain(`[HANDOUT:${h.slug}]`);
+            expect(result).not.toContain(h.title);
+            return;
+          }
           expect(result).toContain(h.title);
           expect(result).toContain(`[HANDOUT:${h.slug}]`);
           expect(result).toContain(`- ${h.title} → wstaw dokładnie: [HANDOUT:${h.slug}]`);
@@ -62,7 +67,11 @@ describe('Empirical Challenger 2: M1 Backward Compatibility & Boundary Testing',
         expect(resNull).toBe(resEmpty);
 
         scenario.handouts.forEach((h: AdventureHandout) => {
-          expect(resEmpty).toContain(`[HANDOUT:${h.slug}]`);
+          if (h.audioUrl) {
+            expect(resEmpty).not.toContain(`[HANDOUT:${h.slug}]`);
+          } else {
+            expect(resEmpty).toContain(`[HANDOUT:${h.slug}]`);
+          }
         });
       });
 
@@ -70,7 +79,7 @@ describe('Empirical Challenger 2: M1 Backward Compatibility & Boundary Testing',
         const filePath = path.join(predefinedDir, file);
         const scenario = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
-        // Scoping to chapter 1 or chapter 5 should still keep all legacy handouts (global fallback)
+        // Chapters alone keep paper evidence visible but cannot discover audio.
         const resCh1 = buildHandoutsContext(scenario.handouts, null, { activeChapterId: 'rozdzial-1' });
         const resCh5 = buildHandoutsContext(scenario.handouts, null, { activeChapterId: 5 });
 
@@ -78,8 +87,13 @@ describe('Empirical Challenger 2: M1 Backward Compatibility & Boundary Testing',
         expect(resCh5).toContain('## DOSTĘPNE HANDOUTY');
 
         scenario.handouts.forEach((h: AdventureHandout) => {
-          expect(resCh1).toContain(`[HANDOUT:${h.slug}]`);
-          expect(resCh5).toContain(`[HANDOUT:${h.slug}]`);
+          if (h.audioUrl) {
+            expect(resCh1).not.toContain(`[HANDOUT:${h.slug}]`);
+            expect(resCh5).not.toContain(`[HANDOUT:${h.slug}]`);
+          } else {
+            expect(resCh1).toContain(`[HANDOUT:${h.slug}]`);
+            expect(resCh5).toContain(`[HANDOUT:${h.slug}]`);
+          }
         });
       });
     });
