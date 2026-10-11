@@ -352,7 +352,8 @@ Krótki scenariusz do gry d100 w Arkham w 1924 roku. Badacze odkrywają tajemnic
       expect(advsPl[0].documentType).toBe('scenario');
       expect(advsPl[0].graph?.npcs?.map((n) => n.name)).toContain('Lucas Strong');
       expect(advsPl[0].graph?.npcs?.map((n) => n.name)).not.toContain('Bryce Fallon');
-      expect(advsPl[0].handouts?.length).toBeGreaterThanOrEqual(4);
+      // Issue #787: Sny Wezwania nie są handoutami w ekwipunku, lecz dedykowanymi rekordami narracyjnymi
+      expect(advsPl[0].dreamCalls?.length).toBe(4);
       expect(advsPl[1].title).toBe('Szkarłatne litery');
       expect(advsPl[1].sourceCategory).toBe('core');
       expect(advsPl[1].documentType).toBe('scenario');

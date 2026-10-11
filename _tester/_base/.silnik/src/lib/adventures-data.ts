@@ -193,6 +193,8 @@ export interface AdventureContext {
       description: string;
     }>;
   };
+  /** Senne Wezwania i oniryczne wizje CoC 7e RAW (Issue #787: brak w ekwipunku) */
+  dreamCalls?: import('./adventures/dreams/ancient-trees-dreams').DreamCallVariant[];
 }
 
 // ============================================================================

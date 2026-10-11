@@ -26,6 +26,7 @@ import { SpellCard } from './spell-card';
 import { TomeCard } from './tome-card';
 import { OpposedMagicCard } from './opposed-magic-card';
 import { AcquiredItemCard } from './acquired-item-card';
+import { DreamCard } from './dream-card';
 import { DevelopmentPhaseCard } from './DevelopmentPhaseCard';
 import { cleanMarkdown } from '@/lib/utils';
 import { getEraImageFilter } from '@/lib/era-visual-style';
@@ -514,6 +515,14 @@ export function MessageCard({
                   />
                 ))}
               </div>
+            )}
+
+            {/* Diegetyczne okno wizji sennej CoC 7e RAW (Issue #787) */}
+            {message.dreamVisionEvent && (
+              <DreamCard
+                dreamEvent={message.dreamVisionEvent}
+                completed={!isLastMessage || message.dreamVisionEvent.status === 'awakened'}
+              />
             )}
 
             {/* Pościg i tor przeszkód CoC 7e RAW (Fiction First w czacie) */}

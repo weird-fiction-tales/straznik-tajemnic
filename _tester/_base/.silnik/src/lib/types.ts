@@ -194,6 +194,7 @@ export interface Message {
   refereeVetoEvents?: RefereeVetoEventData[]; // Twarde weto sędziego i guardrails [WETO_SEDZIEGO:...]
   tomeStudyEvents?: TomeStudyEventData[]; // Badanie tomów Mitów CoC 7e RAW [TOM:...]
   chaseState?: ChaseState; // Pościg i tor przeszkód CoC 7e RAW [POŚCIG:...]
+  dreamVisionEvent?: DreamVisionEventData; // Oniryczna wizja senna CoC 7e RAW [SEN:...]
   pendingMeleeAttacks?: PendingMeleeAttack[];
   acquiredItems?: AcquiredItemProposal[];
   costData?: Record<string, unknown>;
@@ -201,6 +202,24 @@ export interface Message {
     question: string;
     type: 'dramatic_question' | 'external_event' | 'dilemma';
     options?: string[];
+  };
+}
+
+/** Dane diegetycznej wizji sennej prezentowanej w oknie czatu (Issue #787) */
+export interface DreamVisionEventData {
+  id: string;
+  variantId: string; // np. 'restless-night' | 'dark-cabin' | 'forest-path' | 'thing-in-lake'
+  number: number;
+  title: string;
+  narrative: string;
+  investigatorName?: string;
+  nightNumber: number;
+  status: 'active' | 'awakened';
+  mechanicalEffect?: {
+    sanityCheckRequired: boolean;
+    sanityLossFormula?: string;
+    conPenaltyDice?: boolean;
+    subsequentTriggerLocation?: string;
   };
 }
 
