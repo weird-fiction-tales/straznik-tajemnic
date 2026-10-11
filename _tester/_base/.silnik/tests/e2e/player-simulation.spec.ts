@@ -272,6 +272,7 @@ test.describe('Visual Player Simulation - Obowiązkowy Test Gracza E2E', () => {
     await page.locator('[data-testid="btn-open-journal"]').click();
     let journal = page.locator('[data-testid="session-journal"]');
     await expect(journal).toBeVisible({ timeout: 10000 });
+    await journal.getByRole('button', { name: /^Kronika/ }).click();
     await expect(journal.getByTestId('journal-session-header')).toContainText('Sesja 1');
     await journal.getByRole('button', { name: /Scena #\d+ Archiwum/i }).click();
     await expect(journal.getByTestId('journal-entry').filter({ has: page.getByRole('heading', { name: 'Archiwum', exact: true }) }).getByTestId('scene-chronicle-summary')).toContainText(
@@ -302,6 +303,7 @@ test.describe('Visual Player Simulation - Obowiązkowy Test Gracza E2E', () => {
     await page.getByRole('button', { name: 'Wczytaj', exact: true }).last().click();
     await page.locator('[data-testid="btn-open-journal"]').click();
     journal = page.locator('[data-testid="session-journal"]');
+    await journal.getByRole('button', { name: /^Kronika/ }).click();
     await journal.getByRole('button', { name: /Scena #\d+ Archiwum/i }).click();
     await expect(journal.getByTestId('journal-entry').filter({ has: page.getByRole('heading', { name: 'Archiwum', exact: true }) }).getByTestId('scene-chronicle-summary')).toContainText(
       'Stanisław twierdził, że list wysłano z doków.'
@@ -329,6 +331,7 @@ test.describe('Visual Player Simulation - Obowiązkowy Test Gracza E2E', () => {
     })).toBe(2);
     await page.getByTestId('btn-open-journal').click();
     journal = page.getByTestId('session-journal');
+    await journal.getByRole('button', { name: /^Kronika/ }).click();
     await expect(journal.getByTestId('journal-session-header')).toHaveText(['Sesja 1', 'Sesja 2']);
     await page.screenshot({ path: 'test-results/journal-chapters-pl.png' });
     await journal.getByRole('button', { name: 'Zamknij dziennik' }).click();
@@ -365,6 +368,7 @@ test.describe('Visual Player Simulation - Obowiązkowy Test Gracza E2E', () => {
     await expect(page).toHaveURL(/\/en/);
     await page.locator('[data-testid="btn-open-journal"]').click();
     journal = page.locator('[data-testid="session-journal"]');
+    await journal.getByRole('button', { name: /^Chronicle/ }).click();
     await expect(journal.getByTestId('journal-session-header')).toHaveText(['Session 1', 'Session 2']);
     await journal.getByRole('button', { name: /Scene #\d+ Archiwum/i }).click();
     await expect(journal.getByTestId('journal-entry').filter({ has: page.getByRole('heading', { name: 'Archiwum', exact: true }) }).getByTestId('scene-chronicle-summary')).toContainText(
