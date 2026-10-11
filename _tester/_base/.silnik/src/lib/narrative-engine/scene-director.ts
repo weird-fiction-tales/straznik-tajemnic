@@ -12,7 +12,6 @@
 import {
   getTechniquesForSceneState,
   getTechniqueDirective,
-  getTechnique,
 } from './techniques/playbook';
 import type {
   TechniqueDefinition,

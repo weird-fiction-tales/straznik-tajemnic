@@ -1,4 +1,8 @@
-import { labelForSeconds, PACER_MESSAGES } from './loading-indicator';
+import {
+  labelForSeconds,
+  PACER_MESSAGES,
+  type PacerPhaseKey,
+} from './loading-indicator';
 
 describe('LoadingIndicator - Diegetyczny Pacer (Issue #757)', () => {
   it('zwraca angielskie fazy diegetyczne dla locale en', () => {
@@ -19,8 +23,8 @@ describe('LoadingIndicator - Diegetyczny Pacer (Issue #757)', () => {
   });
 
   it('obsługuje funkcję tłumaczącą next-intl t() z bezpiecznym fallbackiem', () => {
-    const mockT = jest.fn((key: string) => `T_${key}`);
-    const res = labelForSeconds(5, 'pl', mockT as any);
+    const mockT = jest.fn((key: PacerPhaseKey): string => `T_${key}`);
+    const res = labelForSeconds(5, 'pl', mockT);
     expect(mockT).toHaveBeenCalledWith('phase2');
     expect(res).toBe('T_phase2');
   });
