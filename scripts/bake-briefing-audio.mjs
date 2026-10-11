@@ -51,7 +51,7 @@ const apiKey = process.env.ELEVENLABS_API_KEY || process.env.NEXT_PUBLIC_ELEVENL
 const isDryRun = process.argv.includes('--dry-run');
 
 console.log('🎙️ === GENERATOR BRIEFINGÓW AUDIO (AKTOWE INTRO) ===');
-console.log(`ElevenLabs API Key: ${apiKey ? 'WYKRYTO (***' + apiKey.slice(-4) + ')' : 'BRAK (użycie syntezy systemowej)'}`);
+console.log(`ElevenLabs API Key: ${apiKey ? 'WYKRYTO' : 'BRAK (użycie syntezy systemowej)'}`);
 console.log(`Tryb Dry-Run: ${isDryRun ? 'TAK' : 'NIE'}\n`);
 
 if (!fs.existsSync(MANIFEST_PATH)) {
