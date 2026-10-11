@@ -14,6 +14,7 @@ import type {
   NPC,
   OpposedMeleeEventData,
   GuardrailState,
+  StatChangeEventData,
 } from '@/lib/types';
 import {
   createChaseState,
@@ -1961,6 +1962,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         // appendJournalFromText jest idempotentne (dedup po messageId).
         let finalActiveChar = activeCharacter;
         let finalCharacters = characters;
+        let statChangeEvents: StatChangeEventData[] = [];
         if (activeCharacter) {
           const currentEra =
             adventureContext?.yearRange ||
@@ -2061,6 +2063,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               }
             }
           );
+          statChangeEvents = s.statChangeEvents;
           const eq = applyEquipmentEventsToParty(
             s.characters,
             s.activeCharacter,
@@ -2264,7 +2267,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           refereeVetoEvents.length > 0 ||
           gameOverEvents.length > 0 ||
           currentChase ||
-          dreamVisionEvent
+          dreamVisionEvent ||
+          statChangeEvents.length > 0
         ) {
           setMessages((prev) =>
             prev.map((message) =>
@@ -2281,6 +2285,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                     ...(gameOverEvents.length > 0 ? { gameOverEvents } : {}),
                     ...(currentChase ? { chaseState: currentChase } : {}),
                     ...(dreamVisionEvent ? { dreamVisionEvent } : {}),
+                    ...(statChangeEvents.length > 0 ? { statChangeEvents } : {}),
                   }
                 : message
             )

@@ -195,6 +195,7 @@ export interface Message {
   tomeStudyEvents?: TomeStudyEventData[]; // Badanie tomów Mitów CoC 7e RAW [TOM:...]
   chaseState?: ChaseState; // Pościg i tor przeszkód CoC 7e RAW [POŚCIG:...]
   dreamVisionEvent?: DreamVisionEventData; // Oniryczna wizja senna CoC 7e RAW [SEN:...]
+  statChangeEvents?: StatChangeEventData[]; // Zmiany statystyk (HP, SAN, Szczęście) w czacie [OBRAŻENIA:...], [UTRATA_SAN:...], [SZCZĘŚCIE:...]
   pendingMeleeAttacks?: PendingMeleeAttack[];
   acquiredItems?: AcquiredItemProposal[];
   costData?: Record<string, unknown>;
@@ -203,6 +204,29 @@ export interface Message {
     type: 'dramatic_question' | 'external_event' | 'dilemma';
     options?: string[];
   };
+}
+
+export type StatChangeType = 'hp' | 'san' | 'luck';
+
+export interface StatChangeItem {
+  type: StatChangeType;
+  delta: number;
+  reason?: string;
+  previousValue: number;
+  currentValue: number;
+  maxValue?: number;
+}
+
+export interface StatChangeEventData {
+  id: string;
+  characterId: string;
+  characterName: string;
+  avatarUrl?: string;
+  changes: StatChangeItem[];
+  intCheckRequired?: boolean; // utrata >= 5 SAN
+  majorWound?: boolean; // Ciężka Rana
+  unconscious?: boolean; // HP <= 0
+  dying?: boolean; // Stan Umierania
 }
 
 /** Dane diegetycznej wizji sennej prezentowanej w oknie czatu (Issue #787) */

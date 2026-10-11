@@ -4945,6 +4945,27 @@
     "awakenedStatus": "Awakened from the nightmare",
     "awakenButton": "Wake Up"
   },
+  "StatChangeCard": {
+    "headerTitle": "Investigator Condition",
+    "hpLabel": "Hit Points",
+    "sanLabel": "Sanity",
+    "luckLabel": "Luck",
+    "hpLoss": "Damage",
+    "hpGain": "Healing",
+    "sanLoss": "Psychic Shock",
+    "sanGain": "Regained Composure",
+    "luckLoss": "Luck Spent",
+    "luckGain": "Fortune's Favor",
+    "intCheckRequired": "Mythos Shock: Intelligence Test Required (≥ 5 SAN)",
+    "intCheckButton": "Roll Intelligence Test (INT)",
+    "intCheckDone": "Intelligence test rolled",
+    "majorWoundAlert": "Major Wound! Risk of unconsciousness",
+    "unconsciousAlert": "Unconscious (0 HP)",
+    "dyingAlert": "Dying! Immediate First Aid required",
+    "currentHp": "HP: {current} / {max}",
+    "currentSan": "SAN: {current} / {max}",
+    "currentLuck": "Luck: {current}"
+  },
   "MessageCard": {
     "playerPortraitAlt": "Player portrait",
     "resumeReading": "Resume reading",
