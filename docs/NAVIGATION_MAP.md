@@ -86,8 +86,8 @@ graph TD
     game -->|Karta postaci / Character sheet| character_sheet
     game -->|Ekwipunek / Equipment| equipment
     equipment -->|Szczegóły przedmiotu / Equipment details| equipment_detail
-    game -->|Dziennik / Journal| journal
-    journal -->|Zamknij dziennik / Close journal| game
+    game -->|Akta sprawy / Case Files| journal
+    journal -->|Zamknij akta sprawy / Close Case Files| game
     game -->|Rzuć kośćmi / Roll dice| dice
     game -->|Narzędzia MG / GM tools| gm_tools
     game -->|Faza rozwoju (po sesji) / Development phase (after session)| development
@@ -167,8 +167,8 @@ graph TD
 | Aktywna sesja | Karta postaci / Character sheet | Karta badacza (Dark Art Déco d100 Weird Fiction) | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Aktywna sesja | Ekwipunek / Equipment | Ekwipunek (Broń, Wyposażenie, Fabularne) | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Ekwipunek (Broń, Wyposażenie, Fabularne) | Szczegóły przedmiotu / Equipment details | Szczegóły przedmiotu | `src/components/ui/equipment-detail-dialog.tsx` |
-| Aktywna sesja | Dziennik / Journal | Akta sprawy - styl Karty Badacza, najnowsze wpisy na górze | `src/components/sidebar/CthulhuSidebar.tsx` |
-| Akta sprawy - styl Karty Badacza, najnowsze wpisy na górze | Zamknij dziennik / Close journal | Aktywna sesja | `src/components/ui/session-journal.tsx` |
+| Aktywna sesja | Akta sprawy / Case Files | Akta sprawy - styl Karty Badacza, najnowsze wpisy na górze | `src/components/sidebar/CthulhuSidebar.tsx` |
+| Akta sprawy - styl Karty Badacza, najnowsze wpisy na górze | Zamknij akta sprawy / Close Case Files | Aktywna sesja | `src/components/ui/session-journal.tsx` |
 | Aktywna sesja | Rzuć kośćmi / Roll dice | Rzuty kośćmi | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Aktywna sesja | Narzędzia MG / GM tools | Narzędzia MG | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Aktywna sesja | Faza rozwoju (po sesji) / Development phase (after session) | Faza rozwoju | `src/components/sidebar/CthulhuSidebar.tsx` |
