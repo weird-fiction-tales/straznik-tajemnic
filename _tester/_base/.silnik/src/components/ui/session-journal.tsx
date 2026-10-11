@@ -101,16 +101,16 @@ type JournalSectionId = 'overview' | 'chronicle' | 'people' | 'places' | 'materi
 
 function ArchiveHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
   return <>
-    <p className="text-xs uppercase tracking-[0.16em] text-[#a69d8d]">{eyebrow} <span className="px-1 text-[#c9a45e]">／</span></p>
-    <h2 className="mt-2 font-serif text-3xl font-semibold text-[#eee5d4] md:text-4xl">{title}</h2>
-    <p className="mb-6 mt-3 max-w-3xl font-serif text-lg leading-7 text-[#b8b09f]">{description}</p>
+    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{eyebrow} <span className="px-1 text-brass">／</span></p>
+    <h2 className="deco-separator mt-2 font-display-decorative text-2xl font-black uppercase tracking-[0.1em] text-foreground md:text-3xl">{title}</h2>
+    <p className="mb-6 mt-3 max-w-3xl font-serif text-lg leading-7 text-muted-foreground">{description}</p>
   </>;
 }
 
 function ArchiveEmpty({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
-  return <div className="flex min-h-52 flex-col items-center justify-center border border-dashed border-[#443c30] bg-[#171a19]/70 p-8 text-center">
-    <Icon aria-hidden="true" className="mb-4 h-8 w-8 text-[#c9a45e]/60" />
-    <p className="max-w-md font-serif text-base leading-6 text-[#a69d8d]">{text}</p>
+  return <div className="flex min-h-52 flex-col items-center justify-center border border-dashed border-brass/30 bg-[#16130f]/70 p-8 text-center">
+    <Icon aria-hidden="true" className="mb-4 h-8 w-8 text-brass/60" />
+    <p className="max-w-md font-serif text-base leading-6 text-muted-foreground">{text}</p>
   </div>;
 }
 
@@ -184,8 +184,8 @@ export function SessionJournal({
     return Array.from(map.values()).sort((a, b) => {
       const timeA = a.timestamp ? new Date(a.timestamp).getTime() : NaN;
       const timeB = b.timestamp ? new Date(b.timestamp).getTime() : NaN;
-      if (Number.isFinite(timeA) && Number.isFinite(timeB) && timeA !== timeB) return timeA - timeB;
-      return (a.sceneNumber ?? 0) - (b.sceneNumber ?? 0);
+      if (Number.isFinite(timeA) && Number.isFinite(timeB) && timeA !== timeB) return timeB - timeA;
+      return (b.sceneNumber ?? 0) - (a.sceneNumber ?? 0);
     });
   }, [character.sceneCards, character.journal, sharedJournal, locale, t]);
 
@@ -204,7 +204,7 @@ export function SessionJournal({
   const dossier = character.investigatorDossier;
   const knownClues = (dossier?.clues ?? []).filter((clue) => clue.discoveryStatus !== 'unrevealed' && clue.epistemicLayer !== 'keeper_truth');
   const equipment = character.equipment ?? [];
-  const currentAdventure = [...sections].reverse().find((section) => section.chapter?.adventureTitle)?.chapter?.adventureTitle;
+  const currentAdventure = sections.find((section) => section.chapter?.adventureTitle)?.chapter?.adventureTitle;
   const hauntingContext = /haunting|nawiedzon|corbitt|case-s11-01/i.test(
     [dossier?.adventureId, ...sections.map((section) => `${section.chapter?.adventureId ?? ''} ${section.chapter?.adventureTitle ?? ''}`)].join(' ')
   );
@@ -271,17 +271,14 @@ export function SessionJournal({
 
   const archiveHasContent = entries.length > 0 || knownPeople.length > 0 || knownPlaces.length > 0 || materials.length > 0 || recordings.length > 0;
 
-  const latestId = entries[entries.length - 1]?.id;
+  const latestId = entries[0]?.id;
   useEffect(() => { readerRef.current?.scrollTo?.({ top: 0 }); }, [activeSection]);
   useEffect(() => {
-    if (activeSection !== 'chronicle') return;
-    const targetId = selectedId ?? latestId;
-    if (targetId) {
-      const article = articleRefs.current.get(targetId);
-      article?.scrollIntoView?.({ block: 'start', behavior: selectedId ? 'smooth' : 'auto' });
-      if (selectedId) article?.focus({ preventScroll: true });
-    }
-  }, [activeSection, latestId, selectedId]);
+    if (activeSection !== 'chronicle' || !selectedId) return;
+    const article = articleRefs.current.get(selectedId);
+    article?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    article?.focus({ preventScroll: true });
+  }, [activeSection, selectedId]);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement;
@@ -319,14 +316,14 @@ export function SessionJournal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-0 backdrop-blur-sm md:p-6">
     <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="journal-reader-title"
       data-testid="session-journal"
-      className="flex h-full w-full flex-col overflow-hidden border border-[#75613d] bg-[#101211] font-sans text-[#e9e1d0] shadow-2xl md:h-[92vh] md:max-h-[1100px] md:max-w-[1360px] md:rounded-xl">
-      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#443c30] bg-[linear-gradient(90deg,#191c1b,#22231f,#191c1b)] px-5 py-4 text-[#f8f6f0] md:px-7 md:py-5">
+      className="deco-corners relative flex h-full w-full flex-col overflow-hidden border border-brass/40 bg-gradient-to-br from-[#14110c] to-[#0a0c0f] font-sans text-foreground shadow-[0_30px_90px_rgba(0,0,0,.6)] md:h-[92vh] md:max-h-[1100px] md:max-w-[1360px]">
+      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-brass/30 bg-brass/5 px-5 py-4 text-foreground md:px-7 md:py-5">
         <div className="min-w-0">
-          <p className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-[#c9a45e]">{currentAdventure || t('caseFolderHeading')}</p>
-          <h1 id="journal-reader-title" className="flex items-center gap-3 font-display text-xl font-semibold uppercase tracking-[0.1em] md:text-2xl">
-            <BookOpen aria-hidden="true" className="h-5 w-5 shrink-0 text-brass" />{t('caseFileTitle')}
+          <p className="mb-1 font-special-elite text-xs font-semibold uppercase tracking-[0.18em] text-brass">{currentAdventure || t('caseFolderHeading')}</p>
+          <h1 id="journal-reader-title" className="deco-separator flex items-center gap-3 font-display-decorative text-xl font-black uppercase tracking-[0.12em] md:text-2xl">
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rotate-45 border border-brass bg-brass/40" />{t('caseFileTitle')}<span aria-hidden="true" className="h-2 w-2 shrink-0 rotate-45 border border-brass bg-brass/40" />
           </h1>
-          <p className="mt-2 text-sm text-[#c5ced6]">
+          <p className="mt-2 text-sm text-muted-foreground">
             {sharedJournal !== undefined && participantNames.length > 0
               ? t('readerParty', { names: participantNames.join(', ') })
               : t('readerInvestigator', { name: character.name })}
@@ -334,7 +331,7 @@ export function SessionJournal({
           </p>
         </div>
         {onClose && <button type="button" onClick={onClose} aria-label={t('closeAriaLabel')}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 text-[#f8f6f0] hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">
+          className="flex h-10 w-10 shrink-0 items-center justify-center border border-brass/40 text-foreground hover:bg-brass/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">
           <X aria-hidden="true" className="h-5 w-5" />
         </button>}
       </header>
@@ -344,18 +341,18 @@ export function SessionJournal({
           <div className="max-w-lg text-center">
             <BookOpen aria-hidden="true" className="mx-auto mb-5 h-10 w-10 text-brass/60" />
             <h2 className="text-xl font-semibold">{t('readerEmptyTitle')}</h2>
-            <p className="mt-4 text-lg leading-8 text-[#b8b09f]">{t('readerEmptyDescription')}</p>
+            <p className="mt-4 text-lg leading-8 text-muted-foreground">{t('readerEmptyDescription')}</p>
             {character.activeScene?.location && <p className="mt-6 font-serif text-sm">{t('readerCurrentLocation', { location: character.activeScene.location })}</p>}
           </div>
         </main>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <nav aria-label={t('readerContents')} data-testid="journal-contents"
-            className="min-w-0 shrink-0 border-b border-[#443c30] bg-[#171a19] md:w-60 md:overflow-y-auto md:border-b-0 md:border-r lg:w-64">
-            <div className="hidden border-b border-[#443c30] px-5 py-5 md:block">
-              <p className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a69d8d]">{t('caseFolderHeading')}</p>
-              <h2 className="mt-2 font-serif text-xl font-semibold text-[#e9e1d0]">{currentAdventure || t('caseFileDefault')}</h2>
-              {currentInGameDate && <p className="mt-1 text-xs text-[#a69d8d]">{currentInGameDate}</p>}
+            className="min-w-0 shrink-0 border-b border-brass/30 bg-[#16130f] md:w-60 md:overflow-y-auto md:border-b-0 md:border-r lg:w-64">
+            <div className="hidden border-b border-brass/30 px-5 py-5 md:block">
+              <p className="font-special-elite text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t('caseFolderHeading')}</p>
+              <h2 className="mt-2 font-display text-xl font-semibold text-foreground">{currentAdventure || t('caseFileDefault')}</h2>
+              {currentInGameDate && <p className="mt-1 text-xs text-muted-foreground">{currentInGameDate}</p>}
             </div>
             <div className="flex gap-1 overflow-x-auto p-2 md:flex-col md:gap-1 md:p-3">
               {([
@@ -368,25 +365,25 @@ export function SessionJournal({
               ] as const).map(([id, Icon, label, count]) => (
                 <button key={id} type="button" onClick={() => setActiveSection(id)}
                   aria-current={activeSection === id ? 'page' : undefined}
-                  className={cn('flex shrink-0 items-center gap-3 rounded-md border border-transparent px-3 py-2.5 text-left text-sm font-medium text-[#b5b0a6] transition-colors hover:bg-[#232521] hover:text-[#f0e4cb] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass md:w-full',
-                    activeSection === id && 'border-[#6e5935] bg-gradient-to-r from-[#30291d] to-[#22231f] text-[#f0e4cb] shadow-[inset_2px_0_#c9a45e]')}>
-                  <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-[#c9a45e]" />
+                  className={cn('flex shrink-0 items-center gap-3 border border-transparent px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-brass/5 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass md:w-full',
+                    activeSection === id && 'border-brass/40 bg-brass/10 text-foreground border-l-2 border-l-brass')}>
+                  <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-brass" />
                   <span className="whitespace-nowrap">{label}</span>
-                  {count !== null && <span className="ml-auto hidden text-xs text-[#8d877a] sm:inline md:inline">{String(count).padStart(2, '0')}</span>}
+                  {count !== null && <span className="ml-auto hidden text-xs text-muted-foreground sm:inline md:inline">{String(count).padStart(2, '0')}</span>}
                 </button>
               ))}
             </div>
             {activeSection === 'chronicle' && sections.length > 0 && (
-              <div className="max-h-28 overflow-y-auto border-t border-[#443c30] px-3 py-3 md:max-h-none md:overflow-visible">
-                <p className="px-2 pb-2 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a69d8d]">{t('readerContents')}</p>
+              <div className="max-h-28 overflow-y-auto border-t border-brass/30 px-3 py-3 md:max-h-none md:overflow-visible">
+                <p className="px-2 pb-2 font-special-elite text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t('readerContents')}</p>
                 <ol className="space-y-1">
                   {sections.flatMap((section) => section.entries).map((entry) => (
                     <li key={entry.id}>
                       <button type="button" onClick={() => navigate(entry.id)}
                         aria-current={(selectedId ?? latestId) === entry.id ? 'location' : undefined}
-                        className={cn('w-full rounded-md border border-transparent px-3 py-2 text-left text-sm text-[#b5b0a6] hover:bg-[#232521] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass',
-                          (selectedId ?? latestId) === entry.id && 'border-[#6e5935] bg-[#22231f] text-[#f0e4cb]')}>
-                        <span className="block text-[10px] uppercase tracking-wider text-[#a69d8d]">{entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : t('readerEarlierEntry')}</span>
+                        className={cn('w-full border border-transparent px-3 py-2 text-left text-sm text-muted-foreground hover:bg-brass/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass',
+                          (selectedId ?? latestId) === entry.id && 'border-brass/40 bg-brass/10 text-foreground')}>
+                        <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">{entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : t('readerEarlierEntry')}</span>
                         <span className="mt-1 block leading-5">{entry.title}</span>
                       </button>
                     </li>
@@ -394,17 +391,17 @@ export function SessionJournal({
                 </ol>
               </div>
             )}
-            <p className="hidden border-t border-[#443c30] px-5 py-4 font-serif text-sm italic leading-5 text-[#a69d8d] md:block">{t('caseFileNote')}</p>
+            <p className="hidden border-t border-brass/30 px-5 py-4 font-serif text-sm italic leading-5 text-muted-foreground md:block">{t('caseFileNote')}</p>
           </nav>
 
           <main ref={readerRef} data-testid="journal-reader" aria-label={t('readerTitle')}
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto scroll-smooth bg-[radial-gradient(ellipse_at_55%_0%,#1b1b17,#101211_65%)] text-[#e9e1d0]">
+            className="min-h-0 min-w-0 flex-1 overflow-y-auto scroll-smooth bg-transparent text-foreground">
             <div className="mx-auto max-w-[1160px] px-5 py-6 md:px-8 md:py-8">
               {activeSection === 'overview' && (
                 <section aria-labelledby="journal-overview-title" data-testid="journal-overview">
-                  <p className="text-xs uppercase tracking-[0.16em] text-[#a69d8d]">{t('caseFolderHeading')}</p>
-                  <h2 id="journal-overview-title" className="mt-2 font-serif text-3xl font-semibold text-[#eee5d4] md:text-4xl">{currentAdventure || t('caseFileDefault')}</h2>
-                  <p className="mt-3 max-w-3xl font-serif text-lg leading-7 text-[#b8b09f]">{t('readerIntroduction')}</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('caseFolderHeading')}</p>
+                  <h2 id="journal-overview-title" className="deco-separator mt-2 font-display-decorative text-2xl font-black uppercase tracking-[0.1em] text-foreground md:text-3xl">{currentAdventure || t('caseFileDefault')}</h2>
+                  <p className="mt-3 max-w-3xl font-serif text-lg leading-7 text-muted-foreground">{t('readerIntroduction')}</p>
                   <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
                     {[
                       [BookOpen, entries.length, t('readerTitle')],
@@ -413,65 +410,65 @@ export function SessionJournal({
                       [FileText, materials.length, t('sectionMaterials')],
                     ].map(([Icon, count, label], index) => {
                       const CountIcon = Icon as typeof BookOpen;
-                      return <div key={String(index)} className="border border-[#443c30] bg-[#171a19]/90 p-4">
-                        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#a69d8d]"><CountIcon aria-hidden="true" className="h-4 w-4 text-[#c9a45e]" />{String(label)}</div>
-                        <div className="mt-2 font-serif text-3xl text-[#c9a45e]">{String(count).padStart(2, '0')}</div>
+                      return <div key={String(index)} className="border border-brass/30 bg-[#16130f]/90 p-4">
+                        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-muted-foreground"><CountIcon aria-hidden="true" className="h-4 w-4 text-brass" />{String(label)}</div>
+                        <div className="mt-2 font-serif text-3xl text-brass">{String(count).padStart(2, '0')}</div>
                       </div>;
                     })}
                   </div>
-                  {character.activeScene?.location && <div className="mt-6 border-l-2 border-[#c9a45e] bg-[#20211d] px-5 py-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#c9a45e]">{t('readerCurrentLocation', { location: character.activeScene.location })}</p>
-                    <p className="mt-2 font-serif text-base leading-6 text-[#c9c0af]">{t('readerCurrentDescription')}</p>
+                  {character.activeScene?.location && <div className="mt-6 border-l-2 border-brass bg-brass/5 px-5 py-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brass">{t('readerCurrentLocation', { location: character.activeScene.location })}</p>
+                    <p className="mt-2 font-serif text-base leading-6 text-foreground">{t('readerCurrentDescription')}</p>
                   </div>}
-                  <div className="mt-8 flex items-center justify-between border-b border-[#443c30] pb-3">
-                    <h3 className="font-display text-sm font-semibold uppercase tracking-[0.1em] text-[#ddd2bd]">{t('recentChronicle')}</h3>
-                    {entries.length > 3 && <button type="button" onClick={() => setActiveSection('chronicle')} className="text-xs text-[#c9a45e] hover:text-[#f0d28f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">{t('openChronicle')}</button>}
+                  <div className="mt-8 flex items-center justify-between border-b border-brass/30 pb-3">
+                    <h3 className="font-display text-sm font-semibold uppercase tracking-[0.1em] text-foreground">{t('recentChronicle')}</h3>
+                    {entries.length > 3 && <button type="button" onClick={() => setActiveSection('chronicle')} className="text-xs text-brass hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">{t('openChronicle')}</button>}
                   </div>
                   {entries.length > 0 ? <div className="mt-3 space-y-2">
-                    {entries.slice(-3).reverse().map((entry) => <button key={entry.id} type="button" onClick={() => { setActiveSection('chronicle'); navigate(entry.id); }} className="block w-full border border-[#302e28] bg-[#171a19] px-4 py-3 text-left hover:border-[#6e5935] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">
-                      <span className="block font-serif text-lg text-[#eee5d4]">{entry.title}</span>
-                      <span className="mt-1 block line-clamp-2 text-sm leading-5 text-[#a69d8d]">{entry.content || (entry.pending ? t('chroniclePending') : t('readerNoRecord'))}</span>
+                    {entries.slice(0, 3).map((entry) => <button key={entry.id} type="button" onClick={() => { setActiveSection('chronicle'); navigate(entry.id); }} className="block w-full border border-brass/30 bg-[#16130f] px-4 py-3 text-left hover:border-brass/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">
+                      <span className="block font-serif text-lg text-foreground">{entry.title}</span>
+                      <span className="mt-1 block line-clamp-2 text-sm leading-5 text-muted-foreground">{entry.content || (entry.pending ? t('chroniclePending') : t('readerNoRecord'))}</span>
                     </button>)}
-                  </div> : <p className="mt-3 font-serif text-base text-[#a69d8d]">{t('emptyChronicle')}</p>}
+                  </div> : <p className="mt-3 font-serif text-base text-muted-foreground">{t('emptyChronicle')}</p>}
                 </section>
               )}
 
               {activeSection === 'chronicle' && <section aria-label={t('readerTitle')}>
-                <p className="text-xs uppercase tracking-[0.16em] text-[#a69d8d]">{t('caseFolderHeading')} <span className="px-1 text-[#c9a45e]">／</span> {t('readerTitle')}</p>
-                <h2 className="mt-2 font-serif text-3xl font-semibold text-[#eee5d4] md:text-4xl">{t('chronicleHeading')}</h2>
-                <p className="mb-8 mt-3 max-w-3xl font-serif text-lg leading-7 text-[#b8b09f]">{t('readerIntroduction')}</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('caseFolderHeading')} <span className="px-1 text-brass">／</span> {t('readerTitle')}</p>
+                <h2 className="deco-separator mt-2 font-display-decorative text-2xl font-black uppercase tracking-[0.1em] text-foreground md:text-3xl">{t('chronicleHeading')}</h2>
+                <p className="mb-8 mt-3 max-w-3xl font-serif text-lg leading-7 text-muted-foreground">{t('readerIntroduction')}</p>
                 {sections.length > 0 ? sections.map((section, sectionIndex) => (
                   <section key={`${section.key}-${sectionIndex}`} data-testid="journal-chapter" className="mb-8">
                     {(sectionIndex === 0 || section.chapter?.adventureId !== sections[sectionIndex - 1].chapter?.adventureId || section.chapter?.playthroughId !== sections[sectionIndex - 1].chapter?.playthroughId) &&
-                      <h3 className="mb-3 font-serif text-2xl font-semibold leading-snug text-[#e9e1d0]">{section.chapter?.adventureTitle || (section.chapter ? t('readerAdventure') : t('readerEarlierEntry'))}</h3>}
-                    {section.chapter && <h4 data-testid="journal-session-header" className="mb-6 border-b border-[#443c30] pb-3 text-sm font-semibold text-[#a69d8d]">{t('readerSession', { number: section.chapter.sessionNumber })}</h4>}
+                      <h3 className="mb-3 font-display text-2xl font-semibold leading-snug text-foreground">{section.chapter?.adventureTitle || (section.chapter ? t('readerAdventure') : t('readerEarlierEntry'))}</h3>}
+                    {section.chapter && <h4 data-testid="journal-session-header" className="mb-6 border-b border-brass/30 pb-3 text-sm font-semibold text-muted-foreground">{t('readerSession', { number: section.chapter.sessionNumber })}</h4>}
                     {section.entries.map((entry) => (
                       <article key={entry.id} tabIndex={-1} data-testid="journal-entry"
                         ref={(element) => { if (element) articleRefs.current.set(entry.id, element); else articleRefs.current.delete(entry.id); }}
                         aria-labelledby={`journal-entry-${encodeURIComponent(entry.id)}`}
-                        className="mb-7 scroll-mt-6 border-b border-[#443c30] pb-7 outline-none last:mb-0 focus-visible:ring-1 focus-visible:ring-brass/40">
-                        {(entry.sceneNumber !== undefined || entry.inGameDate) && <p className="mb-2 text-sm font-medium text-[#a69d8d]">
+                        className="mb-7 scroll-mt-6 border-b border-brass/30 pb-7 outline-none last:mb-0 focus-visible:ring-1 focus-visible:ring-brass/40">
+                        {(entry.sceneNumber !== undefined || entry.inGameDate) && <p className="mb-2 text-sm font-medium text-muted-foreground">
                           {entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : null}
-                          {entry.inGameDate && <span className="ml-3 normal-case tracking-normal text-[#a69d8d]">{entry.inGameDate}</span>}
+                          {entry.inGameDate && <span className="ml-3 normal-case tracking-normal text-muted-foreground">{entry.inGameDate}</span>}
                         </p>}
-                        <h4 id={`journal-entry-${encodeURIComponent(entry.id)}`} className="font-serif text-2xl font-semibold leading-snug text-[#eee5d4]">{entry.title}</h4>
-                        {entry.location && entry.location !== entry.title && <p className="mt-2 text-base text-[#a69d8d]">{entry.location}</p>}
-                        {entry.people.length > 0 && <p className="mt-3 text-base leading-7 text-[#b8b09f]">
-                          <span className="font-medium text-[#ddd2bd]">{t('readerPeople')}: </span>{entry.people.join(', ')}
+                        <h4 id={`journal-entry-${encodeURIComponent(entry.id)}`} className="font-display text-2xl font-semibold leading-snug text-foreground">{entry.title}</h4>
+                        {entry.location && entry.location !== entry.title && <p className="mt-2 text-base text-muted-foreground">{entry.location}</p>}
+                        {entry.people.length > 0 && <p className="mt-3 text-base leading-7 text-muted-foreground">
+                          <span className="font-medium text-foreground">{t('readerPeople')}: </span>{entry.people.join(', ')}
                         </p>}
-                        {entry.pending ? <p className="mt-4 font-serif text-lg italic leading-8 text-[#a69d8d]">{t('chroniclePending')}</p>
-                          : <div data-testid={entry.legacy ? 'journal-legacy-record' : 'scene-chronicle-summary'} className="mt-4 whitespace-pre-line font-serif text-lg leading-8 text-[#e9e1d0]">
+                        {entry.pending ? <p className="mt-4 font-serif text-lg italic leading-8 text-muted-foreground">{t('chroniclePending')}</p>
+                          : <div data-testid={entry.legacy ? 'journal-legacy-record' : 'scene-chronicle-summary'} className="mt-4 whitespace-pre-line font-serif text-lg leading-8 text-foreground">
                             {entry.content || t('readerNoRecord')}
                           </div>}
-                        {entry.findings.length > 0 && <p className="mt-4 text-base leading-7 text-[#b8b09f]">
-                          <span className="font-medium text-[#ddd2bd]">{t('readerFindings')}: </span>{entry.findings.join(', ')}
+                        {entry.findings.length > 0 && <p className="mt-4 text-base leading-7 text-muted-foreground">
+                          <span className="font-medium text-foreground">{t('readerFindings')}: </span>{entry.findings.join(', ')}
                         </p>}
                       </article>
                     ))}
                   </section>
-                )) : <p className="font-serif text-lg text-[#a69d8d]">{t('emptyChronicle')}</p>}
-                {character.activeScene?.location && <section data-testid="journal-current-scene" className="mt-7 border border-[#443c30] bg-[#20211d] p-5 text-base leading-7 text-[#b8b09f]">
-                  <h3 className="mb-2 font-serif text-lg font-semibold text-[#ddd2bd]">{t('readerCurrentLocation', { location: character.activeScene.location })}</h3>
+                )) : <p className="font-serif text-lg text-muted-foreground">{t('emptyChronicle')}</p>}
+                {character.activeScene?.location && <section data-testid="journal-current-scene" className="mt-7 border border-brass/30 bg-brass/5 p-5 text-base leading-7 text-muted-foreground">
+                  <h3 className="mb-2 font-display text-lg font-semibold text-foreground">{t('readerCurrentLocation', { location: character.activeScene.location })}</h3>
                   <p>{t('readerCurrentDescription')}</p>
                 </section>}
               </section>}
@@ -482,18 +479,18 @@ export function SessionJournal({
                   {knownPeople.map((person) => {
                     const portrait = person.avatarUrl;
                     const source = (sharedJournal ?? character.journal ?? []).find((entry) => entry.id === person.sourceJournalEntryId)?.title;
-                    return <article key={person.id} className="overflow-hidden border border-[#39362e] bg-[#171a19]">
-                      <div className="flex h-40 justify-center overflow-hidden border-b border-[#443c30] bg-[radial-gradient(ellipse_at_50%_35%,#3b3428,#171918_76%)] p-2">
-                        {portrait ? <SafeImage src={portrait} alt={t('portraitAlt', { name: person.name })} className="h-full w-auto max-w-full object-contain object-center sepia-[0.12]" /> : <Users aria-hidden="true" className="my-auto h-8 w-8 text-[#c9a45e]/50" />}
+                    return <article key={person.id} className="overflow-hidden border border-brass/30 bg-[#16130f]">
+                      <div className="deco-corners relative flex h-40 justify-center overflow-hidden border-b border-brass/30 bg-gradient-to-b from-[#1a160f] to-[#0c0d0a] p-2">
+                        {portrait ? <SafeImage src={portrait} alt={t('portraitAlt', { name: person.name })} className="h-full w-auto max-w-full object-contain object-center sepia-[0.12]" /> : <Users aria-hidden="true" className="my-auto h-8 w-8 text-brass/50" />}
                       </div>
                       <div className="p-4">
-                        <p className="font-display text-[10px] font-semibold uppercase tracking-[0.13em] text-[#c9a45e]">{person.occupation || t('sectionPeople')}</p>
-                        <h3 className="mt-1 font-serif text-xl font-semibold text-[#eee5d4]">{person.name}</h3>
+                        <p className="font-special-elite text-xs font-semibold uppercase tracking-[0.13em] text-brass">{person.occupation || t('sectionPeople')}</p>
+                        <h3 className="mt-1 font-display text-xl font-semibold text-foreground">{person.name}</h3>
                         {[...new Set([person.firstImpression, person.keyInformation, person.notes].filter((text) =>
                           text && !/\[SEKRET MG\]|Sekret MG:|Statystyki:/i.test(text) &&
                           ![person.secret, person.psychologicalAgenda].some((secret) => secret && secret !== '[SEKRET MG]' && text.includes(secret))
-                        ))].map((text) => <p key={text} className="mt-2 whitespace-pre-line font-serif text-base leading-6 text-[#c9c0af]">{text}</p>)}
-                        {source && <p className="mt-3 text-xs text-[#968e7e]">{t('sourceLabel')}: {source}</p>}
+                        ))].map((text) => <p key={text} className="mt-2 whitespace-pre-line font-serif text-base leading-6 text-foreground">{text}</p>)}
+                        {source && <p className="mt-3 text-xs text-muted-foreground">{t('sourceLabel')}: {source}</p>}
                       </div>
                     </article>;
                   })}
@@ -506,16 +503,16 @@ export function SessionJournal({
                   {knownPlaces.map((place) => {
                     const artwork = locationImage(place.id, place.imageUrl);
                     const relatedTitles = knownClues.filter((clue) => place.discoveredClueIds?.includes(clue.id) || clue.foundLocationId === place.id || clue.foundLocation?.toLocaleLowerCase() === place.name.toLocaleLowerCase()).map((clue) => clue.title);
-                    return <article key={place.id} className="overflow-hidden border border-[#39362e] bg-[#171a19]">
-                      <div className="relative flex h-36 items-center justify-center overflow-hidden border-b border-[#6e5935] bg-[radial-gradient(ellipse_at_50%_105%,#91704a_0_2%,#2b2921_3%_4%,transparent_38%),linear-gradient(155deg,#34332d,#171918_68%)]">
-                        {artwork ? <SafeImage src={artwork} alt={t('relatedPlaceImageAlt', { name: place.name })} className="h-full w-full object-cover sepia-[0.16]" /> : <MapPin aria-hidden="true" className="h-8 w-8 text-[#c9a45e]" />}
-                        <span className="absolute bottom-0 left-[5%] h-px w-[90%] bg-[#6e5935]" />
+                    return <article key={place.id} className="overflow-hidden border border-brass/30 bg-[#16130f]">
+                      <div className="relative flex h-36 items-center justify-center overflow-hidden border-b border-brass/40 bg-gradient-to-b from-[#1a160f] to-[#0c0d0a]">
+                        {artwork ? <SafeImage src={artwork} alt={t('relatedPlaceImageAlt', { name: place.name })} className="h-full w-full object-cover sepia-[0.16]" /> : <MapPin aria-hidden="true" className="h-8 w-8 text-brass" />}
+                        <span className="absolute bottom-0 left-[5%] h-px w-[90%] bg-brass/40" />
                       </div>
                       <div className="p-4">
-                        <p className="font-display text-[10px] font-semibold uppercase tracking-[0.13em] text-[#c9a45e]">{place.addressOrRegion || t('sectionPlaces')}</p>
-                        <h3 className="mt-1 font-serif text-xl font-semibold text-[#eee5d4]">{place.name}</h3>
-                        {place.description && <p className="mt-2 font-serif text-base leading-6 text-[#c9c0af]">{place.description}</p>}
-                        {relatedTitles.length > 0 && <p className="mt-3 text-xs leading-5 text-[#968e7e]">{t('relatedMaterials')}: {relatedTitles.join(' · ')}</p>}
+                        <p className="font-special-elite text-xs font-semibold uppercase tracking-[0.13em] text-brass">{place.addressOrRegion || t('sectionPlaces')}</p>
+                        <h3 className="mt-1 font-display text-xl font-semibold text-foreground">{place.name}</h3>
+                        {place.description && <p className="mt-2 font-serif text-base leading-6 text-foreground">{place.description}</p>}
+                        {relatedTitles.length > 0 && <p className="mt-3 text-xs leading-5 text-muted-foreground">{t('relatedMaterials')}: {relatedTitles.join(' · ')}</p>}
                       </div>
                     </article>;
                   })}
@@ -525,17 +522,17 @@ export function SessionJournal({
               {activeSection === 'materials' && <section aria-label={t('sectionMaterials')}>
                 <ArchiveHeading eyebrow={t('caseFolderHeading')} title={t('sectionMaterialsTitle')} description={t('materialsDescription')} />
                 {materials.length > 0 ? <div className="grid items-start gap-3 lg:grid-cols-2">
-                  {materials.map((material) => <article key={material.id} className="grid min-h-36 grid-cols-[96px_minmax(0,1fr)] overflow-hidden border border-[#39362e] bg-[#171a19] sm:grid-cols-[120px_minmax(0,1fr)]">
-                    <div className="flex min-h-36 items-center justify-center overflow-hidden border-r border-[#443c30] bg-[#20211d]">
-                      {material.imageUrl ? <SafeImage src={material.imageUrl} alt={t('materialImageAlt', { name: material.title })} className="h-36 w-full object-contain sepia-[0.16]" /> : <FileText aria-hidden="true" className="h-7 w-7 text-[#c9a45e]/70" />}
+                  {materials.map((material) => <article key={material.id} className="grid min-h-36 grid-cols-[96px_minmax(0,1fr)] overflow-hidden border border-brass/30 bg-[#16130f] sm:grid-cols-[120px_minmax(0,1fr)]">
+                    <div className="flex min-h-36 items-center justify-center overflow-hidden border-r border-brass/30 bg-brass/5">
+                      {material.imageUrl ? <SafeImage src={material.imageUrl} alt={t('materialImageAlt', { name: material.title })} className="h-36 w-full object-contain sepia-[0.16]" /> : <FileText aria-hidden="true" className="h-7 w-7 text-brass/70" />}
                     </div>
                     <div className="min-w-0 p-3 sm:p-4">
-                      <p className="font-display text-[9px] font-semibold uppercase tracking-[0.13em] text-[#c9a45e]">{material.kind === 'document' ? t('materialKindDocument') : material.kind === 'testimony' ? t('materialKindTestimony') : material.kind === 'occult' ? t('materialKindOccult') : material.kind === 'forensic' ? t('materialKindForensic') : t('materialKindObject')}</p>
-                      <h3 className="mt-1 font-serif text-lg font-semibold leading-6 text-[#eee5d4]">{material.title}</h3>
-                      {material.source && <p className="mt-1 text-xs text-[#968e7e]">{t('sourceLabel')}: {material.source}</p>}
-                      {material.description && <details className="group mt-2 text-sm leading-5 text-[#c9c0af]">
-                        <summary className="cursor-pointer list-none text-xs font-medium text-[#c9a45e] hover:text-[#f0d28f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass [&::-webkit-details-marker]:hidden">{t('readDescription')} <span className="inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span></summary>
-                        <p className="mt-2 font-serif text-base leading-6 text-[#c9c0af]">{material.description}</p>
+                      <p className="font-special-elite text-xs font-semibold uppercase tracking-[0.13em] text-brass">{material.kind === 'document' ? t('materialKindDocument') : material.kind === 'testimony' ? t('materialKindTestimony') : material.kind === 'occult' ? t('materialKindOccult') : material.kind === 'forensic' ? t('materialKindForensic') : t('materialKindObject')}</p>
+                      <h3 className="mt-1 font-display text-lg font-semibold leading-6 text-foreground">{material.title}</h3>
+                      {material.source && <p className="mt-1 text-xs text-muted-foreground">{t('sourceLabel')}: {material.source}</p>}
+                      {material.description && <details className="group mt-2 text-sm leading-5 text-foreground">
+                        <summary className="cursor-pointer list-none text-xs font-medium text-brass hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass [&::-webkit-details-marker]:hidden">{t('readDescription')} <span className="inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span></summary>
+                        <p className="mt-2 font-serif text-base leading-6 text-foreground">{material.description}</p>
                       </details>}
                     </div>
                   </article>)}
@@ -545,13 +542,13 @@ export function SessionJournal({
               {activeSection === 'audio' && <section aria-label={t('sectionAudio')}>
                 <ArchiveHeading eyebrow={t('caseFolderHeading')} title={t('sectionAudioTitle')} description={t('audioDescription')} />
                 {recordings.length > 0 ? <div className="grid gap-4 lg:grid-cols-2">
-                  {recordings.map((recording) => <article key={recording.id} className="overflow-hidden border border-[#39362e] bg-[#171a19]">
-                    <div className="flex items-center gap-3 border-b border-[#443c30] bg-[#20211d] p-4">
-                      <Music aria-hidden="true" className="h-5 w-5 shrink-0 text-[#c9a45e]" />
-                      <div className="min-w-0"><h3 className="font-serif text-lg font-semibold text-[#eee5d4]">{recording.title}</h3>{recording.source && <p className="mt-1 text-xs text-[#968e7e]">{t('sourceLabel')}: {recording.source}</p>}</div>
+                  {recordings.map((recording) => <article key={recording.id} className="overflow-hidden border border-brass/30 bg-[#16130f]">
+                    <div className="flex items-center gap-3 border-b border-brass/30 bg-brass/5 p-4">
+                      <Music aria-hidden="true" className="h-5 w-5 shrink-0 text-brass" />
+                      <div className="min-w-0"><h3 className="font-display text-lg font-semibold text-foreground">{recording.title}</h3>{recording.source && <p className="mt-1 text-xs text-muted-foreground">{t('sourceLabel')}: {recording.source}</p>}</div>
                     </div>
-                    {recording.description && <p className="p-4 font-serif text-base leading-6 text-[#c9c0af]">{recording.description}</p>}
-                    <div className="px-4 pb-4"><audio aria-label={recording.title} controls preload="metadata" className="w-full accent-[#c9a45e]"><source src={recording.audioUrl} type="audio/mpeg" />{t('audioUnsupported')}</audio></div>
+                    {recording.description && <p className="p-4 font-serif text-base leading-6 text-foreground">{recording.description}</p>}
+                    <div className="px-4 pb-4"><audio aria-label={recording.title} controls preload="metadata" className="w-full accent-brass"><source src={recording.audioUrl} type="audio/mpeg" />{t('audioUnsupported')}</audio></div>
                   </article>)}
                 </div> : <ArchiveEmpty icon={Music} text={t('emptyAudio')} />}
               </section>}

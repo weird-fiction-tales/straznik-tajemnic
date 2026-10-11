@@ -115,11 +115,29 @@ describe('SessionJournal reader', () => {
     openChronicle();
     const articles = screen.getAllByTestId('journal-entry');
     expect(articles).toHaveLength(2);
-    expect(within(articles[0]).getByRole('heading')).toHaveTextContent('Rozdział 1');
-    expect(within(articles[1]).getByRole('heading')).toHaveTextContent('Rozdział 2');
-    expect(articles[0]).toHaveTextContent(locale === 'pl' ? 'Stanisław twierdził, że list 1' : 'Stanisław claimed letter 1');
-    expect(screen.getByRole('dialog')).toHaveAccessibleName(locale === 'pl' ? 'Dziennik drużyny' : 'Party Journal');
-    expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
+    expect(within(articles[0]).getByRole('heading')).toHaveTextContent('Rozdział 2');
+    expect(within(articles[1]).getByRole('heading')).toHaveTextContent('Rozdział 1');
+    expect(articles[1]).toHaveTextContent(locale === 'pl' ? 'Stanisław twierdził, że list 1' : 'Stanisław claimed letter 1');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName(locale === 'pl' ? 'Akta sprawy' : 'Case Files');
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it('sortuje najnowsze daty i numery scen w widoku, zachowując dane wejściowe', () => {
+    const scenes = [scene(1, { timestamp: '2026-10-01T10:00:00Z' }), scene(2, { timestamp: '2026-10-03T10:00:00Z' })];
+    render(<SessionJournal character={character(scenes)} />);
+    expect(screen.getByRole('dialog')).toHaveClass('deco-corners', 'border-brass/40');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('font-display-decorative');
+    const recent = within(screen.getByTestId('journal-overview')).getAllByRole('button');
+    expect(recent[0]).toHaveTextContent('Rozdział 2');
+    openChronicle();
+    expect(screen.getAllByTestId('journal-entry').map((entry) => entry.querySelector('h4')?.textContent)).toEqual(['Rozdział 2', 'Rozdział 1']);
+    expect(scenes.map((entry) => entry.sceneNumber)).toEqual([1, 2]);
+  });
+
+  it('przy braku poprawnych dat pokazuje większy numer sceny na górze', () => {
+    render(<SessionJournal character={character([scene(1, { timestamp: 'invalid' }), scene(2, { timestamp: 'invalid' })])} />);
+    openChronicle();
+    expect(screen.getAllByTestId('journal-entry')[0]).toHaveTextContent('Rozdział 2');
   });
 
   it('nawigacja przewija do fragmentu bez ukrywania pozostałych wpisów', () => {
@@ -129,7 +147,7 @@ describe('SessionJournal reader', () => {
     fireEvent.click(within(navigation).getByRole('button', { name: /Scena #1/ }));
     expect(scroll).toHaveBeenLastCalledWith({ block: 'start', behavior: 'smooth' });
     expect(screen.getAllByTestId('journal-entry')).toHaveLength(2);
-    expect(screen.getAllByTestId('journal-entry')[0]).toHaveFocus();
+    expect(screen.getAllByTestId('journal-entry')[1]).toHaveFocus();
   });
 
   it('zapis pozostaje tylko do czytania, bez liczników i porad ze starych raportów', () => {
@@ -257,7 +275,7 @@ describe('SessionJournal reader', () => {
     expect(screen.getByRole('heading', { name: locale === 'pl' ? 'Wcześniejsze wpisy' : 'Earlier entries' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Archiwum', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Doki', level: 3 })).toBeInTheDocument();
-    expect(screen.getAllByTestId('journal-session-header').map((header) => header.textContent)).toEqual(locale === 'pl' ? ['Sesja 1', 'Sesja 2', 'Sesja 3'] : ['Session 1', 'Session 2', 'Session 3']);
+    expect(screen.getAllByTestId('journal-session-header').map((header) => header.textContent)).toEqual(locale === 'pl' ? ['Sesja 3', 'Sesja 2', 'Sesja 1'] : ['Session 3', 'Session 2', 'Session 1']);
   });
 });
 

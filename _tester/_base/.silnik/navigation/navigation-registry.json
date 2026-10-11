@@ -249,8 +249,8 @@
       "id": "journal",
       "kind": "modal",
       "label": {
-        "pl": "Dziennik drużyny - teczka sprawy",
-        "en": "Party journal - case file"
+        "pl": "Akta sprawy - styl Karty Badacza, najnowsze wpisy na górze",
+        "en": "Case Files - Character Sheet style, newest entries first"
       }
     },
     {
