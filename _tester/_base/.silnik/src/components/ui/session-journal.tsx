@@ -331,7 +331,7 @@ export function SessionJournal({
           </p>
         </div>
         {onClose && <button type="button" onClick={onClose} aria-label={t('closeAriaLabel')}
-          className="flex h-10 w-10 shrink-0 items-center justify-center border border-brass/40 text-foreground hover:bg-brass/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">
+          className="flex h-10 w-10 shrink-0 items-center justify-center border border-brass/40 text-foreground hover:bg-brass/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           <X aria-hidden="true" className="h-5 w-5" />
         </button>}
       </header>
@@ -365,9 +365,9 @@ export function SessionJournal({
               ] as const).map(([id, Icon, label, count]) => (
                 <button key={id} type="button" onClick={() => setActiveSection(id)}
                   aria-current={activeSection === id ? 'page' : undefined}
-                  className={cn('flex shrink-0 items-center gap-3 border border-transparent px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-brass/5 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass md:w-full',
-                    activeSection === id && 'border-brass/40 bg-brass/10 text-foreground border-l-2 border-l-brass')}>
-                  <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-brass" />
+                  className={cn('flex shrink-0 items-center gap-3 border border-transparent px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-brass/5 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary md:w-full',
+                    activeSection === id && 'border-primary/50 bg-primary/10 text-foreground border-l-2 border-l-primary')}>
+                  <Icon aria-hidden="true" className={cn("h-4 w-4 shrink-0 text-brass", activeSection === id && "text-primary")} />
                   <span className="whitespace-nowrap">{label}</span>
                   {count !== null && <span className="ml-auto hidden text-xs text-muted-foreground sm:inline md:inline">{String(count).padStart(2, '0')}</span>}
                 </button>
@@ -381,9 +381,9 @@ export function SessionJournal({
                     <li key={entry.id}>
                       <button type="button" onClick={() => navigate(entry.id)}
                         aria-current={(selectedId ?? latestId) === entry.id ? 'location' : undefined}
-                        className={cn('w-full border border-transparent px-3 py-2 text-left text-sm text-muted-foreground hover:bg-brass/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass',
-                          (selectedId ?? latestId) === entry.id && 'border-brass/40 bg-brass/10 text-foreground')}>
-                        <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">{entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : t('readerEarlierEntry')}</span>
+                        className={cn('w-full border border-transparent px-3 py-2 text-left text-sm text-muted-foreground hover:bg-brass/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
+                          (selectedId ?? latestId) === entry.id && 'border-primary/50 bg-primary/10 text-foreground')}>
+                        <span className="block text-xs uppercase tracking-wider text-muted-foreground">{entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : t('readerEarlierEntry')}</span>
                         <span className="mt-1 block leading-5">{entry.title}</span>
                       </button>
                     </li>
@@ -411,21 +411,21 @@ export function SessionJournal({
                     ].map(([Icon, count, label], index) => {
                       const CountIcon = Icon as typeof BookOpen;
                       return <div key={String(index)} className="border border-brass/30 bg-[#16130f]/90 p-4">
-                        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-muted-foreground"><CountIcon aria-hidden="true" className="h-4 w-4 text-brass" />{String(label)}</div>
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.13em] text-muted-foreground"><CountIcon aria-hidden="true" className="h-4 w-4 text-brass" />{String(label)}</div>
                         <div className="mt-2 font-serif text-3xl text-brass">{String(count).padStart(2, '0')}</div>
                       </div>;
                     })}
                   </div>
-                  {character.activeScene?.location && <div className="mt-6 border-l-2 border-brass bg-brass/5 px-5 py-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brass">{t('readerCurrentLocation', { location: character.activeScene.location })}</p>
+                  {character.activeScene?.location && <div className="mt-6 border-l-2 border-primary bg-primary/5 px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass">{t('readerCurrentLocation', { location: character.activeScene.location })}</p>
                     <p className="mt-2 font-serif text-base leading-6 text-foreground">{t('readerCurrentDescription')}</p>
                   </div>}
                   <div className="mt-8 flex items-center justify-between border-b border-brass/30 pb-3">
                     <h3 className="font-display text-sm font-semibold uppercase tracking-[0.1em] text-foreground">{t('recentChronicle')}</h3>
-                    {entries.length > 3 && <button type="button" onClick={() => setActiveSection('chronicle')} className="text-xs text-brass hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">{t('openChronicle')}</button>}
+                    {entries.length > 3 && <button type="button" onClick={() => setActiveSection('chronicle')} className="text-xs text-primary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{t('openChronicle')}</button>}
                   </div>
                   {entries.length > 0 ? <div className="mt-3 space-y-2">
-                    {entries.slice(0, 3).map((entry) => <button key={entry.id} type="button" onClick={() => { setActiveSection('chronicle'); navigate(entry.id); }} className="block w-full border border-brass/30 bg-[#16130f] px-4 py-3 text-left hover:border-brass/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">
+                    {entries.slice(0, 3).map((entry) => <button key={entry.id} type="button" onClick={() => { setActiveSection('chronicle'); navigate(entry.id); }} className="block w-full border border-brass/30 bg-[#16130f] px-4 py-3 text-left hover:border-brass/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                       <span className="block font-serif text-lg text-foreground">{entry.title}</span>
                       <span className="mt-1 block line-clamp-2 text-sm leading-5 text-muted-foreground">{entry.content || (entry.pending ? t('chroniclePending') : t('readerNoRecord'))}</span>
                     </button>)}
@@ -446,7 +446,7 @@ export function SessionJournal({
                       <article key={entry.id} tabIndex={-1} data-testid="journal-entry"
                         ref={(element) => { if (element) articleRefs.current.set(entry.id, element); else articleRefs.current.delete(entry.id); }}
                         aria-labelledby={`journal-entry-${encodeURIComponent(entry.id)}`}
-                        className="mb-7 scroll-mt-6 border-b border-brass/30 pb-7 outline-none last:mb-0 focus-visible:ring-1 focus-visible:ring-brass/40">
+                        className="mb-7 scroll-mt-6 border-b border-brass/30 pb-7 outline-none last:mb-0 focus-visible:ring-1 focus-visible:ring-primary/40">
                         {(entry.sceneNumber !== undefined || entry.inGameDate) && <p className="mb-2 text-sm font-medium text-muted-foreground">
                           {entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : null}
                           {entry.inGameDate && <span className="ml-3 normal-case tracking-normal text-muted-foreground">{entry.inGameDate}</span>}
@@ -531,7 +531,7 @@ export function SessionJournal({
                       <h3 className="mt-1 font-display text-lg font-semibold leading-6 text-foreground">{material.title}</h3>
                       {material.source && <p className="mt-1 text-xs text-muted-foreground">{t('sourceLabel')}: {material.source}</p>}
                       {material.description && <details className="group mt-2 text-sm leading-5 text-foreground">
-                        <summary className="cursor-pointer list-none text-xs font-medium text-brass hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass [&::-webkit-details-marker]:hidden">{t('readDescription')} <span className="inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span></summary>
+                        <summary className="cursor-pointer list-none text-xs font-medium text-primary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">{t('readDescription')} <span className="inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span></summary>
                         <p className="mt-2 font-serif text-base leading-6 text-foreground">{material.description}</p>
                       </details>}
                     </div>
@@ -548,7 +548,7 @@ export function SessionJournal({
                       <div className="min-w-0"><h3 className="font-display text-lg font-semibold text-foreground">{recording.title}</h3>{recording.source && <p className="mt-1 text-xs text-muted-foreground">{t('sourceLabel')}: {recording.source}</p>}</div>
                     </div>
                     {recording.description && <p className="p-4 font-serif text-base leading-6 text-foreground">{recording.description}</p>}
-                    <div className="px-4 pb-4"><audio aria-label={recording.title} controls preload="metadata" className="w-full accent-brass"><source src={recording.audioUrl} type="audio/mpeg" />{t('audioUnsupported')}</audio></div>
+                    <div className="px-4 pb-4"><audio aria-label={recording.title} controls preload="metadata" className="w-full accent-primary"><source src={recording.audioUrl} type="audio/mpeg" />{t('audioUnsupported')}</audio></div>
                   </article>)}
                 </div> : <ArchiveEmpty icon={Music} text={t('emptyAudio')} />}
               </section>}

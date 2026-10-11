@@ -127,10 +127,13 @@ describe('SessionJournal reader', () => {
     render(<SessionJournal character={character(scenes)} />);
     expect(screen.getByRole('dialog')).toHaveClass('deco-corners', 'border-brass/40');
     expect(screen.getByRole('heading', { level: 1 })).toHaveClass('font-display-decorative');
+    expect(screen.getByRole('button', { name: /^Przegląd/ })).toHaveClass('border-primary/50', 'bg-primary/10');
     const recent = within(screen.getByTestId('journal-overview')).getAllByRole('button');
     expect(recent[0]).toHaveTextContent('Rozdział 2');
     openChronicle();
     expect(screen.getAllByTestId('journal-entry').map((entry) => entry.querySelector('h4')?.textContent)).toEqual(['Rozdział 2', 'Rozdział 1']);
+    expect(screen.getByRole('button', { name: /^Kronika/ })).toHaveClass('border-primary/50', 'bg-primary/10');
+    expect(screen.getByRole('button', { name: /Scena #2/ })).toHaveClass('border-primary/50', 'bg-primary/10');
     expect(scenes.map((entry) => entry.sceneNumber)).toEqual([1, 2]);
   });
 
@@ -228,7 +231,7 @@ describe('SessionJournal reader', () => {
     view.rerender(<SessionJournal character={data} onClose={nextClose} />);
     expect(article).toHaveFocus();
     fireEvent.keyDown(window, { key: 'Tab' });
-    expect(screen.getByRole('button', { name: 'Zamknij dziennik' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Zamknij akta sprawy' })).toHaveFocus();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(firstClose).not.toHaveBeenCalled();
     expect(nextClose).toHaveBeenCalledTimes(1);
@@ -249,7 +252,7 @@ describe('SessionJournal reader', () => {
     const onClose = jest.fn(); render(<SessionJournal character={character()} onClose={onClose} />);
     openChronicle();
     expect(screen.getByText('Pierwszy wpis jest jeszcze przed nami')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Zamknij dziennik' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Zamknij akta sprawy' }));
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(2);
   });

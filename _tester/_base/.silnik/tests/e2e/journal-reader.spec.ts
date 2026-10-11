@@ -76,6 +76,13 @@ for (const locale of ['pl', 'en'] as const) {
       const dialog = page.getByTestId('session-journal');
       await expect(dialog).toHaveAccessibleName(locale === 'pl' ? 'Akta sprawy' : 'Case Files');
       await expect(dialog.getByTestId('journal-overview')).toBeVisible();
+      const activeTab = dialog.getByTestId('journal-contents').locator('button[aria-current="page"]');
+      await expect(activeTab).toHaveClass(/border-primary\/50/);
+      const activeColor = await activeTab.locator('svg').evaluate((element) => getComputedStyle(element).color);
+      const channels = activeColor.match(/\d+/g)!.map(Number);
+      expect(channels[1]).toBeGreaterThan(channels[0] * 2);
+      expect(channels[2]).toBeGreaterThan(channels[0] * 2);
+
       if (archive) {
         await dialog.getByRole('button', { name: locale === 'pl' ? /^Postacie/ : /^People/ }).click();
         const portrait = dialog.getByRole('img');
@@ -138,6 +145,7 @@ for (const locale of ['pl', 'en'] as const) {
       await page.screenshot({ path: `test-results/journal-reader-${locale}-${layout}.png` });
       await page.keyboard.press('Tab');
       await expect(dialog.getByRole('button').first()).toBeFocused();
+      expect(await dialog.getByRole('button').first().evaluate((element) => getComputedStyle(element).outlineColor)).toBe(activeColor);
       await page.keyboard.press('Escape');
       await expect(dialog).toHaveCount(0);
       await expect(trigger).toBeFocused();

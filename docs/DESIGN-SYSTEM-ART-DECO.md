@@ -65,3 +65,46 @@ node scripts/audit-art-deco.mjs src/components/sidebar/CthulhuSidebar.tsx
 ```
 
 Skrypt ten jest zintegrowany z bramką jakościową i wyłapuje relikty szarości, nowoczesnych zaokrągleń oraz niespójnych kolorów.
+
+
+## 6. Standard każdego nowego i przebudowywanego modalu
+
+Ten rozdział jest referencją do odbioru modali. Obowiązuje razem z zasadami powyżej. Wzorzec wizualny: **Karta Badacza** (`_tester/_base/.silnik/src/components/ui/character-sheet/index.tsx`), szczególnie nagłówek, narożniki panelu oraz zielone wyróżnienia w `components/stat-card.tsx` i `components/stat-bars.tsx`.
+
+### Mosiądz i szmaragd mają różne zadania
+
+| Element | Rola koloru | Klasy referencyjne |
+|---|---|---|
+| Ramka dokumentu, narożniki, romby, ozdobny separator | Mosiądz buduje geometrię Art Deco | `border-brass/30`, `deco-corners`, `deco-separator`, `text-brass` |
+| Aktywna zakładka, wybrany wpis lub karta | Szmaragd pokazuje aktualny wybór | `border-primary/50 bg-primary/10 text-foreground` |
+| Ikona aktywnego elementu | Szmaragd wzmacnia wybór | `text-primary` |
+| Główna akcja lub rozwinięcie treści | Szmaragd wskazuje interakcję | istniejący `Button`, albo `text-primary` dla dyskretnej akcji tekstowej |
+| Fokus klawiatury | Szmaragd wskazuje element gotowy do obsługi | `focus-visible:outline-primary` lub `focus-visible:ring-ring` |
+| Tekst czytanej treści | Ciepła jasna biel, czytelność | `text-foreground` |
+| Źródło, podpis, informacja pomocnicza | Czytelny kolor wyciszony | `text-muted-foreground` |
+
+Nie zastępuj szmaragdu mosiądzem w aktywnych stanach. Nie zamieniaj całego panelu na zielone tło. W modalu informacyjnym bez zakładek zielony akcent może wystąpić w akcji i fokusie; nie dodawaj sztucznej funkcji tylko dla koloru. Wybór musi mieć też ramkę, oznaczenie ikony lub podkreślenie oraz `aria-current`, `aria-selected` albo `aria-expanded` odpowiednie do roli. Kolor nie może być jedynym nośnikiem stanu.
+
+### Konstrukcja
+
+1. Użyj istniejących `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription` i `Button`, jeśli obsługują wymagany układ. Szukaj wspólnego wzorca przed pisaniem nowego.
+2. Zachowaj bazę `bg-background` / `bg-card`, ramkę mosiężną i lokalne fonty aplikacji. Gradient Karty Badacza od `#14110c` do `#0a0c0f` jest dopuszczonym wzorcem powierzchni dokumentu. Kolory semantyczne odczytuj z `src/app/globals.css` i `tailwind.config.ts`; nie twórz kolejnej palety dla jednego okna.
+3. Tytuł modalu: `font-display-decorative`, tytuły kart: `font-display`, krótkie oznaczenia dokumentu: `font-special-elite`, narracja: `font-serif`, nawigacja i instrukcje: `font-sans`. Ozdobny krój stosuj do krótkich nagłówków.
+4. Użyj `deco-corners` i `deco-separator` lub istniejących ornamentów Karty Badacza. Ornamenty nie przechwytują kliknięć i nie zasłaniają tekstu. Nie kopiuj całego komponentu Karty Badacza do innego modalu.
+5. Zwykły tekst UI: co najmniej 16 px; pomocniczy: co najmniej 14 px; narracja: 18 px i wygodna interlinia. Sprawdzaj rozmiar wynikowy - aplikacja zwiększa `text-xs` i `text-sm`. Nie zmniejszaj podpisów do 9-10 px dla zmieszczenia treści.
+6. Tekst zwykły utrzymuje kontrast co najmniej 4,5:1, duży tekst i istotne granice kontrolek co najmniej 3:1. Mały tekst pozostaje czytelny również bez poświaty. Osłabianie krycia tekstu wymaga sprawdzenia kontrastu.
+7. Na telefonie nagłówki mogą się zawijać. Treść przewija się wewnątrz panelu, zamknięcie pozostaje dostępne, a poziome przewijanie służy wyłącznie celowo zaprojektowanej nawigacji. Portrety pokazują pełny obraz; kadrowanie innych ilustracji musi pasować do rodzaju materiału.
+8. Modal ma dostępną nazwę, pułapkę fokusu, zamknięcie Escape i powrót fokusu do przycisku otwierającego. Nowy modal używa wspólnego dialogu; własna implementacja wymaga dowodu obsługi tych zachowań. Rozwijane opisy używają natywnego `details/summary` lub równoważnej dostępnej kontrolki.
+9. Treści, nazwy i etykiety dostępności mają wersję PL i EN. Zachowaj identyfikatory testowe i aktualizuj rejestr nawigacji oraz generowaną mapę.
+
+### Kontrola odbioru
+
+- [ ] Porównaj render z Kartą Badacza: ciemna baza, mosiężna geometria **i szmaragdowe stany aktywne**.
+- [ ] Sprawdź w przeglądarce rzeczywisty kolor aktywnego elementu, jego ramkę i fokus. Samo wystąpienie klasy w kodzie nie potwierdza wyglądu.
+- [ ] Użyj wspieranych wartości krycia (np. `/10`, `/30`, `/40`, `/50`) lub jawnej składni arbitralnej, np. `/[0.28]`. Nie zakładaj, że `/28` wygeneruje styl w obecnej konfiguracji.
+- [ ] Otwórz PL i EN na komputerze i telefonie: brak uciętych tytułów, pełne portrety, czytelne źródła, dostępne zamknięcie.
+- [ ] Sprawdź klawiaturę: Tab, Shift+Tab, Escape i przywrócenie fokusu.
+- [ ] Zapisz zrzuty widoków i sprawdź je wzrokowo; testuj wybór i rozwinięcie, nie tylko pusty modal.
+- [ ] Uruchom audyt Art Deco oraz bramki projektu. Audyt klas nie wykrywa braku zielonych akcentów, błędów kadrowania ani całej dostępności - potrzebny jest też test renderu.
+
+`DESIGN-ELDRITCH-DESK.md` opisuje kierunek rekwizytów i tekstur. Nazwy planowanych tam tokenów nie zastępują tokenów faktycznie dostępnych w kodzie. Przy rozbieżności użyj obecnej palety oraz tego standardu modali; rozszerzenie palety wymaga osobnej, spójnej zmiany systemu.
