@@ -27,6 +27,7 @@ import { TomeCard } from './tome-card';
 import { OpposedMagicCard } from './opposed-magic-card';
 import { AcquiredItemCard } from './acquired-item-card';
 import { DreamCard } from './dream-card';
+import { StatChangeCard } from './stat-change-card';
 import { DevelopmentPhaseCard } from './DevelopmentPhaseCard';
 import { cleanMarkdown } from '@/lib/utils';
 import { getEraImageFilter } from '@/lib/era-visual-style';
@@ -523,6 +524,22 @@ export function MessageCard({
                 dreamEvent={message.dreamVisionEvent}
                 completed={!isLastMessage || message.dreamVisionEvent.status === 'awakened'}
               />
+            )}
+
+            {/* Zmiany statystyk Badacza (HP, SAN, Szczęście) CoC 7e RAW (Issue #763) */}
+            {message.statChangeEvents && message.statChangeEvents.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {message.statChangeEvents.map((statEvent) => (
+                  <StatChangeCard
+                    key={statEvent.id}
+                    statEvent={statEvent}
+                    activeCharacter={activeCharacter}
+                    characters={characters}
+                    onRollTest={onRollTest}
+                    completed={!isLastMessage}
+                  />
+                ))}
+              </div>
             )}
 
             {/* Pościg i tor przeszkód CoC 7e RAW (Fiction First w czacie) */}

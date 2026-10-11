@@ -4945,6 +4945,27 @@
     "awakenedStatus": "Przebudzono się z koszmaru",
     "awakenButton": "Obudź się"
   },
+  "StatChangeCard": {
+    "headerTitle": "Stan Badacza",
+    "hpLabel": "Punkty Życia",
+    "sanLabel": "Poczytalność",
+    "luckLabel": "Szczęście",
+    "hpLoss": "Obrażenia",
+    "hpGain": "Leczenie",
+    "sanLoss": "Szok psychiczny",
+    "sanGain": "Odzyskana równowaga",
+    "luckLoss": "Utrata Szczęścia",
+    "luckGain": "Uśmiech Losu",
+    "intCheckRequired": "Szok Mitów: Wymagany Test Inteligencji (≥ 5 SAN)",
+    "intCheckButton": "Rzuć test Inteligencji (INT)",
+    "intCheckDone": "Wykonano test Inteligencji",
+    "majorWoundAlert": "Ciężka Rana! Ryzyko utraty przytomności",
+    "unconsciousAlert": "Utrata przytomności (0 PŻ)",
+    "dyingAlert": "Stan Umierania! Wymagana natychmiastowa Pierwsza Pomoc",
+    "currentHp": "PŻ: {current} / {max}",
+    "currentSan": "SAN: {current} / {max}",
+    "currentLuck": "Szczęście: {current}"
+  },
   "MessageCard": {
     "playerPortraitAlt": "Portret gracza",
     "resumeReading": "Wznów czytanie",

@@ -1,22 +1,25 @@
 /**
- * Most między tagami MG a kartą postaci - automatyczna utrata/odzysk SAN i HP
- * w trakcie sesji (Faza 5 audytu mechaniki, BRAK-1 + Issue #48 Poczytalność RAW).
+ * Most między tagami MG a kartą postaci - automatyczna utrata/odzysk SAN, HP i Szczęścia
+ * w trakcie sesji (Faza 5 audytu mechaniki, BRAK-1 + Issue #48 Poczytalność RAW + Issue #763).
  *
  * AI zgłasza zmiany strukturalnymi tagami w surowej narracji:
  *   [SANITY: -3: widok rozkładających się zwłok]
- *   [HP: -5: cios nożem]   (ujemne = utrata, dodatnie = leczenie)
+ *   [UTRATA_SAN: 1k4: widok abominacji]
+ *   [HP: -5: cios nożem]
+ *   [OBRAŻENIA: 1k6: poparzenia od artefaktu]
+ *   [SZCZĘŚCIE: +5: nagroda za brawurę]
+ *   [LUCK: -15: uniknięcie kuli]
+ *
  * Aplikacja sumuje delty i odejmuje/dodaje do karty z pełną egzekucją progów CoC 7e RAW:
  *   - utrata >= 5 SAN -> zdarzenie 'int_check_required'
  *   - utrata 1/5 dziennej SAN -> Czasowa Niepoczytalność + 'underlyingInsanity'
  *   - 'underlyingInsanity' -> każda utrata odpala atak szaleństwa
  *   - próg Mity Cthulhu > SAN -> redukcja strat SAN o 50%
  *
- * Wzorzec (ref-equality skip + wywołanie raz po pełnym streamie) jak
- * `appendJournalFromText` (IND-201). Tag jest usuwany z czatu przez
- * `narrative/cleanup.ts`, więc gracz nie widzi surowego znacznika.
+ * Zwraca ustrukturyzowane zdarzenia statChangeEvents dla kart w czacie (Issue #763).
  */
 
-import type { Character } from '@/lib/types';
+import type { Character, StatChangeEventData, StatChangeItem } from '@/lib/types';
 import { rollDiceFormula } from '@/lib/dice-utils';
 import { resolveCharacterByName } from './match-by-name';
 import { applySanityDelta, type SanityEvent } from '@/lib/sanity/sanity-engine';
@@ -29,28 +32,42 @@ export type { SanityEvent };
 // Opcjonalny prefiks `@Imię:` wskazuje właściciela zmiany w duecie (fallback: aktywna
 // postać). Powód dowolny do ']'. Globalne - sumujemy wszystkie wystąpienia.
 const DELTA = String.raw`[+-]?(?:\d+[dDkK]\d+(?:[+-]\d+)?|\d+)`;
+
 const SANITY_TAG = new RegExp(
-  `\\[SANITY:\\s*(?:@(?<who>[^:\\]]+?)\\s*:\\s*)?(?<delta>${DELTA})(?:\\s*:\\s*(?<reason>[^\\]]*))?\\]`,
+  `\\[(?<tag>SANITY|SAN|POCZYTALNOŚĆ|POCZYTALNOSC|UTRATA_SAN):\\s*(?:@(?<who>[^:\\]]+?)\\s*:\\s*)?(?<delta>${DELTA})(?:\\s*:\\s*(?<reason>[^\\]]*))?\\]`,
   'gi'
 );
+
 const HP_TAG = new RegExp(
-  `\\[HP:\\s*(?:@(?<who>[^:\\]]+?)\\s*:\\s*)?(?<delta>${DELTA})(?:\\s*:[^\\]]*)?\\]`,
+  `\\[(?<tag>HP|OBRAŻENIA|OBRAZENIA|RANY):\\s*(?:@(?<who>[^:\\]]+?)\\s*:\\s*)?(?<delta>${DELTA})(?:\\s*:\\s*(?<reason>[^\\]]*))?\\]`,
+  'gi'
+);
+
+const LUCK_TAG = new RegExp(
+  `\\[(?<tag>LUCK|SZCZĘŚCIE|SZCZESCIE):\\s*(?:@(?<who>[^:\\]]+?)\\s*:\\s*)?(?<delta>${DELTA})(?:\\s*:\\s*(?<reason>[^\\]]*))?\\]`,
   'gi'
 );
 
 /**
  * Zamienia surową deltę na liczbę. Notacja kości (zawiera `d`/`D` lub `k`/`K`) jest rzucana
- * przez `rollDiceFormula` ("Tacka liczy wszystko") - znak z przodu steruje kierunkiem
- * (`-1d6` / `-1k4` = utrata), null z formuły → 0. Stała → `parseInt`.
+ * przez `rollDiceFormula` ("Tacka liczy wszystko") - znak z przodu steruje kierunkiem.
+ * Gdy `isDamageOrLoss` = true i brak jawnego plusa, wartość traktowana jest jako ujemna.
  */
-function parseDelta(raw: string): number {
-  if (/[dDkK]/.test(raw)) {
-    const sign = raw.trim().startsWith('-') ? -1 : 1;
-    const formula = raw.replace(/^[+-]/, '');
+function parseDelta(raw: string, isDamageOrLoss = false): number {
+  const trimmed = raw.trim();
+  const hasExplicitPlus = trimmed.startsWith('+');
+  const hasExplicitMinus = trimmed.startsWith('-');
+  const isNegative = hasExplicitMinus || (isDamageOrLoss && !hasExplicitPlus);
+
+  if (/[dDkK]/.test(trimmed)) {
+    const formula = trimmed.replace(/^[+-]/, '');
     const rolled = rollDiceFormula(formula);
-    return rolled ? sign * Math.abs(rolled.total) : 0;
+    const value = rolled ? Math.abs(rolled.total) : 0;
+    return isNegative ? -value : value;
   }
-  return parseInt(raw, 10);
+  const parsed = parseInt(trimmed.replace(/^[+-]/, ''), 10);
+  if (isNaN(parsed)) return 0;
+  return isNegative ? -parsed : parsed;
 }
 
 /** Clamp do [0, max]; gdy max nieokreślony - tylko dolne ograniczenie (0). */
@@ -59,7 +76,7 @@ function clampStat(value: number, max: number | undefined): number {
   return max != null ? Math.min(max, lower) : lower;
 }
 
-interface SanityTagMatch {
+export interface StatTagMatch {
   who?: string;
   delta: number;
   reason?: string;
@@ -68,36 +85,75 @@ interface SanityTagMatch {
 /**
  * Zbiera tagi SAN z tekstu z rozbiciem na deltę i powód.
  */
-function collectSanityMatches(text: string): SanityTagMatch[] {
-  const matches: SanityTagMatch[] = [];
+function collectSanityMatches(text: string): StatTagMatch[] {
+  const matches: StatTagMatch[] = [];
   SANITY_TAG.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = SANITY_TAG.exec(text)) !== null) {
-    const delta = parseDelta(match.groups?.delta ?? '0');
+    const tagName = match.groups?.tag?.toUpperCase() ?? '';
+    const isLoss = tagName === 'UTRATA_SAN';
+    const delta = parseDelta(match.groups?.delta ?? '0', isLoss);
     if (delta !== 0) {
       matches.push({
         who: match.groups?.who?.trim(),
         delta,
-        reason: match.groups?.reason?.trim()
+        reason: match.groups?.reason?.trim() || undefined,
       });
     }
   }
   return matches;
 }
 
-/** Sumuje wszystkie delty HP pasujące do wzorca. */
-function sumHpDeltas(text: string): number {
-  let total = 0;
-  let match: RegExpExecArray | null;
+/** Zbiera tagi HP z tekstu z rozbiciem na deltę i powód. */
+function collectHpMatches(text: string): StatTagMatch[] {
+  const matches: StatTagMatch[] = [];
   HP_TAG.lastIndex = 0;
+  let match: RegExpExecArray | null;
   while ((match = HP_TAG.exec(text)) !== null) {
-    total += parseDelta(match.groups?.delta ?? '0');
+    const tagName = match.groups?.tag?.toUpperCase() ?? '';
+    const isDamage = tagName === 'OBRAŻENIA' || tagName === 'OBRAZENIA' || tagName === 'RANY';
+    const delta = parseDelta(match.groups?.delta ?? '0', isDamage);
+    if (delta !== 0) {
+      matches.push({
+        who: match.groups?.who?.trim(),
+        delta,
+        reason: match.groups?.reason?.trim() || undefined,
+      });
+    }
   }
-  return total;
+  return matches;
+}
+
+/** Zbiera tagi Szczęścia z tekstu z rozbiciem na deltę i powód. */
+function collectLuckMatches(text: string): StatTagMatch[] {
+  const matches: StatTagMatch[] = [];
+  LUCK_TAG.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = LUCK_TAG.exec(text)) !== null) {
+    const delta = parseDelta(match.groups?.delta ?? '0', false);
+    if (delta !== 0) {
+      matches.push({
+        who: match.groups?.who?.trim(),
+        delta,
+        reason: match.groups?.reason?.trim() || undefined,
+      });
+    }
+  }
+  return matches;
+}
+
+/** Sumuje wszystkie delty HP pasujące do wzorca dla pojedynczej postaci. */
+function sumHpDeltas(text: string): number {
+  return collectHpMatches(text).reduce((total, m) => total + m.delta, 0);
+}
+
+/** Sumuje wszystkie delty Luck pasujące do wzorca dla pojedynczej postaci. */
+function sumLuckDeltas(text: string): number {
+  return collectLuckMatches(text).reduce((total, m) => total + m.delta, 0);
 }
 
 /**
- * Aplikuje zmiany SAN/HP z tagów [SANITY:]/[HP:] w surowym tekście MG dla pojedynczego badacza.
+ * Aplikuje zmiany SAN/HP/LUCK z tagów w surowym tekście MG dla pojedynczego badacza.
  * Zwraca TEN SAM obiekt (referencyjnie), gdy nie ma żadnej zmiany - caller
  * może tanio pominąć zapis/persist (jak przy appendJournalFromText).
  */
@@ -108,7 +164,8 @@ export function applyStatChangesFromText(
 ): Character {
   const sanMatches = collectSanityMatches(rawText);
   const hpDelta = sumHpDeltas(rawText);
-  if (sanMatches.length === 0 && hpDelta === 0) return character;
+  const luckDelta = sumLuckDeltas(rawText);
+  if (sanMatches.length === 0 && hpDelta === 0 && luckDelta === 0) return character;
 
   let next = { ...character };
 
@@ -159,39 +216,22 @@ export function applyStatChangesFromText(
     }
   }
 
+  if (luckDelta !== 0) {
+    const currentLuck = character.luck ?? 50;
+    next.luck = Math.max(0, Math.min(99, currentLuck + luckDelta));
+  }
+
   return next;
 }
 
-/** Zbiera delty HP (po jednym rzucie na tag) z grupowaniem po docelowej postaci. */
-function collectHpDeltas(
-  text: string,
-  characters: Character[],
-  active: Character
-): Map<string, number> {
-  const byChar = new Map<string, number>();
-  HP_TAG.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = HP_TAG.exec(text)) !== null) {
-    const target = resolveCharacterByName(
-      characters,
-      match.groups?.who,
-      active
-    );
-    const delta = parseDelta(match.groups?.delta ?? '0');
-    if (delta !== 0) {
-      byChar.set(target.id, (byChar.get(target.id) ?? 0) + delta);
-    }
-  }
-  return byChar;
-}
-
 /**
- * Wariant party-aware (duet / Hot Seat): kieruje każdą zmianę SAN/HP do postaci
+ * Wariant party-aware (duet / Hot Seat): kieruje każdą zmianę SAN/HP/LUCK do postaci
  * wskazanej prefiksem `@Imię` w tagu (`[SANITY:@Eleanor: -1]`), a bez prefiksu - do
  * `activeCharacter` (fallback, zachowuje zachowanie single-player).
  *
- * Zwraca zaktualizowaną listę postaci + zsynchronizowaną aktywną + flagę `changed`
- * oraz listę wyemitowanych zdarzeń psychicznych `sanityEvents`.
+ * Zwraca zaktualizowaną listę postaci + zsynchronizowaną aktywną + flagę `changed`,
+ * listę wyemitowanych zdarzeń psychicznych `sanityEvents` oraz ustrukturyzowane
+ * karty zmian `statChangeEvents` dla interfejsu czatu.
  */
 export function applyStatChangesToParty(
   characters: Character[],
@@ -203,58 +243,98 @@ export function applyStatChangesToParty(
   activeCharacter: Character;
   changed: boolean;
   sanityEvents: SanityEvent[];
+  statChangeEvents: StatChangeEventData[];
 } {
   const sanMatches = collectSanityMatches(rawText);
-  const hpByChar = collectHpDeltas(rawText, characters, activeCharacter);
+  const hpMatches = collectHpMatches(rawText);
+  const luckMatches = collectLuckMatches(rawText);
 
-  if (sanMatches.length === 0 && hpByChar.size === 0) {
-    return { characters, activeCharacter, changed: false, sanityEvents: [] };
+  if (sanMatches.length === 0 && hpMatches.length === 0 && luckMatches.length === 0) {
+    return {
+      characters,
+      activeCharacter,
+      changed: false,
+      sanityEvents: [],
+      statChangeEvents: [],
+    };
   }
 
-  // Zgrupuj zmiany SAN po postaci
-  const sanByChar = new Map<string, Array<{ delta: number; reason?: string }>>();
+  // Zgrupuj zmiany po identyfikatorze postaci
+  const sanByChar = new Map<string, StatTagMatch[]>();
   for (const m of sanMatches) {
     const target = resolveCharacterByName(characters, m.who, activeCharacter);
     const list = sanByChar.get(target.id) ?? [];
-    list.push({ delta: m.delta, reason: m.reason });
+    list.push(m);
     sanByChar.set(target.id, list);
+  }
+
+  const hpByChar = new Map<string, StatTagMatch[]>();
+  for (const m of hpMatches) {
+    const target = resolveCharacterByName(characters, m.who, activeCharacter);
+    const list = hpByChar.get(target.id) ?? [];
+    list.push(m);
+    hpByChar.set(target.id, list);
+  }
+
+  const luckByChar = new Map<string, StatTagMatch[]>();
+  for (const m of luckMatches) {
+    const target = resolveCharacterByName(characters, m.who, activeCharacter);
+    const list = luckByChar.get(target.id) ?? [];
+    list.push(m);
+    luckByChar.set(target.id, list);
   }
 
   let changed = false;
   const allEvents: SanityEvent[] = [];
+  const statChangeEvents: StatChangeEventData[] = [];
 
   const apply = (c: Character): Character => {
-    const sanList = sanByChar.get(c.id);
-    const hpD = hpByChar.get(c.id) ?? 0;
-    if (!sanList && hpD === 0) return c;
+    const charSanMatches = sanByChar.get(c.id) ?? [];
+    const charHpMatches = hpByChar.get(c.id) ?? [];
+    const charLuckMatches = luckByChar.get(c.id) ?? [];
+
+    if (charSanMatches.length === 0 && charHpMatches.length === 0 && charLuckMatches.length === 0) {
+      return c;
+    }
 
     changed = true;
     let next = { ...c };
+    const prevHp = c.hp ?? c.maxHp ?? 10;
+    const prevSan = c.san ?? 50;
+    const prevLuck = c.luck ?? 50;
+    let charIntCheckRequired = false;
 
-    if (sanList) {
-      for (const entry of sanList) {
-        const res = applySanityDelta(next, entry.delta, entry.reason);
-        next = res.nextCharacter;
-        for (const ev of res.events) {
-          allEvents.push(ev);
-          onSanityEvent?.(ev);
+    // 1. Poczytalność
+    for (const entry of charSanMatches) {
+      const res = applySanityDelta(next, entry.delta, entry.reason);
+      next = res.nextCharacter;
+      if (entry.delta <= -5) {
+        charIntCheckRequired = true;
+      }
+      for (const ev of res.events) {
+        allEvents.push(ev);
+        if (ev.type === 'int_check_required') {
+          charIntCheckRequired = true;
         }
+        onSanityEvent?.(ev);
       }
     }
 
-    if (hpD !== 0) {
-      next.hp = clampStat(c.hp + hpD, c.maxHp);
+    // 2. Punkty Życia
+    const totalHpDelta = charHpMatches.reduce((acc, m) => acc + m.delta, 0);
+    if (totalHpDelta !== 0) {
+      next.hp = clampStat(c.hp + totalHpDelta, c.maxHp);
       const maxHp = c.maxHp || c.hp || 10;
       const isPulp = c.rulesetVariant === 'pulp';
       const majorWoundThreshold = isPulp ? maxHp : Math.floor(maxHp / 2);
-      if (hpD <= -majorWoundThreshold) {
+      if (totalHpDelta <= -majorWoundThreshold) {
         next.hasMajorWound = true;
       }
       if (next.hp <= 0) {
         next.isUnconscious = true;
         if (isPulp) {
           const dyingThreshold = Math.floor(maxHp / 2);
-          if (-hpD >= dyingThreshold || next.hasMajorWound) {
+          if (-totalHpDelta >= dyingThreshold || next.hasMajorWound) {
             next.isDying = true;
           }
         } else {
@@ -280,6 +360,68 @@ export function applyStatChangesToParty(
       }
     }
 
+    // 3. Szczęście
+    const totalLuckDelta = charLuckMatches.reduce((acc, m) => acc + m.delta, 0);
+    if (totalLuckDelta !== 0) {
+      next.luck = Math.max(0, Math.min(99, prevLuck + totalLuckDelta));
+    }
+
+    // Budowanie pozycji zmian dla karty w czacie (Issue #763)
+    const items: StatChangeItem[] = [];
+
+    if (charHpMatches.length > 0 && totalHpDelta !== 0) {
+      const reasons = charHpMatches.map((m) => m.reason).filter(Boolean);
+      items.push({
+        type: 'hp',
+        delta: totalHpDelta,
+        reason: reasons.length > 0 ? reasons.join('; ') : undefined,
+        previousValue: prevHp,
+        currentValue: next.hp,
+        maxValue: next.maxHp || 10,
+      });
+    }
+
+    if (charSanMatches.length > 0) {
+      const totalSanDelta = charSanMatches.reduce((acc, m) => acc + m.delta, 0);
+      if (totalSanDelta !== 0) {
+        const reasons = charSanMatches.map((m) => m.reason).filter(Boolean);
+        items.push({
+          type: 'san',
+          delta: totalSanDelta,
+          reason: reasons.length > 0 ? reasons.join('; ') : undefined,
+          previousValue: prevSan,
+          currentValue: next.san,
+          maxValue: 99,
+        });
+      }
+    }
+
+    if (charLuckMatches.length > 0 && totalLuckDelta !== 0) {
+      const reasons = charLuckMatches.map((m) => m.reason).filter(Boolean);
+      items.push({
+        type: 'luck',
+        delta: totalLuckDelta,
+        reason: reasons.length > 0 ? reasons.join('; ') : undefined,
+        previousValue: prevLuck,
+        currentValue: next.luck ?? 50,
+        maxValue: 99,
+      });
+    }
+
+    if (items.length > 0) {
+      statChangeEvents.push({
+        id: `stat-change-${Date.now()}-${c.id}-${Math.random().toString(36).slice(2, 6)}`,
+        characterId: c.id,
+        characterName: c.name,
+        avatarUrl: c.portraitUrl,
+        changes: items,
+        intCheckRequired: charIntCheckRequired,
+        majorWound: Boolean(next.hasMajorWound && !c.hasMajorWound),
+        unconscious: Boolean(next.isUnconscious && !c.isUnconscious),
+        dying: Boolean(next.isDying && !c.isDying),
+      });
+    }
+
     return next;
   };
 
@@ -292,6 +434,7 @@ export function applyStatChangesToParty(
     characters: nextCharacters,
     activeCharacter: nextActive,
     changed,
-    sanityEvents: allEvents
+    sanityEvents: allEvents,
+    statChangeEvents,
   };
 }
