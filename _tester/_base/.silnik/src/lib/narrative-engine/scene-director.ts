@@ -370,8 +370,71 @@ export function selectSceneTechniques(
   };
 }
 
+export interface CadenceWordBudget {
+  min: number;
+  max: number;
+  description: {
+    pl: string;
+    en: string;
+  };
+}
+
 /**
- * Formatuje zwięzłą dyrektywę promptową Reżysera Sceny dla Gemini
+ * Zwraca twarde widełki budżetu słów per Bieg Kadencji (Issue #757)
+ */
+export function getCadenceWordBudget(gear: CadenceGear): CadenceWordBudget {
+  switch (gear) {
+    case 0:
+      return {
+        min: 120,
+        max: 190,
+        description: {
+          pl: 'Bieg 0: Otwarcie Przygody / Szeroki Kadr Otwarcia (120-190 słów)',
+          en: 'Gear 0: Adventure Opening / Broad Framing (120-190 words)',
+        },
+      };
+    case 1:
+      return {
+        min: 25,
+        max: 60,
+        description: {
+          pl: 'Bieg 1: Ping-Pong / Dialog / Szybka akcja (25-60 słów; max 60 słów w dialogu)',
+          en: 'Gear 1: Ping-Pong / Dialogue / Fast action (25-60 words; max 60 words in dialogue)',
+        },
+      };
+    case 2:
+      return {
+        min: 90,
+        max: 150,
+        description: {
+          pl: 'Bieg 2: Szeroki Kadr / Śledztwo / Nowa lokacja (90-150 słów)',
+          en: 'Gear 2: Broad Shot / Investigation / New location (90-150 words)',
+        },
+      };
+    case 3:
+      return {
+        min: 30,
+        max: 55,
+        description: {
+          pl: 'Bieg 3: Przełamanie / Cios / Zagrożenie (30-55 słów)',
+          en: 'Gear 3: Breakthrough / Strike / Threat (30-55 words)',
+        },
+      };
+    case 4:
+    default:
+      return {
+        min: 40,
+        max: 80,
+        description: {
+          pl: 'Bieg 4: Zawieszenie / Pustka / Szok (40-80 słów)',
+          en: 'Gear 4: Suspension / Void / Shock (40-80 words)',
+        },
+      };
+  }
+}
+
+/**
+ * Formatuje zwięzłą dyrektywę promptową Reżysera Sceny dla Gemini (Issue #757)
  */
 export function formatSceneDirective(
   selection: SceneTechniqueSelection,
@@ -385,6 +448,9 @@ export function formatSceneDirective(
     ? selection.pacingMoodSuggestion.pl
     : selection.pacingMoodSuggestion.en;
 
+  const budget = getCadenceWordBudget(selection.cadenceGear);
+  const budgetDesc = isPl ? budget.description.pl : budget.description.en;
+
   const primaryName = isPl
     ? selection.primaryTechnique.name.pl
     : selection.primaryTechnique.name.en;
@@ -393,10 +459,28 @@ export function formatSceneDirective(
     locale
   );
 
+  const wordLimitDirective = isPl
+    ? `[LIMIT_SŁÓW: ${budget.min}-${budget.max} słów | ${budgetDesc}]`
+    : `[WORD_LIMIT: ${budget.min}-${budget.max} words | ${budgetDesc}]`;
+
+  const asymmetryDirective = isPl
+    ? `[KSIĄŻKOWA_ASYMETRIA: Bezwzględny zakaz monotonnych, symetrycznych akapitów o równej liczbie zdań (kopyto AI). Wymóg naturalnej zmienności rytmu powieściowego: kontrastuj krótki, uderzeniowy akapit (1-2 zdania) z akapitem opisowym lub zwięzłą ripostą NPC bez zbędnych wstępów.]`
+    : `[BOOK_ASYMMETRY: Strictly forbid monotonous, symmetrical paragraphs of equal length (AI pattern). Enforce natural novelistic rhythm variation: contrast a punchy short paragraph (1-2 sentences) with descriptive detail or a concise NPC response without redundant preambles.]`;
+
+  const activePassengerDirective = isPl
+    ? `[ZASADA_AKTYWNEGO_PASAŻERA: Bezwzględny zakaz monologów ekspozycyjnych NPC dłuższych niż 2-3 zdania bez oddania głosu graczowi. W scenach podróży i przemieszczania ZAKAZ streszczania całej trasy w jednym poście - zatrzymaj akcję na progu mikrodecyzji lub reakcji otoczenia (spojrzenie w lusterko, deszcz za szybą, korek) z pytaniem [Co robisz?].]`
+    : `[ACTIVE_PASSENGER_RULE: Strictly forbid NPC exposition monologues longer than 2-3 sentences without handing the turn back to the player. In travel and transit scenes, NEVER summarize the entire journey in a single post - pause the action at a micro-decision threshold or environmental cue (mirror glance, rain against the window, traffic) with the prompt [What do you do?].]`;
+
   let directiveStr = isPl
     ? `[REŻYSER_SCENY: ${stateLabel}: ${selection.sceneState} | ${cadenceLabel}: ${selection.cadenceGear} | ${moodLabel}: ${mood}]\n` +
+      `${wordLimitDirective}\n` +
+      `${asymmetryDirective}\n` +
+      `${activePassengerDirective}\n` +
       `[TECHNIKA_MG: ${primaryName}] ${primaryDir}`
     : `[SCENE_DIRECTOR: ${stateLabel}: ${selection.sceneState} | ${cadenceLabel}: ${selection.cadenceGear} | ${moodLabel}: ${mood}]\n` +
+      `${wordLimitDirective}\n` +
+      `${asymmetryDirective}\n` +
+      `${activePassengerDirective}\n` +
       `[GM_TECHNIQUE: ${primaryName}] ${primaryDir}`;
 
   if (selection.secondaryTechnique) {
@@ -412,11 +496,11 @@ export function formatSceneDirective(
       : `\n[SUPPORTING_TECHNIQUE: ${secName}] ${secDir}`;
   }
 
-  // Issue #546: Żelazna dyrektywa Dialog-First dla scen dialogowych
+  // Issue #546 & #757: Żelazna dyrektywa Dialog-First dla scen dialogowych z limitem do 60 słów
   if (selection.sceneState === 'dialogue') {
     directiveStr += isPl
-      ? '\n[ZASADA DIALOG-FIRST: Odpowiedź NPC musi paść NATYCHMIAST na początku Twojego posta (max 1 zwięzły mikrogest przed wypowiedzią). ZAKAZ otwierania tury od wieloakapitowych opisów zapachów, mebli, kurzu czy atmosfery pomieszczenia.]'
-      : '\n[DIALOG-FIRST RULE: The NPC response must appear IMMEDIATELY at the start of your post (max 1 concise micro-gesture before dialogue). FORBIDDEN: Opening the post with descriptive paragraphs about environmental smells, furniture, dust, or room atmosphere.]';
+      ? '\n[ZASADA DIALOG-FIRST: Odpowiedź NPC musi paść NATYCHMIAST na początku Twojego posta (max 1 zwięzły mikrogest przed wypowiedzią). ZAKAZ otwierania tury od wieloakapitowych opisów zapachów, mebli, kurzu czy atmosfery pomieszczenia. Twardy limit wypowiedzi NPC: do 60 słów.]'
+      : '\n[DIALOG-FIRST RULE: The NPC response must appear IMMEDIATELY at the start of your post (max 1 concise micro-gesture before dialogue). FORBIDDEN: Opening the post with descriptive paragraphs about environmental smells, furniture, dust, or room atmosphere. Hard limit on NPC speech: up to 60 words.]';
   }
 
   return directiveStr;

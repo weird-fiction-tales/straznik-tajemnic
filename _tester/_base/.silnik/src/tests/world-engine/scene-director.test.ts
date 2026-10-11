@@ -5,6 +5,7 @@ import {
   getCadenceForSceneState,
   selectSceneTechniques,
   formatSceneDirective,
+  getCadenceWordBudget,
   dispatchWorldEngines,
   buildWorldEngineDirectives,
 } from '@/lib/world-engine';
@@ -217,6 +218,88 @@ describe('Dynamiczny Reżyser Pacingu i Selektor Technik (Issue #536)', () => {
 
       const directiveEn = formatSceneDirective(selection, 'en');
       expect(directiveEn).toContain('[DIALOG-FIRST RULE:');
+    });
+
+    it('wstrzykuje twarde przedziały słów per Bieg Kadencji (Issue #757)', () => {
+      expect(getCadenceWordBudget(0)).toEqual({
+        min: 120,
+        max: 190,
+        description: expect.objectContaining({
+          pl: expect.stringContaining('Bieg 0'),
+          en: expect.stringContaining('Gear 0'),
+        }),
+      });
+      expect(getCadenceWordBudget(1).min).toBe(25);
+      expect(getCadenceWordBudget(1).max).toBe(60);
+      expect(getCadenceWordBudget(2).min).toBe(90);
+      expect(getCadenceWordBudget(2).max).toBe(150);
+      expect(getCadenceWordBudget(3).min).toBe(30);
+      expect(getCadenceWordBudget(3).max).toBe(55);
+      expect(getCadenceWordBudget(4).min).toBe(40);
+      expect(getCadenceWordBudget(4).max).toBe(80);
+    });
+
+    it('formatuje dyrektywę z limitem słów, Książkową Asymetrią i Zasadą Aktywnego Pasażera w PL i EN', () => {
+      const selectionAction = selectSceneTechniques({
+        sceneState: 'action',
+      });
+      const directivePl = formatSceneDirective(selectionAction, 'pl');
+      expect(directivePl).toContain('[LIMIT_SŁÓW: 25-60 słów');
+      expect(directivePl).toContain('[KSIĄŻKOWA_ASYMETRIA:');
+      expect(directivePl).toContain('[ZASADA_AKTYWNEGO_PASAŻERA:');
+
+      const directiveEn = formatSceneDirective(selectionAction, 'en');
+      expect(directiveEn).toContain('[WORD_LIMIT: 25-60 words');
+      expect(directiveEn).toContain('[BOOK_ASYMMETRY:');
+      expect(directiveEn).toContain('[ACTIVE_PASSENGER_RULE:');
+    });
+
+    it('w stanie dialogue egzekwuje twardy limit wypowiedzi NPC do 60 słów', () => {
+      const selectionDialogue = selectSceneTechniques({
+        sceneState: 'dialogue',
+      });
+      const directivePl = formatSceneDirective(selectionDialogue, 'pl');
+      expect(directivePl).toContain('Twardy limit wypowiedzi NPC: do 60 słów');
+
+      const directiveEn = formatSceneDirective(selectionDialogue, 'en');
+      expect(directiveEn).toContain('Hard limit on NPC speech: up to 60 words');
+    });
+  });
+
+  describe('Wątek poboczny: Empiryczna symulacja pacingu per Bieg Kadencji (Issue #757)', () => {
+    it('Bieg 0 (Otwarcie): formatuje dyrektywę z limitem 120-190 słów', () => {
+      const selection = {
+        ...selectSceneTechniques({ sceneState: 'investigation' }),
+        cadenceGear: 0 as const,
+      };
+      const directive = formatSceneDirective(selection, 'pl');
+      expect(directive).toContain('[LIMIT_SŁÓW: 120-190 słów');
+      expect(directive).toContain('Otwarcie Przygody');
+    });
+
+    it('Bieg 1 (Ping-Pong / Dialog): formatuje dyrektywę z limitem 25-60 słów', () => {
+      const selection = selectSceneTechniques({ sceneState: 'dialogue' });
+      const directive = formatSceneDirective(selection, 'pl');
+      expect(directive).toContain('[LIMIT_SŁÓW: 25-60 słów');
+      expect(directive).toContain('[ZASADA DIALOG-FIRST:');
+    });
+
+    it('Bieg 2 (Szeroki Kadr / Eksploracja): formatuje dyrektywę z limitem 90-150 słów', () => {
+      const selection = selectSceneTechniques({ sceneState: 'investigation' });
+      const directive = formatSceneDirective(selection, 'pl');
+      expect(directive).toContain('[LIMIT_SŁÓW: 90-150 słów');
+    });
+
+    it('Bieg 3 (Przełamanie / Cios): formatuje dyrektywę z limitem 30-55 słów', () => {
+      const selection = selectSceneTechniques({ sceneState: 'tension_spike' });
+      const directive = formatSceneDirective(selection, 'pl');
+      expect(directive).toContain('[LIMIT_SŁÓW: 30-55 słów');
+    });
+
+    it('Bieg 4 (Zawieszenie / Pustka / SAN loss): formatuje dyrektywę z limitem 40-80 słów', () => {
+      const selection = selectSceneTechniques({ sceneState: 'abyssal_reveal' });
+      const directive = formatSceneDirective(selection, 'pl');
+      expect(directive).toContain('[LIMIT_SŁÓW: 40-80 słów');
     });
   });
 

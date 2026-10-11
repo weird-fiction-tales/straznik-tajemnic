@@ -1,13 +1,35 @@
-import { labelForSeconds } from './loading-indicator';
+import { labelForSeconds, PACER_MESSAGES } from './loading-indicator';
 
-describe('LoadingIndicator labels', () => {
-  it('uses English Game Master labels for the English locale', () => {
-    expect(labelForSeconds(0, 'en')).toBe('The Game Master is responding...');
-    expect(labelForSeconds(6, 'en')).toBe('The Game Master is setting the scene...');
-    expect(labelForSeconds(15, 'en')).toBe('The Game Master weighs their words...');
+describe('LoadingIndicator - Diegetyczny Pacer (Issue #757)', () => {
+  it('zwraca angielskie fazy diegetyczne dla locale en', () => {
+    expect(labelForSeconds(0, 'en')).toBe("Reading the Investigator's intent...");
+    expect(labelForSeconds(2, 'en')).toBe('Listening for footsteps in the dark...');
+    expect(labelForSeconds(5, 'en')).toBe('Framing the scene...');
+    expect(labelForSeconds(8, 'en')).toBe('Recording the investigative chronicle...');
+    expect(labelForSeconds(12, 'en')).toBe('The Game Master weighs their words in silence...');
+    expect(labelForSeconds(20, 'en')).toBe('The Game Master weighs their words in silence...');
   });
 
-  it('keeps Polish labels for the Polish locale', () => {
-    expect(labelForSeconds(0, 'pl')).toBe('Mistrz Gry odpowiada...');
+  it('zwraca polskie fazy diegetyczne dla locale pl', () => {
+    expect(labelForSeconds(0, 'pl')).toBe('Odczytywanie intencji Badacza...');
+    expect(labelForSeconds(2, 'pl')).toBe('Nadsłuchiwanie kroków w mroku...');
+    expect(labelForSeconds(5, 'pl')).toBe('Układanie scenerii w kadrze...');
+    expect(labelForSeconds(8, 'pl')).toBe('Spisywanie kroniki zdarzeń...');
+    expect(labelForSeconds(12, 'pl')).toBe('Mistrz Gry waży słowa w ciszy...');
+  });
+
+  it('obsługuje funkcję tłumaczącą next-intl t() z bezpiecznym fallbackiem', () => {
+    const mockT = jest.fn((key: string) => `T_${key}`);
+    const res = labelForSeconds(5, 'pl', mockT as any);
+    expect(mockT).toHaveBeenCalledWith('phase2');
+    expect(res).toBe('T_phase2');
+  });
+
+  it('gwarantuje 100% symetrię faz w słownikach PACER_MESSAGES', () => {
+    const plKeys = Object.keys(PACER_MESSAGES.pl);
+    const enKeys = Object.keys(PACER_MESSAGES.en);
+    expect(plKeys).toEqual(enKeys);
+    expect(plKeys.length).toBe(5);
   });
 });
+
