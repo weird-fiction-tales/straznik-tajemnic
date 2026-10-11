@@ -7,7 +7,7 @@ import { HelpIcon } from '../../ui/tooltip';
 import { Switch } from '../../ui/switch';
 import { ProviderTestButton } from './provider-test-button';
 import { GeminiSettings } from './gemini-settings';
-import { VolumeSlider, SpeedSlider } from './shared-sliders';
+import { VolumeSlider, SpeedSlider, SFXVolumeSlider } from './shared-sliders';
 
 interface TTSSettingsProps {
   settings: AISettings;
@@ -99,6 +99,7 @@ export function TTSSettings({
             </div>
             <VolumeSlider settings={settings} setSettings={setSettings} />
             <SpeedSlider settings={settings} setSettings={setSettings} />
+            <SFXVolumeSlider />
 
             {/* Wybór formatu narracji: Słuchowisko vs Audiobook */}
             <div className="pt-3 border-t border-brass/15 flex flex-col gap-2">

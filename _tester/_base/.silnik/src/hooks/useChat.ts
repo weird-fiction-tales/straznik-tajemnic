@@ -98,6 +98,7 @@ import {
 import { resolveEraVisualProfile } from '@/lib/era-visual-style';
 import { isCheatCommand, executeCheatCommand } from '@/lib/cheats/cheat-engine';
 import { getGlobalLightDirector } from '@/lib/hardware/hue/light-director-service';
+import { playSFX } from '@/lib/audio/sfx-catalog';
 import type {
   CombatResolution,
   PendingMeleeAttack,
@@ -623,6 +624,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const currentUserMessageIdRef = useRef<string | null>(null);
   const lastHueLocationChangeTimeRef = useRef<number>(0);
   const hasTriggeredSanShockThisTurnRef = useRef<boolean>(false);
+  const sceneSFXBudgetRef = useRef<{
+    hasPlayedGunshot: boolean;
+    hasPlayedThunder: boolean;
+    hasPlayedSanShock: boolean;
+  }>({
+    hasPlayedGunshot: false,
+    hasPlayedThunder: false,
+    hasPlayedSanShock: false,
+  });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1585,13 +1595,61 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 }
               }
 
+              // Reset budżetu sceny przy cięciu reżyserskim [ZMIANA_SCENY] (Issue #789)
+              if (/\[(?:ZMIANA_SCENY|SCENE_CHANGE)\b/i.test(text)) {
+                sceneSFXBudgetRef.current = {
+                  hasPlayedGunshot: false,
+                  hasPlayedThunder: false,
+                  hasPlayedSanShock: false,
+                };
+              }
+
+              // 1. Szok SAN (Somatyczny mrok + szept utraty poczytalności)
               if (
-                !hasTriggeredSanShockThisTurnRef.current &&
+                !sceneSFXBudgetRef.current.hasPlayedSanShock &&
                 /\[SANITY:\s*(?:@[^:]+:\s*)?-\d+/i.test(text)
               ) {
+                sceneSFXBudgetRef.current.hasPlayedSanShock = true;
                 hasTriggeredSanShockThisTurnRef.current = true;
+                playSFX('sanity_loss_whisper');
                 const director = getGlobalLightDirector();
                 director.triggerSanityShock().catch(() => {});
+              }
+
+              // 2. Wystrzał w scenie (Kinowy akcent One-Shot per Scene z rozbłyskiem Hue)
+              if (!sceneSFXBudgetRef.current.hasPlayedGunshot) {
+                const isGunshotEvent =
+                  /\[\s*(?:WALKA_ATAK|ATAK_WALKA|OPPOSED_MELEE|WALKA|COMBAT|BROŃ|WEAPON)\s*:[^\]]*(?:pistolet|rewolwer|strzelb|karabin|shotgun|tommy|gun|shot|paln)\b/i.test(text) ||
+                  /\[TEST:\s*(?:Broń palna|Strzelectwo|Pistolet|Strzelba|Karabin|Firearms)\b/i.test(text);
+
+                if (isGunshotEvent) {
+                  sceneSFXBudgetRef.current.hasPlayedGunshot = true;
+                  let sfxId = 'gunshot';
+                  if (/strzelb|shotgun|obrzyn/i.test(text)) sfxId = 'shotgun_blast';
+                  else if (/tommy|automat|seri/i.test(text)) sfxId = 'tommy_gun_burst';
+                  else if (/karabin|rifle/i.test(text)) sfxId = 'rifle_shot_bolt';
+                  else if (/derringer/i.test(text)) sfxId = 'derringer_pocket_shot';
+
+                  playSFX(sfxId);
+                  const director = getGlobalLightDirector();
+                  director.triggerGunshotFlash().catch(() => {});
+                }
+              }
+
+              // 3. Piorun w burzowej scenie (Fizyka diegetyczna: błysk natychmiast, grzmot po 300 ms)
+              if (!sceneSFXBudgetRef.current.hasPlayedThunder) {
+                const isThunderEvent =
+                  /\[POGODA:[^\]]*(?:burz|piorun|nawałnic|storm|thunder)\b/i.test(text) ||
+                  /\b(?:piorun\s+uderzył|zagrzmiało|błyskawica\s+rozcięła|huk\s+grzmotu)\b/i.test(text);
+
+                if (isThunderEvent) {
+                  sceneSFXBudgetRef.current.hasPlayedThunder = true;
+                  const director = getGlobalLightDirector();
+                  director.triggerLightningFlash().catch(() => {});
+                  setTimeout(() => {
+                    playSFX('thunder');
+                  }, 300);
+                }
               }
             }
             streamedFullText = cleanText;

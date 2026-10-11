@@ -17,10 +17,24 @@ export class LightDirector {
   private initialSnapshot: HueLightStateSnapshot[] | null = null;
   private currentMood: SceneLightingMood = 'kerosene_lamp';
   private presets: Record<string, LightPreset>;
+  private lastFlashTimestamp: number = 0;
+  private readonly FLASH_COOLDOWN_MS = 1500;
 
   constructor(client: HueClient) {
     this.client = client;
     this.presets = (presetsData as unknown as { presets: Record<string, LightPreset> }).presets;
+  }
+
+  /**
+   * Bezpiecznik sensoryczny: minimalny odstęp 1.5 s między gwałtownymi rozbłyskami
+   */
+  public canTriggerFlash(): boolean {
+    const now = Date.now();
+    if (now - this.lastFlashTimestamp < this.FLASH_COOLDOWN_MS) {
+      return false;
+    }
+    this.lastFlashTimestamp = now;
+    return true;
   }
 
   public getClient(): HueClient {
@@ -144,6 +158,91 @@ export class LightDirector {
         dynamics: { duration: 300 },
       });
     }, 250);
+  }
+
+  /**
+   * Piorun: Błyskawiczny, zimny rozbłysk 80 ms (6500K / 100% jasności) i powrót do barwy sceny.
+   */
+  public async triggerLightningFlash(): Promise<boolean> {
+    const config = this.client.getConfig();
+    if (!config.enabled || !this.canTriggerFlash()) return false;
+
+    const currentPreset = this.presets[this.currentMood];
+    const restoreMs = currentPreset ? currentPreset.transitionMs : 2000;
+
+    await this.client.applyToSelectedLights({
+      on: { on: true },
+      dimming: { brightness: 100 },
+      color_temperature: { mirek: 153 }, // 6500K zimna biel wyładowania
+      dynamics: { duration: 80 },
+    });
+
+    setTimeout(async () => {
+      await this.applyPreset(this.currentMood, restoreMs);
+    }, 100);
+
+    return true;
+  }
+
+  /**
+   * Wystrzał / Eksplozja: Ciepły mikro-rozbłysk 60 ms (żółć/ciepła biel 100%) i powrót do barwy sceny.
+   */
+  public async triggerGunshotFlash(): Promise<boolean> {
+    const config = this.client.getConfig();
+    if (!config.enabled || !this.canTriggerFlash()) return false;
+
+    const currentPreset = this.presets[this.currentMood];
+    const restoreMs = currentPreset ? currentPreset.transitionMs : 1500;
+
+    await this.client.applyToSelectedLights({
+      on: { on: true },
+      dimming: { brightness: 100 },
+      color_temperature: { mirek: 333 }, // 3000K błysk prochu
+      dynamics: { duration: 60 },
+    });
+
+    setTimeout(async () => {
+      await this.applyPreset(this.currentMood, restoreMs);
+    }, 80);
+
+    return true;
+  }
+
+  /**
+   * Spięcie elektryczne / Iskra: Podwójne mikro-migotanie 120 ms.
+   */
+  public async triggerElectricalSpark(): Promise<boolean> {
+    const config = this.client.getConfig();
+    if (!config.enabled || !this.canTriggerFlash()) return false;
+
+    // Błysk 1
+    await this.client.applyToSelectedLights({
+      dimming: { brightness: 90 },
+      color_temperature: { mirek: 180 },
+      dynamics: { duration: 50 },
+    });
+
+    setTimeout(async () => {
+      // Przygaśnięcie
+      await this.client.applyToSelectedLights({
+        dimming: { brightness: 10 },
+        dynamics: { duration: 40 },
+      });
+
+      setTimeout(async () => {
+        // Błysk 2
+        await this.client.applyToSelectedLights({
+          dimming: { brightness: 85 },
+          dynamics: { duration: 50 },
+        });
+
+        setTimeout(async () => {
+          await this.applyPreset(this.currentMood, 800);
+        }, 60);
+      }, 50);
+    }, 60);
+
+    return true;
   }
 
   /**

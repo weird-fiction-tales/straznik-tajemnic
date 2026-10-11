@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { trackEvent } from '@/lib/posthog';
 import { PhysicalDiceScene } from '@/components/dice/physical-dice-scene';
 import { traceForD100, traceForDice, type DiceRollTrace, type PhysicalDieType } from '@/lib/dice-roll-trace';
+import { playSFX } from '@/lib/audio/sfx-catalog';
 
 export interface DiceRoll {
   id: string;
@@ -109,9 +110,9 @@ export function DiceSystem({
   const [pushedRolls, setPushedRolls] = useState<{ [key: string]: DiceRoll }>(
     {}
   );
-  // M5 sesja 146: dice SFX via ElevenLabs DROPPED per D2.
-  // Akceptujemy ciszę dla cube animation (Gemini TTS nie ma SoundEffect API).
-  const playDiceSound = async () => {};
+  const playDiceSound = async () => {
+    playSFX('dice_roll');
+  };
 
   // Load roll history from localStorage
   useEffect(() => {

@@ -131,7 +131,6 @@ const isExcluded = (filePath) => {
   if (normalized.includes('/data/rag/rules-profile.json')) return true;
   if (normalized.includes('/data/rag/capabilities.json')) return true;
   if (normalized.includes('/data/rag/campaigns__')) return true;
-  if (normalized.includes('/public/sounds/sfx')) return true;
   if (normalized.endsWith('.DS_Store')) return true;
   return false;
 };

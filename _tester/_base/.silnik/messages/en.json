@@ -5718,6 +5718,8 @@
     "geminiDesc": "Cheap (~50× cheaper than ElevenLabs), preview",
     "volumeLabel": "Volume",
     "volumeHelp": "Narration volume from 0 (silence) to 100 (maximum loudness)",
+    "sfxVolumeLabel": "Sound effects (SFX)",
+    "sfxVolumeHelp": "Volume of sound effects (gunshots, thunder, dice, props) from 0 (muted) to 100.",
     "speedLabel": "Speech rate",
     "speedHelp": "Text reading speed. 1.0x = normal.",
     "modeLabel": "Narration format",
