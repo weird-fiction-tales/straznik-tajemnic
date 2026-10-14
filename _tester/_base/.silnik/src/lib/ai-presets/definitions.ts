@@ -139,8 +139,8 @@ export const QUALITY_PRESETS = {
     name: 'ULTRA',
     description: 'Pełne słuchowisko, handouty i ilustracje',
     settings: {
-      // Gemini settings - maksymalna jakość
-      model: 'gemini-3.1-pro-preview' as const,
+      // Gemini settings - wysoka jakość z szybkim modelem Flash (Issue #798)
+      model: 'gemini-3.8-flash' as const,
       temperature: 0.9,
       topP: 0.95,
       topK: 60,
@@ -158,7 +158,7 @@ export const QUALITY_PRESETS = {
       // === GEMINI TTS FULL SŁUCHOWISKO ===
       ttsEnabled: true,
       ttsProvider: 'gemini' as const,
-      ttsVoice: 'Gacrux',
+      ttsVoice: 'Algenib',
       narratorOnly: false,
       volume: 85,
       speed: 0.92,

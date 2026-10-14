@@ -38,4 +38,12 @@ describe('Model Registry Drift-Guard', () => {
     expect(CACHEABLE_MODELS.has('gemini-3.8-flash')).toBe(true);
     expect(CACHEABLE_MODELS.has('gemini-3.6-flash')).toBe(true);
   });
+
+  it('Issue #798: ULTRA preset uses gemini-3.8-flash (low thinking) and Algenib voice', () => {
+    expect(QUALITY_PRESETS.ultra.settings.model).toBe('gemini-3.8-flash');
+    expect(QUALITY_PRESETS.ultra.settings.thinkingLevel).toBe('low');
+    expect(QUALITY_PRESETS.ultra.settings.ttsVoice).toBe('Algenib');
+    expect(PRESET_MODELS.ultra.chatModel).toBe('gemini-3.8-flash');
+    expect(PRESET_MODELS.ultra.ttsVoice).toBe('Algenib');
+  });
 });
