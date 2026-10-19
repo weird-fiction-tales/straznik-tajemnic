@@ -15,9 +15,32 @@ type AdventureTranslation = Pick<
   | 'description'
   | 'source'
   | 'externalLinks'
+  | 'investigatorIntro'
+  | 'initialWeather'
+  | 'settingTrivia'
 >;
 
 const EN_ADVENTURES: Record<string, AdventureTranslation> = {
+  'nawiedzony-dom': {
+    title: 'The Haunting',
+    eraLabel: '1920s (USA)',
+    location: 'Boston, Massachusetts',
+    country: 'USA',
+    themes: ['Haunted House', 'Crime of the Past', 'Mythos Cult', 'Archival Investigation'],
+    suggestedOccupations: ['Private Investigator', 'Journalist', 'Antiquarian', 'Doctor', 'Professor'],
+    hook: 'Mr. Steven Knott hires the Investigators to inspect the Corbitt House in central Boston, whose sinister reputation prevents finding tenants.',
+    description:
+      'A classic scenario from the Call of Cthulhu 7e Starter Set. The Investigators look into the mystery of the Corbitt estate, uncovering the dark trial of the past, the Chapel of Contemplation cult, and the undead sorcerer Walter Corbitt resting in the cellar.',
+    investigatorIntro:
+      "May 1920, Boston. In client Steven Knott's office, he lays before you the brass keys to the townhouse on an old cobblestone street. The tragedy of the Macario family has driven away all tenants; your task is to discover the truth and clear the building's reputation.",
+    initialWeather: 'Chilly, damp Boston morning with harbor mist rising over Massachusetts Bay',
+    settingTrivia: [
+      '1920s Boston is a city of sharp contrasts: modern steel-frame offices tower beside gloomy red-brick Victorian tenements.',
+      'The Boston Globe morgue in the newspaper cellar holds thousands of unpublished crime files.',
+      'The Chapel of Contemplation was burned down during a secret Boston Police raid in 1912.',
+    ],
+    source: 'Call of Cthulhu 7e Starter Set',
+  },
   'cien-nad-prabutami': {
     title: "Shadow over Prabuty: Father Klimuszko's Vision",
     eraLabel: "People's Poland - 1970s",
@@ -107,13 +130,16 @@ const EN_CHARACTER_OCCUPATIONS: Record<string, string> = {
   glogow_ufolog: 'Ufologist',
 };
 
-export function localizeStrefa11Adventure(
-  adventure: AdventureContext,
+export function localizeAdventure<T extends { id?: string }>(
+  adventure: T,
   locale: Locale
-): AdventureContext {
-  const translation = locale === 'en' ? EN_ADVENTURES[adventure.id] : undefined;
+): T {
+  const translation =
+    locale === 'en' && adventure.id ? EN_ADVENTURES[adventure.id] : undefined;
   return translation ? { ...adventure, ...translation } : adventure;
 }
+
+export const localizeStrefa11Adventure = localizeAdventure;
 
 export function localizeStrefa11Character(
   character: PredefinedCharacter,

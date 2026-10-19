@@ -1,5 +1,6 @@
 import type { AdventureContext } from '@/lib/types';
 import type { ResolvedEraContext } from '@/lib/era';
+import { localizeAdventure } from '@/lib/immersion/strefa-11-localization';
 
 export interface SettingTriviaResult {
   title: string;
@@ -345,20 +346,36 @@ export function getSafeDossierIntro(
       : (optionsOrFallback || {});
 
   const fallbackDefault = options.fallbackDefault || '';
+  const isEn = options.locale === 'en';
+
+  const effectiveAdv =
+    adventureContext && options.locale
+      ? localizeAdventure(adventureContext, options.locale)
+      : adventureContext;
+
+  const isPolishText = (txt: string) => /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(txt);
 
   // 1. Sprawdź dedykowany investigatorIntro
-  const explicitIntro = adventureContext?.investigatorIntro?.trim();
-  if (explicitIntro && !TECHNICAL_EXTRACTION_REGEX.test(explicitIntro)) {
+  const explicitIntro = effectiveAdv?.investigatorIntro?.trim();
+  if (
+    explicitIntro &&
+    !TECHNICAL_EXTRACTION_REGEX.test(explicitIntro) &&
+    (!isEn || !isPolishText(explicitIntro))
+  ) {
     return explicitIntro;
   }
 
-  // 2. Sprawdź description, jeśli nie zawiera żargonu ekstrakcji
-  const rawDesc = adventureContext?.description?.trim();
-  if (rawDesc && !TECHNICAL_EXTRACTION_REGEX.test(rawDesc)) {
+  // 2. Sprawdź description, jeśli nie zawiera żargonu ekstrakcji i nie wycieka polskiego tekstu w trybie EN
+  const rawDesc = effectiveAdv?.description?.trim();
+  if (
+    rawDesc &&
+    !TECHNICAL_EXTRACTION_REGEX.test(rawDesc) &&
+    (!isEn || !isPolishText(rawDesc))
+  ) {
     const sentences = rawDesc.split(/(?<=[.!?])\s+/);
     if (sentences.length > 0) {
       const candidate = sentences.slice(0, 2).join(' ').trim();
-      if (!TECHNICAL_EXTRACTION_REGEX.test(candidate)) {
+      if (!TECHNICAL_EXTRACTION_REGEX.test(candidate) && (!isEn || !isPolishText(candidate))) {
         return candidate;
       }
     }
@@ -366,12 +383,12 @@ export function getSafeDossierIntro(
 
   // 3. Jeśli mamy kontekst przygody -> uruchom deterministyczny generator
   if (
-    adventureContext?.title ||
-    adventureContext?.location ||
-    adventureContext?.activeSceneYear ||
-    adventureContext?.yearRange
+    effectiveAdv?.title ||
+    effectiveAdv?.location ||
+    effectiveAdv?.activeSceneYear ||
+    effectiveAdv?.yearRange
   ) {
-    return generateAtmosphericDossierPattern(adventureContext, options);
+    return generateAtmosphericDossierPattern(effectiveAdv, options);
   }
 
   return fallbackDefault;

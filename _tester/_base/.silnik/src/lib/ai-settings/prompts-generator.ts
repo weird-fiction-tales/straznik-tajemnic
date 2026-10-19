@@ -59,7 +59,7 @@ export const getGameMasterPrompt = (
   prompt = prompt + '\n' + getLovecraftStylePrompt(locale, measurementSystem);
 
   // === GM PROTOCOL - Tagi strukturalne dla integracji z aplikacją ===
-  prompt = prompt + '\n' + getGMProtocolPrompt();
+  prompt = prompt + '\n' + getGMProtocolPrompt(locale);
 
   // === SESSION ZERO - Kalibracja rozgrywki ===
   prompt = prompt + buildSessionZeroInstructions(settings.sessionZero, locale);

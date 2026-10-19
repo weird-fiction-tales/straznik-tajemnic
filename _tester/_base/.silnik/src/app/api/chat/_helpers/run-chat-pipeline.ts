@@ -537,7 +537,7 @@ export async function runChatPipeline({
 
   // === OPT-21: CONTEXT-AWARE GM PROTOCOL ===
   const messageCount = messages?.length || 0;
-  const gmProtocol = getContextAwareGMProtocol(messageCount);
+  const gmProtocol = getContextAwareGMProtocol(messageCount, 10, locale);
 
   // === ISSUE #563: SCENE SENSORY MEMORY & ZONE DETECTION ===
   const derivedMemory = deriveSceneSensoryMemoryFromMessages(messages, currentLocation);
