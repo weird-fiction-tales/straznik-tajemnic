@@ -9,6 +9,7 @@ import {
   findEquipmentTemplate,
 } from './equipment-catalog';
 import type { EquipmentVisualEra } from './types';
+import { getLocalizedEquipmentName } from './data/character/equipment-localization';
 
 // === BROŃ ===
 
@@ -808,15 +809,24 @@ export const OCCUPATION_EQUIPMENT_ALIASES: Record<string, string> = {
  * Brak dopasowania zawodu → zestaw 'default'.
  */
 export function getStartingEquipmentForOccupation(
-  occupationId: string | null | undefined
+  occupationId: string | null | undefined,
+  locale: 'pl' | 'en' | string = 'pl'
 ): string[] {
   const fallback = OCCUPATION_EQUIPMENT.default ?? [];
-  if (!occupationId) return [...fallback];
-  const aliased = OCCUPATION_EQUIPMENT_ALIASES[occupationId];
-  const capitalized =
-    occupationId.charAt(0).toUpperCase() + occupationId.slice(1);
-  const key = aliased ?? capitalized;
-  return [...(OCCUPATION_EQUIPMENT[key] ?? fallback)];
+  const rawItems = !occupationId
+    ? [...fallback]
+    : (() => {
+        const aliased = OCCUPATION_EQUIPMENT_ALIASES[occupationId];
+        const capitalized =
+          occupationId.charAt(0).toUpperCase() + occupationId.slice(1);
+        const key = aliased ?? capitalized;
+        return [...(OCCUPATION_EQUIPMENT[key] ?? fallback)];
+      })();
+
+  if (locale === 'en') {
+    return rawItems.map((item) => getLocalizedEquipmentName(item, 'en'));
+  }
+  return rawItems;
 }
 
 // === KATEGORIE PO POLSKU ===

@@ -41,6 +41,11 @@ import {
   generateItemLore,
   categorizeItem,
 } from '@/lib/character/item-helpers';
+import {
+  getLocalizedEquipmentName,
+  getLocalizedEquipmentDescription,
+  getLocalizedSkillName,
+} from '@/lib/data/character';
 import { EquipmentDetailDialog } from './equipment-detail-dialog';
 
 interface WizardEquipmentViewProps {
@@ -132,7 +137,7 @@ export function WizardEquipmentView({
           id: `wizard_eq_${index}_${name.toLowerCase().replace(/\s+/g, '_')}`,
           name,
           category: validCategory,
-          description: generateItemLore(name),
+          description: getLocalizedEquipmentDescription(name, locale),
           condition: 'used',
           source: 'starting',
           obtainedAt: new Date(),
@@ -174,14 +179,14 @@ export function WizardEquipmentView({
         item.maxQuantity = item.maxQuantity ?? consumable.maxQuantity;
       }
 
-      // Upewnienie się, że opis lore istnieje
-      if (!item.description || item.description.trim() === '') {
-        item.description = generateItemLore(name);
+      // Upewnienie się, że opis lore istnieje i jest zlokalizowany
+      if (!item.description || item.description.trim() === '' || locale === 'en') {
+        item.description = getLocalizedEquipmentDescription(item, locale);
       }
 
       return item;
     });
-  }, [equipmentStr, effectiveEra]);
+  }, [equipmentStr, effectiveEra, locale]);
 
   // Etykiety kategorii
   const getCategoryLabel = (category: string) => {
@@ -282,7 +287,7 @@ export function WizardEquipmentView({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-1.5">
                       <span className="font-serif text-base font-semibold text-foreground truncate leading-tight group-hover:text-brass transition-colors">
-                        {item.name}
+                        {getLocalizedEquipmentName(item.name, locale)}
                       </span>
                       <span className="shrink-0 font-special-elite text-[10px] text-brass/80 bg-brass/10 px-1.5 py-0.5 rounded border border-brass/20 uppercase tracking-wider">
                         {categoryLabel}
@@ -300,7 +305,7 @@ export function WizardEquipmentView({
                         {range && <span>🎯 {range}</span>}
                         {weaponSkill && (
                           <span className="text-[#d9685f] bg-[#d9685f]/10 px-1 py-0.2 rounded border border-[#d9685f]/20">
-                            {weaponSkill}
+                            {getLocalizedSkillName(weaponSkill, locale)}
                           </span>
                         )}
                         {skillModifier && (
@@ -319,7 +324,7 @@ export function WizardEquipmentView({
                     {/* Opis fabularny / lore */}
                     {item.description && (
                       <p className="font-serif italic text-sm text-muted-foreground/90 line-clamp-2 leading-relaxed mt-1">
-                        {item.description}
+                        {getLocalizedEquipmentDescription(item, locale)}
                       </p>
                     )}
                   </div>
