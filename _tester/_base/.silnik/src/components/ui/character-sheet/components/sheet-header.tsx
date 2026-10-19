@@ -12,8 +12,9 @@ import { SafeImage } from '@/components/ui/safe-image';
  */
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import type { Character } from '@/lib/types';
+import { getLocalizedOccupationName } from '@/lib/data/character';
 import { ImageLightbox } from '@/components/ui/image-lightbox';
 
 export interface SheetHeaderProps {
@@ -44,6 +45,7 @@ const VIGNETTE_STYLE = {
  */
 export function SheetHeader({ character }: SheetHeaderProps) {
   const t = useTranslations('CharacterSheet');
+  const locale = useLocale();
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const hasPortrait = Boolean(character.portraitUrl);
   const gender = genderLabel(character.gender, t);
@@ -104,7 +106,7 @@ export function SheetHeader({ character }: SheetHeaderProps) {
           {character.archetype ? (
             <span className="text-primary font-semibold">{character.archetype} · </span>
           ) : null}
-          {character.occupation || '-'}
+          {getLocalizedOccupationName(character.occupation, locale) || '-'}
           {character.age ? ` · ${t('age', { age: character.age })}` : ''}
           {gender ? ` · ${gender}` : ''}
         </div>

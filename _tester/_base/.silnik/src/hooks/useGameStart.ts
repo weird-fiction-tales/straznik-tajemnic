@@ -26,6 +26,7 @@ import { useEquipmentThumbnails } from './useEquipmentThumbnails';
 import { sanitizeCharacterForApi } from '@/lib/chat-history-sanitizer';
 import { getEraVehicleVisualDescription } from '@/lib/era-visual-style';
 import { resolveGameEraContext, findEraManifest, type ResolvedEraContext } from '@/lib/era';
+import { getLocalizedOccupationName } from '@/lib/data/character';
 import {
   hasBlockingSetupFailure,
   isWorldSetupBundle,
@@ -355,7 +356,8 @@ export function useGameStart({
     if (english && allPlayerCharacters.length > 1) {
       prompt += `**IMPORTANT: This is a Hot Seat game for ${allPlayerCharacters.length} players.**\n\n--- CHARACTER CONTEXT ---\n`;
       allPlayerCharacters.forEach((char, index) => {
-        prompt += `\n**Player ${index + 1} - ${char.name}:**\n- Occupation: ${char.occupation || 'unknown'}\n- Age: ${char.age || 'unknown'}\n`;
+        const occ = getLocalizedOccupationName(char.occupation, 'en') || 'unknown';
+        prompt += `\n**Player ${index + 1} - ${char.name}:**\n- Occupation: ${occ}\n- Age: ${char.age || 'unknown'}\n`;
         if (char.characterConcept)
           prompt += `- Concept: ${char.characterConcept}\n`;
         if (char.background) prompt += `- Background: ${char.background}\n`;
@@ -366,8 +368,9 @@ export function useGameStart({
       prompt += `**UWAGA: Gra toczy się dla ${allPlayerCharacters.length} graczy (Hot Seat mode)!**\n\n`;
       prompt += `--- KONTEKST POSTACI ---\n`;
       allPlayerCharacters.forEach((char, index) => {
+        const occ = getLocalizedOccupationName(char.occupation, 'pl') || 'nieznany';
         prompt += `\n**Gracz ${index + 1} - ${char.name}:**\n`;
-        prompt += `- Zawód: ${char.occupation || 'nieznany'}\n`;
+        prompt += `- Zawód: ${occ}\n`;
         prompt += `- Wiek: ${char.age || 'nieznany'}\n`;
         if (char.characterConcept)
           prompt += `- Koncept: ${char.characterConcept}\n`;
@@ -377,7 +380,8 @@ export function useGameStart({
       prompt +=
         '\n**WAŻNE:** Wprowadzenie MUSI uwzględnić WSZYSTKIE postacie graczy! NIE powtarzaj statystyk ani statycznych opisów postaci z bloku KONTEKST POSTACI w swojej narracji. Wpleć ewentualne nawiązania naturalnie w fabułę.\n\n';
     } else if (english && activeCharacter) {
-      prompt += `--- CHARACTER CONTEXT ---\n**My character:**\n- Name: ${activeCharacter.name}\n- Occupation: ${activeCharacter.occupation || 'unknown'}\n- Age: ${activeCharacter.age || 'unknown'}\n`;
+      const occ = getLocalizedOccupationName(activeCharacter.occupation, 'en') || 'unknown';
+      prompt += `--- CHARACTER CONTEXT ---\n**My character:**\n- Name: ${activeCharacter.name}\n- Occupation: ${occ}\n- Age: ${activeCharacter.age || 'unknown'}\n`;
       if (activeCharacter.characterConcept)
         prompt += `- Concept: ${activeCharacter.characterConcept}\n`;
       if (activeCharacter.background)
@@ -385,8 +389,9 @@ export function useGameStart({
       prompt +=
         '--- END CHARACTER CONTEXT ---\n\nUse this context only in the background. Do not quote or repeat it.\n\n';
     } else if (activeCharacter) {
+      const occ = getLocalizedOccupationName(activeCharacter.occupation, 'pl') || 'nieznany';
       prompt += `--- KONTEKST POSTACI ---\n**Moja postać:**\n`;
-      prompt += `- Imię: ${activeCharacter.name}\n- Zawód: ${activeCharacter.occupation || 'nieznany'}\n- Wiek: ${activeCharacter.age || 'nieznany'}\n`;
+      prompt += `- Imię: ${activeCharacter.name}\n- Zawód: ${occ}\n- Wiek: ${activeCharacter.age || 'nieznany'}\n`;
       if (activeCharacter.characterConcept)
         prompt += `- Koncept: ${activeCharacter.characterConcept}\n`;
       if (activeCharacter.background)
@@ -703,7 +708,7 @@ export function useGameStart({
             ).map((character) => ({
               id: character.id,
               name: character.name,
-              occupation: character.occupation || '',
+              occupation: getLocalizedOccupationName(character.occupation, locale) || '',
               background: character.background || '',
             })),
           }),

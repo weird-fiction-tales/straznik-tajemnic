@@ -18,6 +18,7 @@ import {
   inferWeaponSkill,
   isMeleeWeapon,
 } from '@/lib/combat/weapon-context';
+import { getLocalizedOccupationName } from '@/lib/data/character';
 
 const FILENAME_SANITIZE_REGEX = /[^a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g;
 
@@ -79,7 +80,7 @@ export function exportCharacterToMarkdown(
         md += `**Pulp Talents:** ${character.pulpTalents.join(', ')}  \n`;
       }
     }
-    md += `**Occupation:** ${character.occupation || '-'}  \n`;
+    md += `**Occupation:** ${getLocalizedOccupationName(character.occupation, 'en') || '-'}  \n`;
     md += `**Age:** ${character.age || '-'}  \n`;
     md += `**Gender:** ${character.gender === 'male' ? 'Male' : character.gender === 'female' ? 'Female' : '-'}  \n\n`;
 
@@ -106,7 +107,7 @@ export function exportCharacterToMarkdown(
         md += `**Pulpowe talenty:** ${character.pulpTalents.join(', ')}  \n`;
       }
     }
-    md += `**Zawód:** ${character.occupation || '-'}  \n`;
+    md += `**Zawód:** ${getLocalizedOccupationName(character.occupation, 'pl') || '-'}  \n`;
     md += `**Wiek:** ${character.age || '-'}  \n`;
     md += `**Płeć:** ${character.gender === 'male' ? 'Mężczyzna' : character.gender === 'female' ? 'Kobieta' : '-'}  \n\n`;
 

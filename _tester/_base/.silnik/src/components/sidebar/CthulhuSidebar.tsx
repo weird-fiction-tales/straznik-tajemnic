@@ -3,7 +3,8 @@
 import { SafeImage } from '@/components/ui/safe-image';
 import type { FC } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
+import { getLocalizedOccupationName } from '@/lib/data/character';
 import {
   Settings,
   User,
@@ -182,6 +183,7 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
   adventureContext: adventureContextProp,
 }) => {
   const t = useTranslations('Sidebar');
+  const locale = useLocale();
   const [openDialog, setOpenDialog] = useState<string | null>(null);
   const [showSessionZero, setShowSessionZero] = useState(false);
   const [showHandoutGenerator, setShowHandoutGenerator] = useState(false);
@@ -458,7 +460,7 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                     </option>
                     {characters.map((char) => (
                       <option key={char.id} value={char.id}>
-                        🎭 {char.name} ({char.occupation || t('investigator')})
+                        🎭 {char.name} ({getLocalizedOccupationName(char.occupation, locale) || t('investigator')})
                       </option>
                     ))}
                   </select>
@@ -515,7 +517,7 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                             {activeCharacter.name}
                           </div>
                           <div className="text-sm text-brass/90 font-special-elite font-medium tracking-wide truncate">
-                            {activeCharacter.occupation}
+                            {getLocalizedOccupationName(activeCharacter.occupation, locale)}
                           </div>
                         </div>
                       </div>

@@ -1,5 +1,6 @@
 import type { AdventureContext } from '@/lib/adventures-data';
 import type { PredefinedCharacter } from './predefined-characters';
+import { getLocalizedOccupationName } from '@/lib/data/character';
 
 type Locale = string;
 
@@ -146,7 +147,9 @@ export function localizeStrefa11Character(
   locale: Locale
 ): PredefinedCharacter {
   if (locale !== 'en') return character;
-  const occupation = locale === 'en' ? EN_CHARACTER_OCCUPATIONS[character.id] : undefined;
+  const occupation =
+    EN_CHARACTER_OCCUPATIONS[character.id] ||
+    getLocalizedOccupationName(character.occupation, 'en');
   // The ID is retained solely as display provenance. It lets CharacterSheet
   // select dictionary text without altering the persisted rules data.
   return { ...character, ...(occupation ? { occupation } : {}), sourcePresetId: character.id };

@@ -7,7 +7,13 @@
 export type { CharacterStats, DerivedStats } from './stats';
 export { STAT_DESCRIPTIONS, DERIVED_DESCRIPTIONS } from './stats';
 export type { Occupation } from './occupations';
-export { OCCUPATIONS, OCCUPATION_DESCRIPTIONS } from './occupations';
+export {
+  OCCUPATIONS,
+  OCCUPATION_DESCRIPTIONS,
+  OCCUPATION_DESCRIPTIONS_EN,
+  getLocalizedOccupationName,
+  getLocalizedOccupationDescription,
+} from './occupations';
 export {
   SKILL_DESCRIPTIONS,
   BASE_SKILLS,

@@ -55,6 +55,8 @@ import {
   DERIVED_DESCRIPTIONS,
   OCCUPATIONS,
   OCCUPATION_DESCRIPTIONS,
+  getLocalizedOccupationName,
+  getLocalizedOccupationDescription,
   SKILL_DESCRIPTIONS,
   BASE_SKILLS,
   SKILL_CREATION_LIMIT,
@@ -1213,7 +1215,10 @@ export function CharacterWizardV2({
     setState((prev) => ({ ...prev, isGeneratingPortrait: true }));
     const { name, gender, age, description } = state;
     const occupation =
-      OCCUPATIONS.find((o) => o.id === state.occupationId)?.name || '';
+      getLocalizedOccupationName(
+        OCCUPATIONS.find((o) => o.id === state.occupationId),
+        'en'
+      ) || '';
 
     // Era z kontekstu przygody lub domyślna
     const rawEra = adventureContext
@@ -1286,7 +1291,7 @@ export function CharacterWizardV2({
     setState((prev) => ({ ...prev, isGeneratingBackstory: true }));
 
     const occupation = OCCUPATIONS.find((o) => o.id === state.occupationId);
-    const occupationName = occupation?.name || t('researcherLowercase');
+    const occupationName = getLocalizedOccupationName(occupation, locale) || t('researcherLowercase');
 
     // Buduj kontekst przygody dla promptu
     const adventurePrompt = adventureContext
@@ -1452,7 +1457,7 @@ export function CharacterWizardV2({
   const generateNarrativeBiography = async () => {
     setState((prev) => ({ ...prev, isGeneratingNarrative: true }));
     const occupation = OCCUPATIONS.find((o) => o.id === state.occupationId);
-    const occupationName = occupation?.name || t('researcherLowercase');
+    const occupationName = getLocalizedOccupationName(occupation, locale) || t('researcherLowercase');
     const adventurePrompt = adventureContext
       ? getAdventureContextPrompt(adventureContext as AdventureContext)
       : t('defaultAdventureEra');
@@ -1504,7 +1509,7 @@ export function CharacterWizardV2({
     const contextParts: string[] = [];
     const occupation = OCCUPATIONS.find((o) => o.id === state.occupationId);
     if (occupation)
-      contextParts.push(t('ctxOccupation', { value: occupation.name }));
+      contextParts.push(t('ctxOccupation', { value: getLocalizedOccupationName(occupation, locale) }));
     if (state.age) contextParts.push(t('ctxAge', { value: state.age }));
     if (state.gender) contextParts.push(t('ctxGender', { value: state.gender }));
     if (state.name && fieldName !== 'name')
@@ -1797,7 +1802,7 @@ export function CharacterWizardV2({
       underlyingInsanity: false,
       activeBoutOfMadness: null,
       skills: state.skills,
-      occupation: occupation?.name || t('unknown'),
+      occupation: getLocalizedOccupationName(occupation, locale) || t('unknown'),
       age: state.age,
       portraitUrl: state.portraitUrl || getRetroPortraitForOccupation(state.occupationId).svgPath,
       // === NOWE: Dedykowane pola biografii ===
@@ -2888,8 +2893,10 @@ export function CharacterWizardV2({
       scenarioSuggestedOccs.some(
         (s) =>
           o.name.toLowerCase().includes(s) ||
+          (o.nameEn && o.nameEn.toLowerCase().includes(s)) ||
           o.id.toLowerCase().includes(s) ||
           s.includes(o.name.toLowerCase()) ||
+          (o.nameEn && s.includes(o.nameEn.toLowerCase())) ||
           s.includes(o.id.toLowerCase())
       )
     ).map((o) => o.id);
@@ -2901,8 +2908,10 @@ export function CharacterWizardV2({
       archetypeSuggestedOccs.some(
         (s) =>
           o.name.toLowerCase().includes(s) ||
+          (o.nameEn && o.nameEn.toLowerCase().includes(s)) ||
           o.id.toLowerCase().includes(s) ||
           s.includes(o.name.toLowerCase()) ||
+          (o.nameEn && s.includes(o.nameEn.toLowerCase())) ||
           s.includes(o.id.toLowerCase())
       )
     ).map((o) => o.id);
@@ -2926,7 +2935,9 @@ export function CharacterWizardV2({
       }
       if (occupationSearchQuery.trim()) {
         const q = occupationSearchQuery.toLowerCase().trim();
-        const matchesName = occ.name.toLowerCase().includes(q);
+        const matchesName =
+          occ.name.toLowerCase().includes(q) ||
+          Boolean(occ.nameEn && occ.nameEn.toLowerCase().includes(q));
         const matchesSkill = occ.skills.some((s) =>
           s.toLowerCase().includes(q)
         );
@@ -3028,7 +3039,7 @@ export function CharacterWizardV2({
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-display uppercase tracking-[0.08em] text-base text-foreground font-semibold">
-                                {occ.name}
+                                {getLocalizedOccupationName(occ, locale)}
                               </span>
                               {isRecommended && (
                                 <span
@@ -3074,7 +3085,7 @@ export function CharacterWizardV2({
                     {t('occupationDetailsEyebrow')}
                   </div>
                   <h3 className="font-display uppercase tracking-[0.08em] text-2xl text-foreground mt-0.5">
-                    {selectedOcc.name}
+                    {getLocalizedOccupationName(selectedOcc, locale)}
                   </h3>
                   {recommendedOccupationIds.has(selectedOcc.id) && (
                     <div className="inline-flex items-center gap-1.5 mt-2 font-special-elite text-xs text-brass border border-primary/40 bg-primary/10 px-2.5 py-0.5">
@@ -3092,7 +3103,7 @@ export function CharacterWizardV2({
                     {t('lore')}
                   </div>
                   <p className="font-serif italic text-sm text-foreground/90 leading-relaxed">
-                    {OCCUPATION_DESCRIPTIONS[selectedOcc.id] ||
+                    {getLocalizedOccupationDescription(selectedOcc.id, locale) ||
                       t('noDescription')}
                   </p>
                 </div>
@@ -4158,8 +4169,10 @@ export function CharacterWizardV2({
                   </strong>
                   <span className="text-muted-foreground">
                     , {state.age} {t('yearsOld')},{' '}
-                    {OCCUPATIONS.find((o) => o.id === state.occupationId)?.name ||
-                      t('unknownOccupation')}
+                    {getLocalizedOccupationName(
+                      OCCUPATIONS.find((o) => o.id === state.occupationId),
+                      locale
+                    ) || t('unknownOccupation')}
                   </span>
                 </div>
               </div>

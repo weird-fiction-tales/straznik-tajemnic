@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { Character } from '@/lib/types';
+import { getLocalizedOccupationName } from '@/lib/data/character';
 import { Button } from './button';
 import { 
   Users, 
@@ -34,15 +35,21 @@ export function CharacterSwitcher({
   className
 }: CharacterSwitcherProps) {
   const t = useTranslations('CharacterSwitcher');
+  const locale = useLocale();
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filtrowanie postaci
-  const filteredCharacters = characters.filter(char =>
-    char.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    char.playerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    char.occupation.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredCharacters = characters.filter((char) => {
+    const q = searchQuery.toLowerCase();
+    const localizedOcc = getLocalizedOccupationName(char.occupation, locale);
+    return (
+      char.name.toLowerCase().includes(q) ||
+      char.playerName.toLowerCase().includes(q) ||
+      char.occupation.toLowerCase().includes(q) ||
+      localizedOcc.toLowerCase().includes(q)
+    );
+  });
 
   // Grupowanie postaci według kampanii
   const charactersByCampaign = filteredCharacters.reduce((acc, char) => {
@@ -135,7 +142,7 @@ export function CharacterSwitcher({
                     {activeCharacter.name}
                   </h3>
                   <span className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded">
-                    {activeCharacter.occupation}
+                    {getLocalizedOccupationName(activeCharacter.occupation, locale)}
                   </span>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -244,7 +251,7 @@ export function CharacterSwitcher({
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           <span>{character.playerName}</span>
                           <span>•</span>
-                          <span>{character.occupation}</span>
+                          <span>{getLocalizedOccupationName(character.occupation, locale)}</span>
                           <span>•</span>
                           <span>
                             {character.lastUsed 
