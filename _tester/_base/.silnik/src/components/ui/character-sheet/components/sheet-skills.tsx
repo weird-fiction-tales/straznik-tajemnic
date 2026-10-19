@@ -11,7 +11,8 @@
 import { getSkillValue, isSkillMarked, type Character } from '@/lib/types';
 import { HelpIcon } from '../../tooltip';
 import { SECTION_HELP } from '../types';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
+import { getLocalizedSkillName, getLocalizedSkillDescription } from '@/lib/data/character';
 
 export interface SheetSkillsProps {
   character: Character;
@@ -30,9 +31,12 @@ function isMythosSkill(skill: string): boolean {
  */
 export function SheetSkills({ character, skillLabels = {} }: SheetSkillsProps) {
   const t = useTranslations('CharacterSheet');
-  const skills = Object.entries(character.skills || {}).sort(([a], [b]) =>
-    (skillLabels[a] ?? a).localeCompare(skillLabels[b] ?? b)
-  );
+  const locale = useLocale();
+  const skills = Object.entries(character.skills || {}).sort(([a], [b]) => {
+    const nameA = skillLabels[a] ?? getLocalizedSkillName(a, locale);
+    const nameB = skillLabels[b] ?? getLocalizedSkillName(b, locale);
+    return nameA.localeCompare(nameB, locale);
+  });
 
   return (
     <div>
@@ -83,7 +87,7 @@ export function SheetSkills({ character, skillLabels = {} }: SheetSkillsProps) {
                       ✓
                     </span>
                   )}
-                  {skillLabels[skill] ?? skill}
+                  {skillLabels[skill] ?? getLocalizedSkillName(skill, locale)}
                 </span>
                 <span
                   className="font-special-elite text-xs flex-none flex items-center gap-1.5 cursor-help"

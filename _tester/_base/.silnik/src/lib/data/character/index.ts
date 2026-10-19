@@ -16,6 +16,10 @@ export {
 } from './occupations';
 export {
   SKILL_DESCRIPTIONS,
+  SKILL_DESCRIPTIONS_EN,
+  SKILL_NAMES_EN,
+  getLocalizedSkillName,
+  getLocalizedSkillDescription,
   BASE_SKILLS,
   SKILL_CREATION_LIMIT,
   SKILL_LIMIT_EXCEPTIONS,
