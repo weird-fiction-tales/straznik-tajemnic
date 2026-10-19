@@ -2,7 +2,8 @@
 
 import type { FC } from 'react';
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
+import { getLocalizedOccupationName } from '@/lib/data/character';
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,7 @@ export const CharacterDialog: FC<CharacterDialogProps> = ({
   onCharacterManage,
 }) => {
   const t = useTranslations('CharacterDialog');
+  const locale = useLocale();
   const [view, setView] = useState<'list' | 'details'>('list');
 
   // Aktualnie wyświetlana postać (dla widoku szczegółów)
@@ -95,7 +97,7 @@ export const CharacterDialog: FC<CharacterDialogProps> = ({
                           {activeCharacter.name}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {activeCharacter.occupation}
+                          {getLocalizedOccupationName(activeCharacter.occupation, locale)}
                         </div>
                       </div>
                       <Badge className="bg-brass/20 text-brass border border-brass/40 font-special-elite">{t('activeBadge')}</Badge>
@@ -135,7 +137,7 @@ export const CharacterDialog: FC<CharacterDialogProps> = ({
                                 {char.name}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {char.occupation}
+                                {getLocalizedOccupationName(char.occupation, locale)}
                               </div>
                             </div>
                             <Button
@@ -224,7 +226,7 @@ export const CharacterDialog: FC<CharacterDialogProps> = ({
                         {displayedCharacter.name}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {displayedCharacter.occupation}
+                        {getLocalizedOccupationName(displayedCharacter.occupation, locale)}
                       </p>
                     </div>
                   </CardTitle>
