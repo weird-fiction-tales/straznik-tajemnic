@@ -59,6 +59,7 @@ import {
   getLocalizedOccupationDescription,
   getLocalizedSkillName,
   getLocalizedSkillDescription,
+  getLocalizedEquipmentName,
   SKILL_DESCRIPTIONS,
   BASE_SKILLS,
   SKILL_CREATION_LIMIT,
@@ -644,7 +645,7 @@ export function CharacterWizardV2({
     // Ekwipunek startowy "na sztywno" wg zawodu (CoC 7e) - deterministycznie,
     // bez AI. Wybór zawodu wstawia jego standardowy zestaw przedmiotów.
     const startingEquipment =
-      getStartingEquipmentForOccupation(occupationId).join(', ');
+      getStartingEquipmentForOccupation(occupationId, locale).join(', ');
     setState((prev) => ({
       ...prev,
       occupationId,
@@ -2925,7 +2926,7 @@ export function CharacterWizardV2({
     ]);
 
     const startingEquipmentList = selectedOcc
-      ? getStartingEquipmentForOccupation(selectedOcc.id)
+      ? getStartingEquipmentForOccupation(selectedOcc.id, locale)
       : [];
 
     const filteredOccupations = OCCUPATIONS.filter((occ) => {
@@ -3170,7 +3171,7 @@ export function CharacterWizardV2({
                           key={i}
                           className="font-special-elite text-xs px-2.5 py-1 bg-[#0a0c0f] border border-brass/20 text-muted-foreground"
                         >
-                          {item}
+                          {getLocalizedEquipmentName(item, locale)}
                         </span>
                       ))}
                     </div>

@@ -3,6 +3,11 @@
 import { SafeImage } from '@/components/ui/safe-image';
 import { useTranslations, useLocale } from 'next-intl';
 import { generateItemLore } from '@/lib/character/item-helpers';
+import {
+  getLocalizedEquipmentName,
+  getLocalizedEquipmentDescription,
+  getLocalizedSkillName,
+} from '@/lib/data/character';
 /**
  * CharacterSheet - SheetEquipment komponent (re-skin Dark Art Déco, makieta 04).
  *
@@ -113,10 +118,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
   // Kanoniczne nazwy umiejetnosci (dane gry, SSOT z weapon-context) mapujemy na
   // etykiety wyswietlania per jezyk - dopasowanie wartosci zostaje na kanonie.
   const skillLabel = (canonical: string): string => {
-    if (canonical === 'Broń Palna (Karabin)') return t('skillFirearmsLong');
-    if (canonical === 'Broń Palna') return t('skillFirearms');
-    if (canonical === 'Walka Wręcz') return t('skillMelee');
-    return canonical;
+    return getLocalizedSkillName(canonical, currentLocale);
   };
   const equipment = character.equipment ?? [];
   const weapons = equipment.filter(isWeapon);
@@ -222,7 +224,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
               const damage = w.modifiers?.damage ?? '-';
               const damageStr =
                 melee && hasDb ? `${damage} ${damageBonus}` : damage;
-              const weaponLore = w.description?.trim() || generateItemLore(w.name, locale);
+              const weaponLore = getLocalizedEquipmentDescription(w, currentLocale);
 
               const abnormalCondition =
                 w.condition === 'depleted'
@@ -244,7 +246,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
                       <span className="flex items-center gap-3 min-w-0">
                         <ItemThumbnail item={w} />
                         <span className="font-serif text-lg text-foreground font-medium truncate leading-tight">
-                          {w.name}
+                          {getLocalizedEquipmentName(w.name, currentLocale)}
                         </span>
                       </span>
                       <span className="flex-none font-special-elite text-sm text-[#d9685f] bg-[#d9685f]/10 px-2 py-0.5 rounded border border-[#d9685f]/20">
@@ -304,7 +306,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {medical.map((item) => {
-              const gearLore = item.description?.trim() || generateItemLore(item.name, locale);
+              const gearLore = getLocalizedEquipmentDescription(item, currentLocale);
               const abnormalCondition =
                 item.condition === 'depleted'
                   ? t('conditionDepleted')
@@ -323,7 +325,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-2">
                       <span className="font-serif text-lg text-foreground font-medium truncate leading-tight">
-                        {item.name}
+                        {getLocalizedEquipmentName(item.name, currentLocale)}
                       </span>
                       <div className="flex items-center gap-1.5 flex-none">
                         {abnormalCondition && (
@@ -359,7 +361,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {tools.map((item) => {
-              const gearLore = item.description?.trim() || generateItemLore(item.name, locale);
+              const gearLore = getLocalizedEquipmentDescription(item, currentLocale);
               const isDepleted = item.condition === 'depleted';
               const isBroken = item.condition === 'broken';
               const isDamaged = item.condition === 'damaged';
@@ -374,7 +376,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-2">
                       <span className="font-serif text-lg text-foreground font-medium truncate leading-tight">
-                        {item.name}
+                        {getLocalizedEquipmentName(item.name, currentLocale)}
                       </span>
                       {showConditionBadge && (
                         <span className="flex-none font-special-elite text-xs px-1.5 py-0.5 rounded border text-[#d9685f] bg-[#d9685f]/10 border-[#d9685f]/20">
@@ -407,7 +409,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {documents.map((item) => {
-              const gearLore = item.description?.trim() || generateItemLore(item.name, locale);
+              const gearLore = getLocalizedEquipmentDescription(item, currentLocale);
               const abnormalCondition =
                 item.condition === 'depleted'
                   ? t('conditionDepleted')
@@ -426,7 +428,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-2">
                       <span className="font-serif text-lg text-foreground font-medium truncate leading-tight">
-                        {item.name}
+                        {getLocalizedEquipmentName(item.name, currentLocale)}
                       </span>
                       <div className="flex items-center gap-1.5 flex-none">
                         {abnormalCondition && (
@@ -462,7 +464,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {occult.map((item) => {
-              const gearLore = item.description?.trim() || generateItemLore(item.name, locale);
+              const gearLore = getLocalizedEquipmentDescription(item, currentLocale);
               const abnormalCondition =
                 item.condition === 'depleted'
                   ? t('conditionDepleted')
@@ -481,7 +483,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-2">
                       <span className="font-serif text-lg text-foreground font-medium truncate leading-tight">
-                        {item.name}
+                        {getLocalizedEquipmentName(item.name, currentLocale)}
                       </span>
                       <div className="flex items-center gap-1.5 flex-none">
                         {abnormalCondition && (
@@ -515,7 +517,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {personal.map((item) => {
-              const gearLore = item.description?.trim() || generateItemLore(item.name, locale);
+              const gearLore = getLocalizedEquipmentDescription(item, currentLocale);
               const abnormalCondition =
                 item.condition === 'depleted'
                   ? t('conditionDepleted')
@@ -534,7 +536,7 @@ export function SheetEquipment({ character, eraContext, onItemClick }: SheetEqui
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-2">
                       <span className="font-serif text-lg text-foreground font-medium truncate leading-tight">
-                        {item.name}
+                        {getLocalizedEquipmentName(item.name, currentLocale)}
                       </span>
                       <div className="flex items-center gap-1.5 flex-none">
                         {abnormalCondition && (

@@ -5,6 +5,11 @@ import { Button } from './button';
 import { EquipmentItem, Character } from '@/lib/types';
 import { inferWeaponSkill, inferWeaponDamage, isWeapon } from '@/lib/combat/weapon-context';
 import { generateItemLore } from '@/lib/character/item-helpers';
+import {
+  getLocalizedEquipmentName,
+  getLocalizedEquipmentDescription,
+  getLocalizedSkillName,
+} from '@/lib/data/character';
 import { Loader2, X, Maximize2, Minimize2, Play, Pause, RotateCcw, Disc } from 'lucide-react';
 import { getApiKeyHeaders } from '@/lib/api-keys-service';
 import { DiegeticDocumentViewer } from './diegetic-document-viewer';
@@ -57,7 +62,10 @@ export function getItemMechanics(
   const isMetric = measurementSystem === 'metric';
 
   if (isWeapon(item)) {
-    rows.push({ label: 'combatTest', value: inferWeaponSkill(item) });
+    rows.push({
+      label: 'combatTest',
+      value: getLocalizedSkillName(inferWeaponSkill(item), locale),
+    });
     // Dopełnij obrażenia/zasięg, gdy broń nie ma ich w modifiers (np. broń z
     // OCCUPATION_EQUIPMENT bez szablonu) - tabela CoC 7e per typ broni.
     const inferred =
@@ -283,7 +291,7 @@ export function EquipmentDetailDialog({
   const hasImage = !!item.imageUrl && !item.mapUrl && !item.isMap;
   const hasMap = !!(item.mapUrl || (item.imageUrl && item.isMap));
   const categoryLabel = CATEGORY_LABELS[item.category] || item.category;
-  const effectiveLore = item.description?.trim() || generateItemLore(item.name, locale);
+  const effectiveLore = getLocalizedEquipmentDescription(item, locale);
 
   return (
     <DialogPrimitive.Root open={Boolean(item)} onOpenChange={(open) => !open && onClose()}>
@@ -360,7 +368,7 @@ export function EquipmentDetailDialog({
                   <div className="relative w-full h-full min-h-[280px] md:min-h-0 flex items-center justify-center p-4">
                     <SafeImage
                       src={item.mapUrl || item.imageUrl}
-                      alt={t('mapAlt', { name: item.name })}
+                      alt={t('mapAlt', { name: getLocalizedEquipmentName(item.name, locale) })}
                       className="max-w-full max-h-full object-contain"
                     />
                     <div className="absolute top-4 left-4 bg-brass/90 text-black text-[10px] font-bold font-special-elite uppercase px-2 py-0.5 shadow">
@@ -372,7 +380,7 @@ export function EquipmentDetailDialog({
                   <div className="relative w-full h-full min-h-[280px] md:min-h-0">
                     <SafeImage
                       src={item.imageUrl}
-                      alt={item.name}
+                      alt={getLocalizedEquipmentName(item.name, locale)}
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-2 pointer-events-none border border-brass/25" />
@@ -404,7 +412,7 @@ export function EquipmentDetailDialog({
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
                       <h3 className="font-serif text-2xl md:text-3xl text-foreground leading-tight">
-                        {item.name}
+                        {getLocalizedEquipmentName(item.name, locale)}
                       </h3>
                       {item.value != null && item.value > 0 && (
                         <div className="mt-1.5 font-special-elite text-sm text-brass/80">

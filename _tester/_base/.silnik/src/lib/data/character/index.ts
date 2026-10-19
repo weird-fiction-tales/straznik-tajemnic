@@ -50,4 +50,10 @@ export {
   getPulpTalentsByCategory,
   getAllPulpTalents,
 } from './pulp-talents';
+export {
+  EQUIPMENT_NAMES_EN,
+  getLocalizedEquipmentName,
+  getLocalizedEquipmentDescription,
+} from './equipment-localization';
+
 
