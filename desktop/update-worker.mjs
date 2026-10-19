@@ -6,6 +6,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { execFileSync, spawnSync, spawn } from 'node:child_process';
 import http from 'node:http';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 // Parse CLI arguments
 const rawArgs = process.argv.slice(2);
@@ -266,12 +268,52 @@ async function downloadArchive() {
     return;
   }
 
-  const res = await fetch(url, { redirect: 'follow' });
-  if (!res.ok) {
-    throw new Error(`download failed with status ${res.status}`);
+  const maxAttempts = 3;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const tempPartPath = `${archivePath}.part`;
+    try {
+      if (fs.existsSync(tempPartPath)) {
+        try { fs.unlinkSync(tempPartPath); } catch (_) {}
+      }
+
+      console.log(`Pobieranie paczki aktualizacji (próba ${attempt}/${maxAttempts})...`);
+      const res = await fetch(url, { redirect: 'follow' });
+      if (!res.ok) {
+        throw new Error(`download failed with status ${res.status}`);
+      }
+      if (!res.body) {
+        throw new Error('download failed: empty response body');
+      }
+
+      const fileStream = fs.createWriteStream(tempPartPath);
+      await pipeline(Readable.fromWeb(res.body), fileStream);
+
+      // Atomowe przeniesienie gotowej pobranej paczki
+      fs.renameSync(tempPartPath, archivePath);
+      return;
+    } catch (err) {
+      lastError = err;
+      console.warn(`Niepowodzenie pobierania w próbie ${attempt}/${maxAttempts}: ${err.message}`);
+      if (fs.existsSync(tempPartPath)) {
+        try { fs.unlinkSync(tempPartPath); } catch (_) {}
+      }
+      if (attempt < maxAttempts) {
+        // Krótkie opóźnienie przed ponowieniem
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
+    }
   }
-  const buffer = Buffer.from(await res.arrayBuffer());
-  fs.writeFileSync(archivePath, buffer);
+
+  throw lastError || new Error('download failed');
+}
+
+async function verifyArchiveChecksum(filePath) {
+  const hash = crypto.createHash('sha256');
+  const readStream = fs.createReadStream(filePath);
+  await pipeline(readStream, hash);
+  return hash.digest('hex').toLowerCase();
 }
 
 async function run() {
@@ -291,9 +333,9 @@ async function run() {
     process.exit(1);
   }
 
-  // Weryfikacja sumy SHA-256
-  const hash = crypto.createHash('sha256').update(fs.readFileSync(archivePath)).digest('hex').toLowerCase();
-  if (hash !== expectedSha256) {
+  // Weryfikacja sumy SHA-256 strumieniowo (bezpieczna dla dużych archiwów)
+  const actualHash = await verifyArchiveChecksum(archivePath);
+  if (actualHash !== expectedSha256) {
     writeStatus('failed', 'checksum mismatch');
     cleanup();
     process.exit(1);
