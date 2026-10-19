@@ -529,8 +529,69 @@ function runWorker(env, argsList) {
   console.log('✓ PASS: Oczekiwanie wait-out i bezpieczny start z parametrem desktop-pid');
 }
 
+// -------------------------------------------------------------
+// Test 16: Odporne pobieranie strumieniowe z ponowieniem (retry) przez serwer HTTP
+// -------------------------------------------------------------
+{
+  const c = prepareWindowsCase('stream-retry-download');
+  const http = await import('node:http');
+
+  let requestsCount = 0;
+  const mockServer = http.createServer((req, res) => {
+    requestsCount++;
+    if (requestsCount === 1) {
+      // Pierwsza próba: symulacja błędu 500
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Temporary server error');
+    } else {
+      // Druga próba: sukces strumieniowania
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Length': c.size,
+      });
+      fs.createReadStream(c.zipPath).pipe(res);
+    }
+  });
+
+  await new Promise((resolve) => mockServer.listen(0, '127.0.0.1', resolve));
+  const serverPort = mockServer.address().port;
+  const downloadUrl = `http://127.0.0.1:${serverPort}/update.zip`;
+
+  try {
+    const { spawn } = await import('node:child_process');
+    const child = spawn(process.execPath, [WORKER_SCRIPT, ...[
+      '--target', c.appDir,
+      '--url', downloadUrl,
+      '--sha256', c.sha256,
+      '--version', c.version,
+      '--size', String(c.size),
+      '--data-dir', c.dataDir,
+      '--platform', 'win32',
+    ]], {
+      env: { ...process.env, TEST_MODE: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stderr = '';
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+
+    const exitCode = await new Promise((resolve) => {
+      child.on('close', resolve);
+    });
+
+    assert.strictEqual(exitCode, 0, `Worker powinien zakończyć z kodem 0 po retry. stderr: ${stderr}`);
+    assert.strictEqual(requestsCount, 2, 'Pobieranie powinno wykonać dokładnie 2 próby');
+    const status = JSON.parse(fs.readFileSync(path.join(c.dataDir, 'updates', 'status.json'), 'utf8'));
+    assert.strictEqual(status.state, 'succeeded');
+    assert.strictEqual(fs.readFileSync(path.join(c.liveRuntime, 'marker.txt'), 'utf8').trim(), 'new');
+    console.log('✓ PASS: Odporne pobieranie strumieniowe z automatycznym ponowieniem (retry)');
+  } finally {
+    mockServer.close();
+  }
+}
+
 console.log('\n============================================================');
-console.log(' Wszystkie testy update-worker zakończone sukcesem (15/15)!');
+console.log(' Wszystkie testy update-worker zakończone sukcesem (16/16)!');
 console.log('============================================================\n');
 
 
