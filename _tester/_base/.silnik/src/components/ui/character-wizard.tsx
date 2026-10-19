@@ -57,6 +57,8 @@ import {
   OCCUPATION_DESCRIPTIONS,
   getLocalizedOccupationName,
   getLocalizedOccupationDescription,
+  getLocalizedSkillName,
+  getLocalizedSkillDescription,
   SKILL_DESCRIPTIONS,
   BASE_SKILLS,
   SKILL_CREATION_LIMIT,
@@ -2938,9 +2940,10 @@ export function CharacterWizardV2({
         const matchesName =
           occ.name.toLowerCase().includes(q) ||
           Boolean(occ.nameEn && occ.nameEn.toLowerCase().includes(q));
-        const matchesSkill = occ.skills.some((s) =>
-          s.toLowerCase().includes(q)
-        );
+        const matchesSkill = occ.skills.some((s) => {
+          const loc = getLocalizedSkillName(s, locale);
+          return s.toLowerCase().includes(q) || loc.toLowerCase().includes(q);
+        });
         return matchesName || matchesSkill;
       }
       return true;
@@ -3149,7 +3152,7 @@ export function CharacterWizardV2({
                         key={i}
                         className="font-special-elite text-xs uppercase tracking-[0.06em] px-2.5 py-1 bg-[#1a1611] border border-brass/30 text-brass/90 shadow-sm"
                       >
-                        {skill}
+                        {getLocalizedSkillName(skill, locale)}
                       </span>
                     ))}
                   </div>
@@ -3626,9 +3629,13 @@ export function CharacterWizardV2({
 
         {/* Obliczenia i filtrowanie umiejętności (Issue #414) */}
         {(() => {
-          const allSkillsList = Object.entries(state.skills).filter(
-            ([name]) => name !== CREDIT_RATING_SKILL
-          );
+          const allSkillsList = Object.entries(state.skills)
+            .filter(([name]) => name !== CREDIT_RATING_SKILL)
+            .sort(([a], [b]) => {
+              const nameA = getLocalizedSkillName(a, locale);
+              const nameB = getLocalizedSkillName(b, locale);
+              return nameA.localeCompare(nameB, locale);
+            });
 
           const totalCount = allSkillsList.length;
           const occupationalCount = allSkillsList.filter(([name]) =>
@@ -3736,7 +3743,7 @@ export function CharacterWizardV2({
                         {/* Nazwa umiejętności */}
                         <div className="flex items-center gap-1 mb-2">
                           <span className="font-special-elite text-base uppercase tracking-[0.08em] text-foreground truncate">
-                            {skillName}
+                            {getLocalizedSkillName(skillName, locale)}
                           </span>
                           {isRecommended && (
                             <span
@@ -3748,7 +3755,7 @@ export function CharacterWizardV2({
                           )}
                           <HelpIcon
                             content={
-                              SKILL_DESCRIPTIONS[skillName] ||
+                              getLocalizedSkillDescription(skillName, locale) ||
                               t('baseValue', { value: baseValue })
                             }
                             position="right"

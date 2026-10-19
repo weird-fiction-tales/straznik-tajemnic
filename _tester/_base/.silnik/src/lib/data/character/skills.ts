@@ -173,3 +173,334 @@ export const BASE_SKILLS: Record<string, number> = {
 // Maksymalny poziom umiejętności podczas tworzenia postaci (wyjątki: Język Ojczysty, Majętność)
 export const SKILL_CREATION_LIMIT = 75;
 export const SKILL_LIMIT_EXCEPTIONS = ['Język Ojczysty', 'Majętność'];
+
+/**
+ * Kanoniczne angielskie nazwy bazowych umiejetnosci Call of Cthulhu 7e RAW.
+ */
+export const SKILL_NAMES_EN: Record<string, string> = {
+  "Antropologia": "Anthropology",
+  "Archeologia": "Archaeology",
+  "Biblioteka": "Library Use",
+  "Broń Artyleryjska": "Artillery",
+  "Broń Palna": "Firearms",
+  "Broń Palna (Broń Ciężka)": "Firearms (Heavy Weapons)",
+  "Broń Palna (Karabin)": "Firearms (Rifle/Shotgun)",
+  "Broń Palna (Karabin Maszynowy)": "Firearms (Machine Gun)",
+  "Broń Palna (Krótka)": "Firearms (Handgun)",
+  "Broń Palna (Łuk)": "Firearms (Bow)",
+  "Broń Palna (Miotacz Ognia)": "Firearms (Flamethrower)",
+  "Broń Palna (Pistolet Maszynowy)": "Firearms (Submachine Gun)",
+  "Elektryka": "Electrical Repair",
+  "Gadanina": "Fast Talk",
+  "Historia": "History",
+  "Jeździectwo": "Ride",
+  "Język Obcy": "Language (Other)",
+  "Język Ojczysty": "Language (Own)",
+  "Komputery": "Computers",
+  "Księgowość": "Accounting",
+  "Mechanika": "Mechanical Repair",
+  "Medycyna": "Medicine",
+  "Mity Cthulhu": "Cthulhu Mythos",
+  "Nauka": "Science",
+  "Nasłuchiwanie": "Listen",
+  "Obsługa Ciężkiego Sprzętu": "Operate Heavy Machinery",
+  "Okultyzm": "Occult",
+  "Orientacja": "Navigate",
+  "Pierwsza Pomoc": "First Aid",
+  "Pilotowanie": "Pilot",
+  "Pływanie": "Swim",
+  "Prawo": "Law",
+  "Prowadzenie Samochodu": "Drive Auto",
+  "Przebranie": "Disguise",
+  "Przetrwanie": "Survival",
+  "Perswazja": "Persuade",
+  "Psychoanaliza": "Psychoanalysis",
+  "Psychologia": "Psychology",
+  "Rzucanie": "Throw",
+  "Skok": "Jump",
+  "Skradanie": "Stealth",
+  "Spostrzegawczość": "Spot Hidden",
+  "Sztuka/Rzemiosło": "Art and Craft",
+  "Ślusarstwo": "Locksmith",
+  "Tropienie": "Track",
+  "Unik": "Dodge",
+  "Ukrywanie": "Conceal",
+  "Urok Osobisty": "Charm",
+  "Walka Wręcz": "Fighting",
+  "Walka Wręcz (Bijatyka)": "Fighting (Brawl)",
+  "Walka Wręcz (Broń Obuchowa)": "Fighting (Blunt)",
+  "Walka Wręcz (Szabla/Miecz)": "Fighting (Sword)",
+  "Wiedza o Naturze": "Natural World",
+  "Wiedza Tajemna": "Occult Lore",
+  "Wspinaczka": "Climb",
+  "Wycena": "Appraise",
+  "Zastraszanie": "Intimidate",
+  "Zręczne Palce": "Sleight of Hand",
+  "Majętność": "Credit Rating",
+  "Dowolna": "Any Skill",
+  "Dowolna Umiejętność": "Any Skill",
+  "Język Obcy (2)": "Language (Other) (2)",
+  "Język Obcy (łacina)": "Language (Other) (Latin)",
+  "Nauka (Astronomia)": "Science (Astronomy)",
+  "Nauka (Biologia)": "Science (Biology)",
+  "Nauka (Chemia)": "Science (Chemistry)",
+  "Nauka (Druga)": "Science (Second)",
+  "Nauka (Farmacja)": "Science (Pharmacy)",
+  "Nauka (Farmakologia)": "Science (Pharmacology)",
+  "Nauka (Fizyka)": "Science (Physics)",
+  "Nauka (Geologia)": "Science (Geology)",
+  "Nauka (Matematyka)": "Science (Mathematics)",
+  "Nauka (Specjalizacja)": "Science (Specialization)",
+  "Nauka (Zoologia)": "Science (Zoology)",
+  "Pilotowanie (Łódź)": "Pilot (Boat)",
+  "Sztuka/Rzemiosło (Fotografia)": "Art and Craft (Photography)",
+  "Sztuka/Rzemiosło (Muzyka)": "Art and Craft (Music)"
+};
+
+/**
+ * Angielskie opisy umiejetnosci Call of Cthulhu 7e RAW dla tooltipow i kart pomocy.
+ */
+export const SKILL_DESCRIPTIONS_EN: Record<string, string> = {
+  "Antropologia": "Study of human cultures, beliefs, and behaviors. Used to understand unfamiliar customs and isolated tribal traditions.",
+  "Archeologia": "Expertise in ancient civilizations, ruins, and excavation techniques. Used to analyze historical relics and lost tombs.",
+  "Biblioteka": "Skill in navigating archives, libraries, newspapers, and microfiche to uncover hidden records and documented facts.",
+  "Broń Artyleryjska": "Operation, targeting, and maintenance of field artillery, mortars, and military naval ordnance. Base: 01%",
+  "Broń Palna": "Proficiency in maintaining and shooting handguns and revolvers. Base: 20%",
+  "Broń Palna (Broń Ciężka)": "Operation of anti-tank rifles, rocket launchers, grenade throwers, and vehicular armaments. Base: 10%",
+  "Broń Palna (Karabin)": "Proficiency with hunting rifles, bolt-action service rifles, and shotguns. Base: 25%",
+  "Broń Palna (Karabin Maszynowy)": "Firing and clearing heavy and light tripod- or bipod-mounted machine guns. Base: 10%",
+  "Broń Palna (Krótka)": "Accurate drawing, aiming, and firing of semi-automatic pistols and revolvers. Base: 20%",
+  "Broń Palna (Łuk)": "Target shooting with longbows, short bows, composite bows, and hunting crossbows. Base: 15%",
+  "Broń Palna (Miotacz Ognia)": "Deploying military flamethrowers and managing hazardous pressurized fuel tanks. Base: 10%",
+  "Broń Palna (Pistolet Maszynowy)": "Firing burst and full-auto submachine guns like the Thompson or MP 18. Base: 15%",
+  "Elektryka": "Wiring, troubleshooting, and repairing electrical circuits, generators, fuses, and appliances.",
+  "Gadanina": "The art of confusing, distracting, or fast-talking someone into momentary compliance or agreement.",
+  "Historia": "Knowledge of past events, dynasties, social shifts, and historical contexts of people and places.",
+  "Jeździectwo": "Equestrian riding skill, saddle control, and calming startled horses in hostile environments.",
+  "Język Obcy": "Knowledge and conversational fluency in a specified foreign language. Rating equals percentage proficiency.",
+  "Język Ojczysty": "Command of one mother tongue, syntax, and vocabulary. Automatically equals Education (EDU).",
+  "Komputery": "Operating computing terminals, software systems, programming languages, and network protocols.",
+  "Księgowość": "Auditing financial ledgers, corporate spreadsheets, tax declarations, and uncovering embezzlement.",
+  "Mechanika": "Diagnosing, disassembling, and repairing combustion engines, clockwork mechanisms, valves, and locks.",
+  "Medycyna": "Professional diagnosis and treatment of diseases, infections, trauma, and surgical procedures.",
+  "Mity Cthulhu": "Forbidden revelations concerning the Great Old Ones and cosmic entities. Base: 00%, lowers maximum Sanity.",
+  "Nauka": "Rigorous scientific knowledge in a specialized academic discipline like chemistry, biology, or physics.",
+  "Nasłuchiwanie": "Acuity in detecting faint footsteps, hushed whispers, distant clicks, or breathing in the dark. Base: 20%",
+  "Obsługa Ciężkiego Sprzętu": "Driving steam tractors, excavators, cranes, locomotives, and industrial factory equipment. Base: 01%",
+  "Okultyzm": "Knowledge of folklore, esoteric traditions, spiritualism, and secret sects. Does not reveal Mythos truths.",
+  "Orientacja": "Reading nautical charts, topological maps, celestial constellations, and finding coordinates.",
+  "Pierwsza Pomoc": "Emergency roadside medical treatment, applying tourniquets, bandaging wounds, and revival. Base: 30%",
+  "Pilotowanie": "Piloting aircraft, biplanes, sea vessels, or dirigibles through turbulent conditions.",
+  "Pływanie": "Swimming through rough surf, navigating submerged passages, and treading water while weighed down. Base: 20%",
+  "Prawo": "Knowledge of statutory laws, judicial precedents, criminal court procedures, and legal protections.",
+  "Prowadzenie Samochodu": "Operating automobiles, trucks, and taxis during hazardous road conditions and vehicular pursuits. Base: 20%",
+  "Przebranie": "Cosmetic alterations, posture adjustment, voice modulation, and clothing to conceal identity.",
+  "Przetrwanie": "Wilderness foraging, erecting shelters, tracking potable water, and braving hostile climates.",
+  "Perswazja": "Convincing others through compelling arguments, evidence, rational debate, and structured negotiation. Base: 10%",
+  "Psychoanaliza": "Clinical therapeutic treatment to alleviate acute emotional panic, bouts of madness, and psychological trauma. Base: 01%",
+  "Psychologia": "Perceiving underlying human motivations, emotional states, nervous tics, and assessing deceit. Base: 10%",
+  "Rzucanie": "Hurling items with trajectory precision, including grenades, knives, stones, and ropes. Base: 20%",
+  "Skok": "Leaping across rooftops, hurdles, and vertical obstacles with measured athletic momentum. Base: 20%",
+  "Skradanie": "Moving silently without rustling, minimizing shadow exposure, and avoiding roving sentries. Base: 20%",
+  "Spostrzegawczość": "Noticing minute physical clues, hidden compartments, disguised tripwires, and skulking figures. Base: 25%",
+  "Sztuka/Rzemiosło": "Artistic expression or artisan craftsmanship in a specific medium like painting, photography, or carpentry.",
+  "Ślusarstwo": "Picking tumbler locks, cracking safes, bypassing latches, and studying mechanical security devices.",
+  "Tropienie": "Following physical spoor, trampled foliage, tire treads, and blood trails across various terrains. Base: 10%",
+  "Unik": "Instinctively evading incoming blows, projectile arcs, and collapsing hazards. Automatically half Dexterity.",
+  "Ukrywanie": "Stashing contraband, concealing weapons under clothing, or hiding behind cover. Base: 20%",
+  "Urok Osobisty": "Eliciting warmth and favor through magnetic charisma, flattery, social grace, and personal appeal. Base: 15%",
+  "Walka Wręcz": "Unarmed close-quarters combat or fighting with simple contact weapons. Base: 25%",
+  "Walka Wręcz (Bijatyka)": "Bare-knuckle boxing, brawling, grappling, and using improvised tavern weapons. Base: 25%",
+  "Walka Wręcz (Broń Obuchowa)": "Wielding blunt instruments like clubs, saps, warhammers, maces, and walking sticks. Base: 10%",
+  "Walka Wręcz (Szabla/Miecz)": "Fencing, parrying, and slashing with sabres, rapiers, broadswords, and cavalry blades. Base: 10%",
+  "Wiedza o Naturze": "Recognizing flora, fauna, geological formations, weather patterns, and wilderness ecosystems. Base: 10%",
+  "Wiedza Tajemna": "Obscure knowledge of forgotten grimoires, secret hermetic orders, and forbidden manuscripts. Base: 01%",
+  "Wspinaczka": "Ascending vertical surfaces, stone facades, rigging, drainpipes, and sheer crags. Base: 20%",
+  "Wycena": "Estimating market values and authenticity of antiques, jewelry, rare books, and fine art pieces.",
+  "Zastraszanie": "Coercing cooperation through overt threats, menacing demeanor, physical stature, and cold stares. Base: 15%",
+  "Zręczne Palce": "Manual dexterity in pickpocketing, palming items, misdirection, and card manipulation. Base: 10%",
+  "Majętność": "Material affluence and credit standing, dictating spending limits, social status, and lifestyle tier.",
+  "Dowolna": "Any occupational or personal skill chosen by the investigator."
+};
+
+/**
+ * Normalizuje klucz umiejetnosci (male litery, bez nadmiarowych spacji).
+ */
+function normalizeSkillKey(str: string): string {
+  return str.trim().toLowerCase();
+}
+
+/**
+ * Odwrocona mapa EN -> PL dla szybkiego resolve w obydwie strony.
+ */
+const SKILL_MAP_EN_TO_PL: Record<string, string> = {};
+for (const [plName, enName] of Object.entries(SKILL_NAMES_EN)) {
+  SKILL_MAP_EN_TO_PL[normalizeSkillKey(enName)] = plName;
+}
+
+// Dodatkowe popularne warianty angielskie i aliasy
+const ADDITIONAL_SKILL_ALIASES_EN_TO_PL: Record<string, string> = {
+  'spot hidden': 'Spostrzegawczość',
+  'library use': 'Biblioteka',
+  'first aid': 'Pierwsza Pomoc',
+  'fast talk': 'Gadanina',
+  'fast-talk': 'Gadanina',
+  'credit rating': 'Majętność',
+  'sleight of hand': 'Zręczne Palce',
+  'locksmith': 'Ślusarstwo',
+  'cthulhu mythos': 'Mity Cthulhu',
+  'dodge': 'Unik',
+  'fighting (brawl)': 'Walka Wręcz (Bijatyka)',
+  'brawl': 'Walka Wręcz (Bijatyka)',
+  'fighting': 'Walka Wręcz',
+  'firearms (handgun)': 'Broń Palna (Krótka)',
+  'handgun': 'Broń Palna (Krótka)',
+  'firearms (rifle/shotgun)': 'Broń Palna (Karabin)',
+  'rifle/shotgun': 'Broń Palna (Karabin)',
+  'firearms (submachine gun)': 'Broń Palna (Pistolet Maszynowy)',
+  'submachine gun': 'Broń Palna (Pistolet Maszynowy)',
+  'smg': 'Broń Palna (Pistolet Maszynowy)',
+  'firearms (machine gun)': 'Broń Palna (Karabin Maszynowy)',
+  'firearms (heavy weapons)': 'Broń Palna (Broń Ciężka)',
+  'firearms (bow)': 'Broń Palna (Łuk)',
+  'firearms (flamethrower)': 'Broń Palna (Miotacz Ognia)',
+  'firearms': 'Broń Palna',
+  'stealth': 'Skradanie',
+  'conceal': 'Ukrywanie',
+  'climb': 'Wspinaczka',
+  'jump': 'Skok',
+  'swim': 'Pływanie',
+  'throw': 'Rzucanie',
+  'accounting': 'Księgowość',
+  'anthropology': 'Antropologia',
+  'appraise': 'Wycena',
+  'archaeology': 'Archeologia',
+  'art and craft': 'Sztuka/Rzemiosło',
+  'art / craft': 'Sztuka/Rzemiosło',
+  'art/craft': 'Sztuka/Rzemiosło',
+  'art': 'Sztuka/Rzemiosło',
+  'charm': 'Urok Osobisty',
+  'disguise': 'Przebranie',
+  'drive auto': 'Prowadzenie Samochodu',
+  'driving': 'Prowadzenie Samochodu',
+  'electrical repair': 'Elektryka',
+  'history': 'Historia',
+  'intimidate': 'Zastraszanie',
+  'intimidation': 'Zastraszanie',
+  'law': 'Prawo',
+  'listen': 'Nasłuchiwanie',
+  'mechanical repair': 'Mechanika',
+  'medicine': 'Medycyna',
+  'natural world': 'Wiedza o Naturze',
+  'navigate': 'Orientacja',
+  'navigation': 'Orientacja',
+  'occult': 'Okultyzm',
+  'occult lore': 'Wiedza Tajemna',
+  'operate heavy machinery': 'Obsługa Ciężkiego Sprzętu',
+  'persuade': 'Perswazja',
+  'persuasion': 'Perswazja',
+  'pilot': 'Pilotowanie',
+  'psychoanalysis': 'Psychoanaliza',
+  'psychology': 'Psychologia',
+  'ride': 'Jeździectwo',
+  'science': 'Nauka',
+  'survival': 'Przetrwanie',
+  'track': 'Tropienie',
+  'language (other)': 'Język Obcy',
+  'language (own)': 'Język Ojczysty',
+  'computers': 'Komputery',
+  'artillery': 'Broń Artyleryjska'
+};
+
+for (const [alias, pl] of Object.entries(ADDITIONAL_SKILL_ALIASES_EN_TO_PL)) {
+  SKILL_MAP_EN_TO_PL[alias] = pl;
+}
+
+/**
+ * Zwraca zlokalizowana nazwe umiejetnosci Call of Cthulhu 7e w zadanym jezyku ('pl' lub 'en').
+ * Obsluguje dwukierunkowe mapowanie:
+ * - 'Spostrzegawczość' -> 'Spot Hidden' (gdy locale === 'en')
+ * - 'Spot Hidden' -> 'Spostrzegawczość' (gdy locale === 'pl')
+ * - Nierozpoznane/specjalistyczne nazwy zwraca nienaruszone (fallback).
+ */
+export function getLocalizedSkillName(
+  skillName: string | null | undefined,
+  locale: 'pl' | 'en' | string = 'pl'
+): string {
+  if (!skillName) return '';
+  const raw = skillName.trim();
+  if (!raw) return '';
+
+  const isEn = locale === 'en';
+
+  // 1. Sprawdz bezposrednie mapowanie PL -> EN
+  if (isEn && SKILL_NAMES_EN[raw]) {
+    return SKILL_NAMES_EN[raw];
+  }
+
+  // 2. Jesli szukamy wersji PL, sprawdz czy wejscie to nazwa EN
+  const norm = normalizeSkillKey(raw);
+  if (!isEn && SKILL_MAP_EN_TO_PL[norm]) {
+    return SKILL_MAP_EN_TO_PL[norm];
+  }
+
+  // 3. Sprawdz czy wejscie to wariant PL z wielkoscia liter
+  for (const [plName, enName] of Object.entries(SKILL_NAMES_EN)) {
+    if (normalizeSkillKey(plName) === norm) {
+      return isEn ? enName : plName;
+    }
+  }
+
+  // 4. Obsluz specyfikacje w nawiasach, np. "Język Obcy (łacina)" -> "Language (Other) (łacina)"
+  const bracketMatch = raw.match(/^([^(]+)\(([^)]+)\)$/);
+  if (bracketMatch) {
+    const baseName = bracketMatch[1].trim();
+    const spec = bracketMatch[2].trim();
+    const localizedBase = getLocalizedSkillName(baseName, locale);
+    if (localizedBase && localizedBase !== baseName) {
+      return `${localizedBase} (${spec})`;
+    }
+  }
+
+  // 5. Fallback: zwroc oryginalna nazwe
+  return raw;
+}
+
+/**
+ * Zwraca zlokalizowany opis umiejetnosci dla tooltipow.
+ */
+export function getLocalizedSkillDescription(
+  skillName: string | null | undefined,
+  locale: 'pl' | 'en' | string = 'pl'
+): string {
+  if (!skillName) return '';
+  const raw = skillName.trim();
+  if (!raw) return '';
+
+  const norm = normalizeSkillKey(raw);
+
+  // Ustal kanoniczny klucz PL
+  let plKey = raw;
+  if (SKILL_DESCRIPTIONS[raw]) {
+    plKey = raw;
+  } else if (SKILL_MAP_EN_TO_PL[norm]) {
+    plKey = SKILL_MAP_EN_TO_PL[norm];
+  } else {
+    // Sprawdz bez nawiasow jesli specjalizacja
+    const bracketMatch = raw.match(/^([^(]+)\(/);
+    if (bracketMatch) {
+      const baseName = bracketMatch[1].trim();
+      const baseNorm = normalizeSkillKey(baseName);
+      if (SKILL_DESCRIPTIONS[baseName]) {
+        plKey = baseName;
+      } else if (SKILL_MAP_EN_TO_PL[baseNorm]) {
+        plKey = SKILL_MAP_EN_TO_PL[baseNorm];
+      }
+    }
+  }
+
+  if (locale === 'en') {
+    return SKILL_DESCRIPTIONS_EN[plKey] || SKILL_DESCRIPTIONS[plKey] || '';
+  }
+  return SKILL_DESCRIPTIONS[plKey] || SKILL_DESCRIPTIONS_EN[plKey] || '';
+}
