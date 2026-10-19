@@ -177,11 +177,11 @@ export function cleanupContent(content: string): string {
   cleanContent = cleanContent.replace(/\s+\{\s+/g, ' ');
   cleanContent = cleanContent.replace(/\s+\}\s+/g, ' ');
 
-  // Inline [Co robisz?] / [Co robicie?] - Flash wstawia go w środek akapitu zamiast w osobnej
+  // Inline [Co robisz?] / [What do you do?] - Flash wstawia go w środek akapitu zamiast w osobnej
   // linii, przez co parser (wymaga tagu na osobnej linii) renderuje go jako surowy
   // tekst zamiast przycisku. Przenieś do osobnej linii, by trafił do whisper.
   cleanContent = cleanContent.replace(
-    /(\S)[ \t]*(\[Co robi(?:sz|cie)\?\])/gi,
+    /(\S)[ \t]*(\[(?:Co robi(?:sz|cie)\?|What do you(?: all)? do\?)\])/gi,
     '$1\n\n$2'
   );
 

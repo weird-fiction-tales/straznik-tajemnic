@@ -39,6 +39,7 @@ import {
   storeCampaignMemoryScope,
 } from '@/core/memory/campaign-scope';
 import { isDocumentModelUseBlocked } from '@/lib/document-model-policy';
+import { localizeAdventure } from '@/lib/immersion/strefa-11-localization';
 
 /**
  * Zadanie 6 (hardening demo-safe): chwilowy blip sieci ≠ crash startu gry.
@@ -393,18 +394,21 @@ export function useGameStart({
       prompt += `--- KONIEC KONTEKSTU ---\n\n**WAŻNE:** NIE CYTUJ i NIE POWTARZAJ powyższych informacji o mojej postaci na początku odpowiedzi. Użyj ich TYLKO "w tle" (jako swojej wiedzy Strażnika Tajemnic), aby poprowadzić narrację.\n\n`;
     }
 
-    if (adventureContext) {
+    const effectiveAdv = adventureContext
+      ? localizeAdventure(adventureContext, english ? 'en' : 'pl')
+      : null;
+    if (effectiveAdv) {
       const startDateTimeFormatted =
         typeof timeManager?.formatDateTime === 'function'
-          ? timeManager.formatDateTime()
+          ? timeManager.formatDateTime(english ? 'en' : 'pl')
           : '';
       const startWeather =
         typeof timeManager?.getWeather === 'function'
           ? timeManager.getWeather()
           : '';
       prompt += english
-        ? `**ADVENTURE CONTEXT:**\n- Title: ${adventureContext.title}\n- Location: ${adventureContext.location}, ${adventureContext.country}${startDateTimeFormatted ? `\n- Starting Time: ${startDateTimeFormatted}` : ''}${startWeather ? `\n- Weather: ${startWeather}` : ''}\n- Hook: ${adventureContext.hook}\n\n`
-        : `**KONTEKST PRZYGODY:**\n- Tytuł: ${adventureContext.title}\n- Lokalizacja: ${adventureContext.location}, ${adventureContext.country}${startDateTimeFormatted ? `\n- Czas rozpoczęcia: ${startDateTimeFormatted}` : ''}${startWeather ? `\n- Pogoda: ${startWeather}` : ''}\n- Hook: ${adventureContext.hook}\n\n`;
+        ? `**ADVENTURE CONTEXT:**\n- Title: ${effectiveAdv.title}\n- Location: ${effectiveAdv.location}, ${effectiveAdv.country}${startDateTimeFormatted ? `\n- Starting Time: ${startDateTimeFormatted}` : ''}${startWeather ? `\n- Weather: ${startWeather}` : ''}\n- Hook: ${effectiveAdv.hook}\n\n`
+        : `**KONTEKST PRZYGODY:**\n- Tytuł: ${effectiveAdv.title}\n- Lokalizacja: ${effectiveAdv.location}, ${effectiveAdv.country}${startDateTimeFormatted ? `\n- Czas rozpoczęcia: ${startDateTimeFormatted}` : ''}${startWeather ? `\n- Pogoda: ${startWeather}` : ''}\n- Hook: ${effectiveAdv.hook}\n\n`;
     }
 
     // IND-261: TURA WPROWADZAJĄCA = wyjątek od limitu długości (IND-213). Onboarding
@@ -832,7 +836,10 @@ export function useGameStart({
 
     // Ustaw zegar kampanii na dynamiczną datę startową i pogodę przygody PRZED budowaniem introPromptu.
     // Świeży start nadpisuje stary czas z localStorage; reload zapisanej gry tu nie trafia (osobna ścieżka).
-    timeManager.resetForAdventure(adventureContext);
+    const effectiveAdv = adventureContext
+      ? localizeAdventure(adventureContext, locale === 'en' ? 'en' : 'pl')
+      : null;
+    timeManager.resetForAdventure(effectiveAdv || adventureContext, locale === 'en' ? 'en' : 'pl');
     setMessages([]); // Wyczyść czat przed startem przygody
 
     const introPrompt = buildIntroPrompt();

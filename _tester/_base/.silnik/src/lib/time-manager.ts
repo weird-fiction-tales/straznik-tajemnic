@@ -92,6 +92,29 @@ const DAYS_PL = [
   'Piątek',
   'Sobota',
 ];
+const MONTHS_EN = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+const DAYS_EN = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
 const MOON_PHASES: MoonPhase[] = [
   'new',
   'waxing_crescent',
@@ -112,6 +135,17 @@ const MOON_PHASE_NAMES_PL: Record<MoonPhase, string> = {
   waning_gibbous: 'Malejący Garbaty 🌖',
   last_quarter: 'Ostatnia Kwadra 🌗',
   waning_crescent: 'Malejący Sierp 🌘',
+};
+
+const MOON_PHASE_NAMES_EN: Record<MoonPhase, string> = {
+  new: 'New Moon 🌑',
+  waxing_crescent: 'Waxing Crescent 🌒',
+  first_quarter: 'First Quarter 🌓',
+  waxing_gibbous: 'Waxing Gibbous 🌔',
+  full: 'Full Moon 🌕',
+  waning_gibbous: 'Waning Gibbous 🌖',
+  last_quarter: 'Last Quarter 🌗',
+  waning_crescent: 'Waning Crescent 🌘',
 };
 
 // ============================================================================
@@ -412,34 +446,46 @@ export function deriveStartGameTime(
  */
 export function deriveInitialWeather(
   adventure: AdventureTimeInput | null | undefined,
-  gameTime: GameTime
+  gameTime: GameTime,
+  locale?: 'pl' | 'en'
 ): string {
   if (adventure?.initialWeather && adventure.initialWeather.trim() !== '') {
     return adventure.initialWeather.trim();
   }
 
+  const isEn = locale === 'en';
   const { month } = gameTime;
 
   // Zima (grudzień, styczeń, luty)
   if (month === 11 || month === 0 || month === 1) {
-    return 'Przejmujący mróz, szary śnieg i lodowaty wiatr';
+    return isEn
+      ? 'Bitter frost, grey snow and freezing wind'
+      : 'Przejmujący mróz, szary śnieg i lodowaty wiatr';
   }
 
   // Wiosna (marzec, kwiecień, maj)
   if (month >= 2 && month <= 4) {
-    return 'Rześkie powietrze po wiosennym deszczu';
+    return isEn
+      ? 'Crisp air after a spring shower'
+      : 'Rześkie powietrze po wiosennym deszczu';
   }
 
   // Lato (czerwiec, lipiec, sierpień)
   if (month >= 5 && month <= 7) {
-    return 'Duszne, parne powietrze zwiastujące burzę';
+    return isEn
+      ? 'Stifling, humid air brewing a thunderstorm'
+      : 'Duszne, parne powietrze zwiastujące burzę';
   }
 
   // Jesień (wrzesień, październik, listopad)
   if (adventure?.tone === 'noir') {
-    return 'Gęsta jesienna mgła i chłodny deszcz';
+    return isEn
+      ? 'Dense autumn fog and cold rain'
+      : 'Gęsta jesienna mgła i chłodny deszcz';
   }
-  return 'Chłodny wiatr, nisko wiszące chmury i wilgotne powietrze';
+  return isEn
+    ? 'Cool wind, low hanging clouds and damp air'
+    : 'Chłodny wiatr, nisko wiszące chmury i wilgotne powietrze';
 }
 
 // ============================================================================
@@ -599,10 +645,11 @@ class TimeManager {
    * NIE wołać na reload zapisanej sesji.
    */
   resetForAdventure(
-    adventure: AdventureTimeInput | null | undefined
+    adventure: AdventureTimeInput | null | undefined,
+    locale?: 'pl' | 'en'
   ): GameTime {
     this.currentTime = deriveStartGameTime(adventure);
-    this.currentWeather = deriveInitialWeather(adventure, this.currentTime);
+    this.currentWeather = deriveInitialWeather(adventure, this.currentTime, locale);
     if (adventure?.doomClock?.deadline) {
       const dl = adventure.doomClock.deadline;
       this.setDeadline(
@@ -644,10 +691,10 @@ class TimeManager {
     return calculateMoonPhase(year, month, day);
   }
 
-  getDayOfWeek(): string {
+  getDayOfWeek(locale: 'pl' | 'en' = 'pl'): string {
     const { year, month, day } = this.currentTime;
     const idx = getDayOfWeekIndex(year, month, day);
-    return DAYS_PL[idx];
+    return locale === 'en' ? DAYS_EN[idx] : DAYS_PL[idx];
   }
 
   isNight(): boolean {
@@ -657,8 +704,11 @@ class TimeManager {
 
   // --- Formatting ---
 
-  formatDate(): string {
+  formatDate(locale: 'pl' | 'en' = 'pl'): string {
     const { year, month, day } = this.currentTime;
+    if (locale === 'en') {
+      return `${MONTHS_EN[month]} ${day}, ${year}`;
+    }
     return `${day} ${MONTHS_PL[month]} ${year}`;
   }
 
@@ -667,17 +717,20 @@ class TimeManager {
     return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
   }
 
-  formatDateTime(): string {
-    return `${this.formatDate()}, ${this.formatTime()}`;
+  formatDateTime(locale: 'pl' | 'en' = 'pl'): string {
+    return `${this.formatDate(locale)}, ${this.formatTime()}`;
   }
 
-  formatForPrompt(): string {
+  formatForPrompt(locale: 'pl' | 'en' = 'pl'): string {
+    const isEn = locale === 'en';
     const moonPhase = this.getMoonPhase();
-    const moonPhaseName = MOON_PHASE_NAMES_PL[moonPhase];
-    const dayOfWeek = this.getDayOfWeek();
-    const timeOfDay = this.isNight() ? 'Noc' : 'Dzień';
+    const moonPhaseName = isEn ? MOON_PHASE_NAMES_EN[moonPhase] : MOON_PHASE_NAMES_PL[moonPhase];
+    const dayOfWeek = this.getDayOfWeek(locale);
+    const timeOfDay = this.isNight() ? (isEn ? 'Night' : 'Noc') : (isEn ? 'Day' : 'Dzień');
 
-    return `[AKTUALNY CZAS: ${this.formatDateTime()}, ${dayOfWeek}, ${timeOfDay}, Faza Księżyca: ${moonPhaseName}]`;
+    return isEn
+      ? `[CURRENT TIME: ${this.formatDateTime(locale)}, ${dayOfWeek}, ${timeOfDay}, Moon Phase: ${moonPhaseName}]`
+      : `[AKTUALNY CZAS: ${this.formatDateTime(locale)}, ${dayOfWeek}, ${timeOfDay}, Faza Księżyca: ${moonPhaseName}]`;
   }
 
   // --- Doom Clock (Zegar Zagłady / Presja Czasu CoC 7e RAW) ---
