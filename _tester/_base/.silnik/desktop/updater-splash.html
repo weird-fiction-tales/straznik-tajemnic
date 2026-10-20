@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strażnik Tajemnic — Aktualizacja</title>
+  <style>
+    :root {
+      --bg-obsidian: #08090C;
+      --card-bg: #101216;
+      --gold-primary: #D4AF37;
+      --gold-bright: #F6E05E;
+      --emerald-primary: #11B3A3;
+      --emerald-glow: rgba(17, 179, 163, 0.75);
+      --text-main: #E2E8F0;
+      --text-muted: #94A3B8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-obsidian);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Cinzel", "Cormorant Garamond", Georgia, serif;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-app-region: drag;
+    }
+
+    .container {
+      width: 330px;
+      height: 400px;
+      background: radial-gradient(85% 85% at 50% 35%, #181512 0%, #0A0C0F 65%, #050608 100%);
+      border: 1px solid rgba(212, 175, 55, 0.45);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.85), 0 0 35px rgba(212, 175, 55, 0.2);
+      border-radius: 16px;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Ozdobne narożniki Art Déco */
+    .corner {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid var(--gold-bright);
+      pointer-events: none;
+    }
+    .corner-tl { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+    .corner-tr { top: 8px; right: 8px; border-left: none; border-bottom: none; }
+    .corner-bl { bottom: 8px; left: 8px; border-right: none; border-top: none; }
+    .corner-br { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+
+    /* Tło z promieniami Art Déco (dokładnie jak w ikonie) */
+    .rays-bg {
+      position: absolute;
+      inset: -50px;
+      background: repeating-conic-gradient(
+        from 0deg at 50% 40%,
+        rgba(212, 175, 55, 0.18) 0deg 1.6deg,
+        transparent 1.6deg 9deg
+      );
+      animation: rotateRays 60s linear infinite;
+      pointer-events: none;
+      opacity: 0.9;
+    }
+    @keyframes rotateRays {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Szmaragdowa poświata bloom w centrum */
+    .bloom-center {
+      position: absolute;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 160px;
+      height: 160px;
+      background: radial-gradient(circle, rgba(17, 179, 163, 0.45) 0%, transparent 70%);
+      pointer-events: none;
+      animation: pulseBloom 3s ease-in-out infinite;
+    }
+    @keyframes pulseBloom {
+      0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+      50% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+    }
+
+    .eye-wrapper {
+      width: 130px;
+      height: 130px;
+      margin-top: 10px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+
+    /* Symbol Oka Horusa */
+    .eye-glyph {
+      font-size: 82px;
+      line-height: 1;
+      color: var(--emerald-primary);
+      text-shadow: 
+        0 0 12px var(--emerald-glow),
+        0 0 28px rgba(17, 179, 163, 0.5),
+        0 0 45px rgba(17, 179, 163, 0.25);
+      animation: pulseGlyph 2.4s ease-in-out infinite;
+      display: inline-block;
+      transform-origin: center;
+    }
+    @keyframes pulseGlyph {
+      0%, 100% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(1.08); filter: brightness(1.25); }
+    }
+
+    .content {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      z-index: 2;
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gold-bright);
+      text-shadow: 0 0 12px rgba(246, 224, 94, 0.35);
+    }
+
+    .status-text {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      min-height: 34px;
+      max-width: 270px;
+      transition: opacity 0.2s ease;
+    }
+
+    .progress-bar-rail {
+      width: 85%;
+      height: 4px;
+      background: rgba(212, 175, 55, 0.2);
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      z-index: 2;
+    }
+
+    .progress-bar-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 40%;
+      background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
+      animation: sweepRail 1.8s ease-in-out infinite;
+    }
+    @keyframes sweepRail {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+
+    .hint {
+      font-size: 10px;
+      color: rgba(148, 163, 184, 0.65);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      z-index: 2;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+
+    <div class="rays-bg"></div>
+    <div class="bloom-center"></div>
+
+    <div class="eye-wrapper">
+      <!-- Ikoniczne Oko Horusa z ikony aplikacji Strażnik Tajemnic AI -->
+      <span class="eye-glyph">&#77952;</span>
+    </div>
+
+    <div class="content">
+      <h1 class="title" id="titleLabel">Strażnik Tajemnic</h1>
+      <p class="status-text" id="statusLabel">Przebudowa mechanizmów i podmiana plików…</p>
+    </div>
+
+    <div class="progress-bar-rail">
+      <div class="progress-bar-indicator"></div>
+    </div>
+
+    <div class="hint">Aplikacja uruchomi się samoczynnie</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const customStatus = params.get('status');
+    const lang = params.get('lang') || 'pl';
+
+    if (customStatus) {
+      document.getElementById('statusLabel').textContent = decodeURIComponent(customStatus);
+    } else if (lang === 'en') {
+      document.getElementById('titleLabel').textContent = 'Keeper of Arcana';
+      document.getElementById('statusLabel').textContent = 'Replacing core files and updating components…';
+      document.querySelector('.hint').textContent = 'The game will reopen automatically';
+    }
+  </script>
+</body>
+</html>

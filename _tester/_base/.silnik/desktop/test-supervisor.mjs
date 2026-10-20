@@ -15,11 +15,37 @@ import {
   findAvailablePort,
   checkExistingInstance,
   killProcessTree,
-  getWindowsBrowserCandidates
+  getWindowsBrowserCandidates,
+  initSessionLogger
 } from './supervisor.mjs';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function runTests() {
   console.log('=== Rozpoczynam testy modułu desktop/supervisor.mjs ===\n');
+
+  // Test 0: Inicjalizacja sesji logera i retencja (NLog-style)
+  console.log('[0/7] Test: initSessionLogger() i retencja sesji (max 5)');
+  const testLogsDir = path.join(os.tmpdir(), `zew-test-logs-${Date.now()}`);
+  try {
+    fs.mkdirSync(testLogsDir, { recursive: true });
+    // Tworzymy 6 fikcyjnych starych sesji
+    for (let i = 1; i <= 6; i++) {
+      fs.writeFileSync(path.join(testLogsDir, `session-2026-01-0${i}T00-00-00-000Z.log`), `Log ${i}`);
+    }
+    const sessionFile = initSessionLogger(testLogsDir);
+    assert.ok(sessionFile, 'initSessionLogger powinien zwrócić ścieżkę do pliku sesji');
+    assert.ok(fs.existsSync(sessionFile), 'Plik nowej sesji powinien zostać utworzony lub być gotowy');
+
+    const remainingLogs = fs.readdirSync(testLogsDir).filter(f => f.startsWith('session-') && f.endsWith('.log'));
+    assert.ok(remainingLogs.length <= 5, `Liczba plików logów (${remainingLogs.length}) nie może przekraczać 5`);
+    console.log('  PASS: initSessionLogger tworzy plik sesji i pilnuje retencji max 5 plików.\n');
+  } finally {
+    try { fs.rmSync(testLogsDir, { recursive: true, force: true }); } catch (_) {}
+  }
 
   // Test 1: Izolacja ścieżek platformowych
   console.log('[1/4] Test: resolvePaths() i izolacja danych');
@@ -36,6 +62,53 @@ async function runTests() {
       paths.dataRoot.includes('Library/Application Support/ZewCthulhu'),
       'Na macOS katalog danych musi być w Library/Application Support/ZewCthulhu'
     );
+  } else if (process.platform === 'win32') {
+    assert.equal(
+      paths.dataRoot,
+      path.join(paths.launcherRootDir, 'data'),
+      'Na Windows katalog danych musi być ściśle relatywny do paczki (<launcherRootDir>/data)'
+    );
+    assert.equal(
+      paths.logFile,
+      path.join(paths.logsDir, 'straznik-tajemnic-ai.log'),
+      'Na Windows plik logów musi być w <logsDir>/straznik-tajemnic-ai.log'
+    );
+    assert.ok(
+      !paths.dataRoot.includes('AppData'),
+      'Na Windows dataRoot nie może wyciekać do AppData'
+    );
+  }
+
+  // Weryfikacja symulacji Windows (gdy test uruchomiony na macOS/Linux)
+  {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const originalEnvDataDir = process.env.ZEW_DATA_DIR;
+    const originalEnvLogsDir = process.env.ZEW_LOGS_DIR;
+    delete process.env.ZEW_DATA_DIR;
+    delete process.env.ZEW_LOGS_DIR;
+
+    try {
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      const winPaths = resolvePaths();
+      assert.equal(
+        winPaths.dataRoot,
+        path.join(winPaths.launcherRootDir, 'data'),
+        '[Symulacja Win32] dataRoot musi wskazywać na <launcherRootDir>/data'
+      );
+      assert.equal(
+        winPaths.logFile,
+        path.join(winPaths.launcherRootDir, 'logs', 'straznik-tajemnic-ai.log'),
+        '[Symulacja Win32] logFile musi wskazywać na <launcherRootDir>/logs/straznik-tajemnic-ai.log'
+      );
+      assert.ok(
+        !winPaths.dataRoot.includes('AppData'),
+        '[Symulacja Win32] dataRoot nie może zawierać AppData'
+      );
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform);
+      if (originalEnvDataDir !== undefined) process.env.ZEW_DATA_DIR = originalEnvDataDir;
+      if (originalEnvLogsDir !== undefined) process.env.ZEW_LOGS_DIR = originalEnvLogsDir;
+    }
   }
   console.log('  PASS: resolvePaths poprawnie mapuje ścieżki i separuje dane użytkownika.\n');
 
@@ -165,8 +238,22 @@ async function runTests() {
   await new Promise((resolve) => loopbackServer.close(resolve));
   console.log('  PASS: detekcja i połączenia są w 100% oparte na deterministycznym 127.0.0.1.\n');
 
+  // Test 7: Limit pamięci sterty V8 (NODE_OPTIONS --max-old-space-size=4096)
+  console.log('[7/7] Test: Limit pamięci Node.js (NODE_OPTIONS --max-old-space-size=4096)');
+  const supervisorSource = fs.readFileSync(path.join(__dirname, 'supervisor.mjs'), 'utf8');
+  assert.ok(
+    supervisorSource.includes('--max-old-space-size=4096'),
+    'supervisor.mjs musi przekazywać --max-old-space-size=4096 w konfiguracji NODE_OPTIONS serwera'
+  );
+  const launcherCmdSource = fs.readFileSync(path.join(__dirname, 'launcher.cmd'), 'utf8');
+  assert.ok(
+    launcherCmdSource.includes('--max-old-space-size=4096'),
+    'launcher.cmd musi definiować set NODE_OPTIONS=--max-old-space-size=4096 przed startem'
+  );
+  console.log('  PASS: konfiguracja limitu pamięci 4GB Node.js jest obecna w supervisorze i launcherze.\n');
+
   console.log('====================================================');
-  console.log('Wszystkie testy supervisora zakończone SUKCESEM (6/6)!');
+  console.log('Wszystkie testy supervisora zakończone SUKCESEM (7/7)!');
   console.log('====================================================');
 }
 

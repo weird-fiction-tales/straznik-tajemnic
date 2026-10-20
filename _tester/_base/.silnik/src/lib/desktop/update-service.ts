@@ -466,6 +466,51 @@ export function resolveAppTarget(): string {
   throw new Error('Self-update is unavailable outside an application bundle');
 }
 
+export function getCandidateWorkerPaths(cwd: string = process.cwd(), includeGlobalFallbacks: boolean = true): string[] {
+  const candidates: string[] = [
+    path.join(cwd, 'desktop', 'update-worker.mjs'),
+    path.join(cwd, 'runtime', 'desktop', 'update-worker.mjs'),
+    path.resolve(cwd, '..', 'desktop', 'update-worker.mjs'),
+    path.resolve(cwd, '..', 'runtime', 'desktop', 'update-worker.mjs'),
+    path.resolve(cwd, '../..', 'desktop', 'update-worker.mjs'),
+    path.resolve(cwd, '../../..', 'desktop', 'update-worker.mjs'),
+    path.resolve(cwd, '../../..', 'runtime', 'desktop', 'update-worker.mjs'),
+  ];
+
+  if (includeGlobalFallbacks) {
+    if (process.env.ZEW_APP_BUNDLE) {
+      candidates.push(
+        path.join(process.env.ZEW_APP_BUNDLE, 'Contents', 'Resources', 'runtime', 'desktop', 'update-worker.mjs'),
+        path.join(process.env.ZEW_APP_BUNDLE, 'Contents', 'Resources', 'desktop', 'update-worker.mjs')
+      );
+    }
+
+    if (process.env.ZEW_APP_DIR) {
+      candidates.push(
+        path.join(process.env.ZEW_APP_DIR, 'desktop', 'update-worker.mjs'),
+        path.join(process.env.ZEW_APP_DIR, 'runtime', 'desktop', 'update-worker.mjs')
+      );
+    }
+
+    candidates.push(
+      path.resolve(__dirname, '../../../../desktop/update-worker.mjs'),
+      path.resolve(__dirname, '../../../../../desktop/update-worker.mjs'),
+      path.resolve(__dirname, '../../../../../../desktop/update-worker.mjs')
+    );
+  }
+
+  return candidates;
+}
+
+export function resolveUpdateWorkerPath(cwd: string = process.cwd(), includeGlobalFallbacks: boolean = true): string {
+  const candidates = getCandidateWorkerPaths(cwd, includeGlobalFallbacks);
+  const found = candidates.find((p) => fs.existsSync(p));
+  if (!found) {
+    throw new Error(`Update worker script (update-worker.mjs) not found in candidate paths for cwd: ${cwd}`);
+  }
+  return found;
+}
+
 export async function startDetachedUpdate(manifest: DesktopUpdateManifest): Promise<number> {
   if (!canPerformSelfUpdate()) {
     throw new Error('Self-update is unavailable outside an application bundle');
@@ -481,18 +526,19 @@ export async function startDetachedUpdate(manifest: DesktopUpdateManifest): Prom
   const updateDir = updatesDirectory();
   await mkdir(updateDir, { recursive: true });
 
-  const candidateWorkerPaths = [
-    path.join(process.cwd(), 'desktop', 'update-worker.mjs'),
-    path.join(process.cwd(), 'runtime', 'desktop', 'update-worker.mjs'),
-    path.resolve(process.cwd(), '..', 'desktop', 'update-worker.mjs'),
-    path.resolve(process.cwd(), '..', 'runtime', 'desktop', 'update-worker.mjs'),
-    path.resolve(__dirname, '../../../../desktop/update-worker.mjs'),
-    path.resolve(__dirname, '../../../../../desktop/update-worker.mjs'),
-  ];
-
-  const sourceWorker = candidateWorkerPaths.find((p) => fs.existsSync(p)) || path.join(process.cwd(), 'desktop', 'update-worker.mjs');
+  const sourceWorker = resolveUpdateWorkerPath();
   const detachedWorker = path.join(updateDir, 'update-worker.mjs');
   await copyFile(sourceWorker, detachedWorker);
+
+  // Kopiujemy również ekran ładowania updater-splash.html, jeśli istnieje w tej samej lokalizacji
+  const sourceSplash = path.join(path.dirname(sourceWorker), 'updater-splash.html');
+  if (fs.existsSync(sourceSplash)) {
+    try {
+      await copyFile(sourceSplash, path.join(updateDir, 'updater-splash.html'));
+    } catch {
+      // Ignorujemy błąd kopiowania splash - nie blokuje on procesu aktualizacji
+    }
+  }
 
   let workerExecPath = process.execPath;
   if (platform === 'win32') {
