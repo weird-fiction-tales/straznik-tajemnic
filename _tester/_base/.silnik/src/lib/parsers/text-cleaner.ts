@@ -402,7 +402,7 @@ export function sanitizeMechanicalTags(text: string): string {
     // Tagi multimedialne i ilustracje
     .replace(/\[\s*(?:ILUSTRACJA|OBRAZ|GRAFIKA|RYSUNEK|ZDJĘCIE|ZDJECIE|PORTRET|WIZUALIZACJA|IMAGE|PICTURE|ILLUSTRATION|SHOW|VISUALIZE|PORTRAIT|SFX|DŹWIĘK|DZWIEK|AUDIO|NAGRANIE|PROMPT)[^\]]*\]/gi, '')
     // Czas i pogoda
-    .replace(new RegExp(`\\[\\s*(?:POGODA|WEATHER|AKTUALNY CZAS|AKTUALNY_CZAS|TIME|KONIEC_SESJI|END_SESSION)\\s*:${NESTED_TAG_BODY}\\]`, 'gi'), '')
+    .replace(new RegExp(`\\[\\s*(?:POGODA|WEATHER|AKTUALNY CZAS|AKTUALNY_CZAS|CURRENT TIME|CURRENT_TIME|TIME|KONIEC_SESJI|END_SESSION)\\s*:${NESTED_TAG_BODY}\\]`, 'gi'), '')
     // Catch-all dla halucynowanych wielkich tagów z dwukropkiem lub kreską (np. [ZAGROZENIE_RAW: ...])
     .replace(new RegExp(`\\[[A-ZŁŚŻŹĆŃ_]{2,}\\s*(?::|\\|)${NESTED_TAG_BODY}\\]`, 'gi'), '')
     // Niedomknięty tag techniczny na końcu uciętego streamu

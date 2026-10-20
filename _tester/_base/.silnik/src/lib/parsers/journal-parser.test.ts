@@ -30,10 +30,54 @@ describe('English game protocol', () => {
     ]);
   });
 
-  it('accepts the English LOCATION tag', () => {
+  it('parses [JOURNAL:case:Beginning the investigation] as type case', () => {
+    expect(
+      extractJournalTags(
+        '[JOURNAL:case:Beginning the investigation]1-2 sentences about where I am.[/JOURNAL]'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        type: 'case',
+        title: 'Beginning the investigation',
+        content: '1-2 sentences about where I am.',
+      }),
+    ]);
+  });
+
+  it('parses Polish aliases sprawa and cel as type case', () => {
+    expect(
+      extractJournalTags(
+        '[DZIENNIK:sprawa:Początek śledztwa]Gdzie jestem i co mnie tu sprowadza.[/DZIENNIK]'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        type: 'case',
+        title: 'Początek śledztwa',
+        content: 'Gdzie jestem i co mnie tu sprowadza.',
+      }),
+    ]);
+
+    expect(
+      extractJournalTags(
+        '[DZIENNIK:cel:Odnaleźć profesora]Profesor zniknął bez śladu.[/DZIENNIK]'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        type: 'case',
+        title: 'Odnaleźć profesora',
+        content: 'Profesor zniknął bez śladu.',
+      }),
+    ]);
+  });
+
+  it('accepts the English LOCATION tag with colon or pipe separator', () => {
     expect(
       extractLatestTagLocation('[LOCATION: Corbitt House: Rain-darkened brick]')
     ).toEqual({ name: 'Corbitt House', description: 'Rain-darkened brick' });
+
+    expect(
+      extractLatestTagLocation('[LOCATION: Place Name | Atmosphere & Visual Prompt]')
+    ).toEqual({ name: 'Place Name', description: 'Atmosphere & Visual Prompt' });
   });
 });
 

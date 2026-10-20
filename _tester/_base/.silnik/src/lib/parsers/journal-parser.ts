@@ -143,6 +143,9 @@ export function extractJournalTags(text: string): JournalTagEntry[] {
 
     // Mapowanie typów
     const typeMap: Record<string, JournalTagEntry['type']> = {
+      case: 'case',
+      sprawa: 'case',
+      cel: 'case',
       walka: 'combat',
       combat: 'combat',
       fight: 'combat',

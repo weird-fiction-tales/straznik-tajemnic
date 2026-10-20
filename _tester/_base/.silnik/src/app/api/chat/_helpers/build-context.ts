@@ -1,4 +1,5 @@
 import { getSpellDefinition, getTomeDefinition } from '@/lib/magic';
+import { getLocalizedOccupationName } from '@/lib/data/character';
 /**
  * buildAdditionalContext - pure function dla sekcji 8 route.ts (IND-71 micro 1/3).
  *
@@ -1233,34 +1234,62 @@ export function buildAdditionalContext(
 
   // OPT-22: Hot Seat FIX prompt (≥2 graczy z resolved characterName)
   if (hotSeatConfig?.enabled && (hotSeatConfig?.players?.length ?? 0) >= 2) {
+    const isEn = opts.locale === 'en';
+    const fallbackName = isEn ? 'Unknown' : 'Nieznany';
     const characterNames = (hotSeatConfig.players ?? [])
-      .map((p) => p.characterName || 'Nieznany')
-      .filter((n) => n !== 'Nieznany');
+      .map((p) => p.characterName || fallbackName)
+      .filter((n) => n !== fallbackName);
     if (characterNames.length >= 2) {
-      let duetContext = `\n## TRYB GRY DLA DWÓCH OSÓB (HOT SEAT / DRUŻYNA)\n` +
-        `KRYTYCZNE NADPISANIE ROLI: Ta gra NIE jest jednoosobowa. W grze uczestniczy ZESPÓŁ badaczy: ${characterNames.join(', ')}.\n` +
-        `1. FORMA NARRACJI: Opisuj świat i sceny w liczbie mnogiej ("Widzicie...", "Stajecie przed...", "Słyszycie...") lub w ujęciach adresowanych ("@${characterNames[0]}..., podczas gdy @${characterNames[1]}..."). NIGDY nie zwracaj się do nich jak do pojedynczej osoby w 2. osobie l.poj.\n` +
-        `2. RELACJA I WSPÓLNY CEL: Prowadź grę z uwzględnieniem faktu, że bohaterowie współpracują. Podkreślaj ich wspólne wyzwania oraz to, co sprowadziło ich razem w dany punkt czasu i przestrzeni. NIGDY nie zmuszaj graczy do dyskusji między sobą na czacie.\n` +
-        `3. ADRESOWANIE I AKCJE: Sceny wspólne opisuj dla obu postaci. Kwestie i akcje kierowane do JEDNEJ postaci poprzedzaj tagiem @ImięPostaci: (np. @${characterNames[0]}: ...).\n` +
-        `4. ZAKOŃCZENIE TURY I FIZYCZNY IMMUNITET: Zamiast pytania do każdej postaci z osobna ZAWSZE kończ prostym pytaniem skierowanym do drużyny: [Co robicie?]. PAMIĘTAJ O FIZYCZNYM IMMUNITECIE: nie wykonuj żadnych akcji fizycznych, nie przemieszczaj postaci, nie sięgaj do ich ekwipunku ani nie decyduj za ${characterNames.join(', ')}.\n` +
-        `5. PRZYPISANIE SKUTKÓW: Przy zmianach SAN/HP/dziennika dodawaj prefiks @Imię: \`[SANITY:@${characterNames[0]}: -1d4: powód]\`, \`[HP:@${characterNames[1]}: -1d6: powód]\`, \`[DZIENNIK:@${characterNames[0]}:trop:tytuł]treść[/DZIENNIK]\`.\n`;
+      let duetContext = isEn
+        ? `\n## TWO-PLAYER MODE (HOT SEAT / DUET)\n` +
+          `CRITICAL ROLE OVERRIDE: This game is NOT solo. A TEAM of investigators is participating: ${characterNames.join(', ')}.\n` +
+          `1. NARRATIVE FORM: Describe the world and scenes in the plural ("You see...", "You stand before...", "You hear...") or in addressed shots ("@${characterNames[0]}..., while @${characterNames[1]}..."). NEVER address them as a single individual in the 2nd person singular.\n` +
+          `2. RELATIONSHIP & COMMON GOAL: Run the game recognizing that the investigators are cooperating. Emphasize their shared challenges and what brought them together to this point in time and space. NEVER force players to debate among themselves in chat.\n` +
+          `3. ADDRESSING & ACTIONS: Describe shared scenes for both characters. Prefix lines and actions directed at ONE character with @CharacterName: (e.g. @${characterNames[0]}: ...).\n` +
+          `4. TURN CONCLUSION & PHYSICAL IMMUNITY: Instead of questioning each character individually, ALWAYS end with a simple question addressed to the party: [What do you all do?]. REMEMBER PHYSICAL IMMUNITY: do not perform physical actions, move characters, reach into their inventory, or decide on behalf of ${characterNames.join(', ')}.\n` +
+          `5. ASSIGNING EFFECTS: When applying SAN/HP/journal changes, prefix with @Name: \`[SANITY:@${characterNames[0]}: -1d4: reason]\`, \`[HP:@${characterNames[1]}: -1d6: reason]\`, \`[JOURNAL:@${characterNames[0]}:clue:title]content[/JOURNAL]\`.\n`
+        : `\n## TRYB GRY DLA DWÓCH OSÓB (HOT SEAT / DRUŻYNA)\n` +
+          `KRYTYCZNE NADPISANIE ROLI: Ta gra NIE jest jednoosobowa. W grze uczestniczy ZESPÓŁ badaczy: ${characterNames.join(', ')}.\n` +
+          `1. FORMA NARRACJI: Opisuj świat i sceny w liczbie mnogiej ("Widzicie...", "Stajecie przed...", "Słyszycie...") lub w ujęciach adresowanych ("@${characterNames[0]}..., podczas gdy @${characterNames[1]}..."). NIGDY nie zwracaj się do nich jak do pojedynczej osoby w 2. osobie l.poj.\n` +
+          `2. RELACJA I WSPÓLNY CEL: Prowadź grę z uwzględnieniem faktu, że bohaterowie współpracują. Podkreślaj ich wspólne wyzwania oraz to, co sprowadziło ich razem w dany punkt czasu i przestrzeni. NIGDY nie zmuszaj graczy do dyskusji między sobą na czacie.\n` +
+          `3. ADRESOWANIE I AKCJE: Sceny wspólne opisuj dla obu postaci. Kwestie i akcje kierowane do JEDNEJ postaci poprzedzaj tagiem @ImięPostaci: (np. @${characterNames[0]}: ...).\n` +
+          `4. ZAKOŃCZENIE TURY I FIZYCZNY IMMUNITET: Zamiast pytania do każdej postaci z osobna ZAWSZE kończ prostym pytaniem skierowanym do drużyny: [Co robicie?]. PAMIĘTAJ O FIZYCZNYM IMMUNITECIE: nie wykonuj żadnych akcji fizycznych, nie przemieszczaj postaci, nie sięgaj do ich ekwipunku ani nie decyduj za ${characterNames.join(', ')}.\n` +
+          `5. PRZYPISANIE SKUTKÓW: Przy zmianach SAN/HP/dziennika dodawaj prefiks @Imię: \`[SANITY:@${characterNames[0]}: -1d4: powód]\`, \`[HP:@${characterNames[1]}: -1d6: powód]\`, \`[DZIENNIK:@${characterNames[0]}:trop:tytuł]treść[/DZIENNIK]\`.\n`;
 
       if (isGameStart && characters && characters.length >= 2) {
-        duetContext += `\n### WPROWADZENIE DLA DUETU (ROZPOCZĘCIE GRY)\n` +
-          `Otwierasz grę dla dwójki graczy. Twoja pierwsza tura musi nakreślić wspólny początek z myślą o obu postaciach:\n` +
-          `1. OPISZ RELACJĘ I SPOTKANIE: Opisz jak postacie się tam znalazły, dlaczego podróżują/działają razem, co je łączy i dlaczego są w tym miejscu i czasie w tym samym momencie.\n` +
-          `2. DRUŻYNOWY HAK: Zwiąż hook przygody ze wspólnym celem obu postaci, odwołując się do ich tła z kart.\n` +
-          `3. FORMA: Zwróć się bezpośrednio do obu postaci jednocześnie w liczbie mnogiej.\n\n` +
-          `Dane bohaterów do zarysowania relacji i spotkania:\n`;
-        
+        duetContext += isEn
+          ? `\n### DUET INTRODUCTION (GAME START)\n` +
+            `You are opening the game for two players. Your first turn must sketch a shared beginning with both characters in mind:\n` +
+            `1. DESCRIBE RELATIONSHIP & MEETING: Describe how the characters got there, why they travel/work together, what connects them, and why they are at this place and time at the same moment.\n` +
+            `2. PARTY HOOK: Tie the adventure hook to the shared goal of both characters, referencing their background from character sheets.\n` +
+            `3. FORM: Address both characters directly and simultaneously in the plural.\n\n` +
+            `Investigator details to sketch relationships and meeting:\n`
+          : `\n### WPROWADZENIE DLA DUETU (ROZPOCZĘCIE GRY)\n` +
+            `Otwierasz grę dla dwójki graczy. Twoja pierwsza tura musi nakreślić wspólny początek z myślą o obu postaciach:\n` +
+            `1. OPISZ RELACJĘ I SPOTKANIE: Opisz jak postacie się tam znalazły, dlaczego podróżują/działają razem, co je łączy i dlaczego są w tym miejscu i czasie w tym samym momencie.\n` +
+            `2. DRUŻYNOWY HAK: Zwiąż hook przygody ze wspólnym celem obu postaci, odwołując się do ich tła z kart.\n` +
+            `3. FORMA: Zwróć się bezpośrednio do obu postaci jednocześnie w liczbie mnogiej.\n\n` +
+            `Dane bohaterów do zarysowania relacji i spotkania:\n`;
+
         characters.forEach((char) => {
-          duetContext += `- **${char.name}** (${char.occupation}): ${char.background || ''}\n` +
-            `  * Koncept: ${char.characterConcept || ''}\n` +
-            `  * Osobowość i Cechy: ${(char.traits || []).join(', ')}. ${((char as unknown) as Record<string, unknown>).personality || ''}\n` +
-            `  * Kluczowa osoba: ${char.significantPerson || ''}\n` +
-            `  * Ważne miejsce: ${char.meaningfulLocation || ''}\n` +
-            `  * Cenne posiadanie: ${char.treasuredPossession || ''}\n` +
-            `  * Historia: ${char.backstory || ''}\n`;
+          const occ = isEn
+            ? (char.occupation ? (getLocalizedOccupationName(char.occupation, 'en') || char.occupation) : '')
+            : (char.occupation || '');
+          duetContext += isEn
+            ? `- **${char.name}** (${occ}): ${char.background || ''}\n` +
+              `  * Concept: ${char.characterConcept || ''}\n` +
+              `  * Personality & Traits: ${(char.traits || []).join(', ')}. ${((char as unknown) as Record<string, unknown>).personality || ''}\n` +
+              `  * Significant Person: ${char.significantPerson || ''}\n` +
+              `  * Meaningful Location: ${char.meaningfulLocation || ''}\n` +
+              `  * Treasured Possession: ${char.treasuredPossession || ''}\n` +
+              `  * Backstory: ${char.backstory || ''}\n`
+            : `- **${char.name}** (${char.occupation}): ${char.background || ''}\n` +
+              `  * Koncept: ${char.characterConcept || ''}\n` +
+              `  * Osobowość i Cechy: ${(char.traits || []).join(', ')}. ${((char as unknown) as Record<string, unknown>).personality || ''}\n` +
+              `  * Kluczowa osoba: ${char.significantPerson || ''}\n` +
+              `  * Ważne miejsce: ${char.meaningfulLocation || ''}\n` +
+              `  * Cenne posiadanie: ${char.treasuredPossession || ''}\n` +
+              `  * Historia: ${char.backstory || ''}\n`;
         });
       }
 

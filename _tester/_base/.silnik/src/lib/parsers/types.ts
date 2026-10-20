@@ -82,6 +82,7 @@ export interface SFXRequest {
 
 export interface JournalTagEntry {
   type:
+    | 'case'
     | 'combat'
     | 'discovery'
     | 'npc'

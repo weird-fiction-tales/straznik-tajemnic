@@ -8,6 +8,18 @@
  * @module gm-protocol
  */
 
+import {
+  getGMProtocolPromptEN,
+  getCompactGMProtocolPromptEN,
+  getReactiveInitiativeProtocolEN,
+} from './gm-protocol.en';
+
+export {
+  getGMProtocolPromptEN,
+  getCompactGMProtocolPromptEN,
+  getReactiveInitiativeProtocolEN,
+};
+
 // ============================================================================
 // GM PROTOCOL - INSTRUKCJE TAGOWANIA DLA AI
 // ============================================================================
@@ -17,9 +29,12 @@
  * Używany po 5 turze, gdy model już "zna" pełne instrukcje.
  */
 export function getCompactGMProtocolPrompt(locale: 'pl' | 'en' = 'pl'): string {
-  const isEn = locale === 'en';
-  const actionPrompt = isEn ? '[What do you do?]' : '[Co robisz?]';
-  const partyPrompt = isEn ? '[What do you all do?]' : '[Co robicie?]';
+  if (locale === 'en') {
+    return getCompactGMProtocolPromptEN();
+  }
+  const isEn = false;
+  const actionPrompt = '[Co robisz?]';
+  const partyPrompt = '[Co robicie?]';
 
   return `
 ## PROTOKÓŁ MG (PRZYPOMNIENIE)
@@ -136,9 +151,12 @@ Drabina eskalacji sędziego:
  * OPT-21: Użyj getContextAwareGMProtocol() w chat route zamiast bezpośrednio.
  */
 export function getGMProtocolPrompt(locale: 'pl' | 'en' = 'pl'): string {
-  const isEn = locale === 'en';
-  const actionPrompt = isEn ? '[What do you do?]' : '[Co robisz?]';
-  const partyPrompt = isEn ? '[What do you all do?]' : '[Co robicie?]';
+  if (locale === 'en') {
+    return getGMProtocolPromptEN();
+  }
+  const isEn = false;
+  const actionPrompt = '[Co robisz?]';
+  const partyPrompt = '[Co robicie?]';
 
   return `
 ## PROTOKÓŁ MISTRZA GRY (GM PROTOCOL)
@@ -935,10 +953,12 @@ export function getContextAwareGMProtocol(
 }
 
 export function getReactiveInitiativeProtocol(locale: 'pl' | 'en' = 'pl'): string {
-  const isEn = locale === 'en';
+  if (locale === 'en') {
+    return getReactiveInitiativeProtocolEN();
+  }
   return `
 ## ZASADA INICJATYWY REAKTYWNEJ / REACTIVE INITIATIVE
-Nie popychaj fabuły samowolnie. Drzwi nie zatrzaskują się same, podejrzani nie uciekają, a potwory nie atakują bez przyczyny. Gwałtowny zwrot, ucieczka NPC lub atak z zewnątrz są dozwolone WYŁĄCZNIE po porażce gracza w ryzykownym teście, zignorowaniu bezpośredniego ostrzeżenia z poprzedniej tury lub jawnej prowokacji gracza. Zwykłe badanie i rozmowa nie stanowią prowokacji. Opisuj stan zastany i czekaj na ruch gracza: ${isEn ? '[What do you do?]' : '[Co robisz?] / [What do you do?]'}. Bieg 0 i BLOKADA_AKTU mają pierwszeństwo przed pozostałymi nakazami eskalacji, także przy wysokim heat.
+Nie popychaj fabuły samowolnie. Drzwi nie zatrzaskują się same, podejrzani nie uciekają, a potwory nie atakują bez przyczyny. Gwałtowny zwrot, ucieczka NPC lub atak z zewnątrz są dozwolone WYŁĄCZNIE po porażce gracza w ryzykownym teście, zignorowaniu bezpośredniego ostrzeżenia z poprzedniej tury lub jawnej prowokacji gracza. Zwykłe badanie i rozmowa nie stanowią prowokacji. Opisuj stan zastany i czekaj na ruch gracza: [Co robisz?]. Bieg 0 i BLOKADA_AKTU mają pierwszeństwo przed pozostałymi nakazami eskalacji, także przy wysokim heat.
 Never force a plot twist. External attacks, fleeing suspects and abrupt turns require a failed risky player roll, an ignored direct warning from the previous turn, or an explicit player provocation. Investigation and conversation are not provocations. Gear 0 and the clue gate override other escalation instructions.
 Tag [PRZEJŚCIE_AKTU: Akt N] jest ukrytym sygnałem stanu. Emituj go tylko dla następnego aktu i tylko po odblokowaniu bramki co najmniej dwóch odkrytych poszlak Core bieżącego aktu. Nigdy nie emituj go przy BLOKADA_AKTU. Nie ujawniaj licznika ani bramki w prozie lub Dzienniku. W jednostrzale bramka blokuje ostateczną konfrontację i wejście do leża potwora.
 The hidden act-transition tag is permitted only for the next act after the current act's two revealed Core clues unlock the gate. Never reveal gates or counters to the player. In one-shots, the same gate prevents the final confrontation and entry into the monster's lair.

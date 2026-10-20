@@ -825,38 +825,50 @@ function findSentenceBoundaryBefore(
 function extractTrailingTags(text: string): string[] {
   const trailingTags: string[] = [];
 
-  // 1. Tagi sparowane: [DZIENNIK:...]...[/DZIENNIK], [KARTA_SCENY:...]...[/KARTA_SCENY]
-  const pairedRegex = /\[(DZIENNIK|KARTA_SCENY)(?::[^\]]*)?\][\s\S]*?\[\/\1\]/gi;
+  // 1. Tagi sparowane: [DZIENNIK:...]...[/DZIENNIK], [JOURNAL:...]...[/JOURNAL], [KARTA_SCENY:...]...[/KARTA_SCENY]
+  const pairedRegex = /\[(DZIENNIK|JOURNAL|KARTA_SCENY)(?::[^\]]*)?\][\s\S]*?\[\/\1\]/gi;
   let match: RegExpExecArray | null;
 
   while ((match = pairedRegex.exec(text)) !== null) {
     trailingTags.push(match[0]);
   }
 
-  // 2. Tagi pojedyncze: [LOKACJA:...], [OBECNI_NPC:...], [ZMIANA_SCENY], [AKTUALNY CZAS:...], etc.
+  // 2. Tagi pojedyncze: [LOKACJA:...], [LOCATION:...], [OBECNI_NPC:...], [PRESENT_NPCS:...], [ZMIANA_SCENY], [SCENE_CHANGE], etc.
   const singleTagNames = [
     'AKTUALNY CZAS',
+    'CURRENT TIME',
     'SFX',
     'SANITY',
     'HP',
     'LOKACJA',
+    'LOCATION',
     'OBECNI_NPC',
+    'PRESENT_NPCS',
     'ZMIANA_SCENY',
+    'SCENE_CHANGE',
     'NPC',
     'PRZEDMIOT',
+    'ITEM',
     'ZDOBYTY_PRZEDMIOT',
     'ZAGROŻENIE',
+    'HAZARD',
     'WETO_SEDZIEGO',
+    'REFEREE_VETO',
     'GAME_OVER',
     'NASTRÓJ',
     'CEL_NARRACYJNY',
     'MYŚLI_MG',
     'OBSERWACJA',
+    'OBSERVATION',
     'CZAR',
+    'SPELL',
     'OBRONA_MAGIA',
+    'OPPOSED_MAGIC',
     'WALKA_ATAK',
     'OBRONA_WALKA',
+    'OPPOSED_MELEE',
     'MAGIA_SPONTANICZNA',
+    'SPONTANEOUS_MAGIC',
   ];
   const singleRegex = new RegExp(`\\[(${singleTagNames.join('|')})(?::[^\\]]*)?\\]`, 'gi');
   while ((match = singleRegex.exec(text)) !== null) {
@@ -876,17 +888,24 @@ function sanitizeTextAtBoundary(
   isEn: boolean
 ): string {
   const questionMarker = isEn
-    ? '[What do you do?]'
+    ? (isDuet ? '[What do you all do?]' : '[What do you do?]')
     : (isDuet ? '[Co robicie?]' : '[Co robisz?]');
 
   let baseText = text.slice(0, cutoffIndex).trimEnd();
   baseText = baseText.replace(/[—–,:]\s*$/, '').trimEnd();
 
   const trailingTags = extractTrailingTags(text.slice(cutoffIndex));
-  const timeTag = trailingTags.find((t) => t.includes('AKTUALNY CZAS'));
-  const otherSafeTags = trailingTags.filter(
-    (t) => !t.includes('AKTUALNY CZAS') && !baseText.includes(t)
+  const timeTag = trailingTags.find(
+    (t) => t.includes('AKTUALNY CZAS') || t.includes('CURRENT TIME')
   );
+  const otherSafeTags = trailingTags.filter(
+    (t) =>
+      !t.includes('AKTUALNY CZAS') &&
+      !t.includes('CURRENT TIME') &&
+      !baseText.includes(t)
+  );
+
+  const alreadyHasQuestion = /\[(Co robisz\?|Co robicie\?|What do you do\?|What do you all do\?)\]\s*$/i.test(baseText);
 
   if (!baseText) {
     baseText = isEn
@@ -894,11 +913,10 @@ function sanitizeTextAtBoundary(
       : (isDuet
           ? `Stoicie na progu zdarzenia, obserwując otoczenie.`
           : `Stoisz na progu zdarzenia, obserwując otoczenie.`);
-  } else if (!/[.!?…]$/.test(baseText)) {
+  } else if (!alreadyHasQuestion && !/[.!?…\]]$/.test(baseText)) {
     baseText += '.';
   }
 
-  const alreadyHasQuestion = /\[(Co robisz\?|Co robicie\?|What do you do\?)\]\s*$/i.test(baseText);
   let result = alreadyHasQuestion ? baseText : `${baseText}\n\n${questionMarker}`;
 
   if (otherSafeTags.length > 0) {

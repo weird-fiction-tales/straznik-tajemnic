@@ -408,7 +408,7 @@ function isHandoutStart(line: string): boolean {
 }
 
 function isHandoutTerminator(line: string): boolean {
-  return /^\[(Co robi(?:sz|cie)\?|RZUT|TEST|WYNIK|HANDOUT|Zaktualizowano dziennik|Journal updated|Lokacja zbadana wyczerpująco|Location thoroughly searched)/i.test(line);
+  return /^\[(Co robi(?:sz|cie)\?|What do you(?: all)? do\?|RZUT|TEST|WYNIK|HANDOUT|Zaktualizowano dziennik|Journal updated|Lokacja zbadana wyczerpująco|Location thoroughly searched)/i.test(line);
 }
 
 function isHandoutEnd(line: string, buffer?: string[]): boolean {

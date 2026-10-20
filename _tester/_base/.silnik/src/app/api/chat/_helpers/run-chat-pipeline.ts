@@ -789,7 +789,9 @@ export async function runChatPipeline({
     directorEventSection:
       directorEvent &&
       (directorEvent.title?.trim() || directorEvent.description?.trim())
-        ? `\n## INSTRUKCJA REŻYSERSKA\n[MG wrzucił to losowe wydarzenie. Wpleć je organicznie w swoją narrację, nie przerywając głównego wątku]\n${directorEvent.title.replace(/\[/g, '(').replace(/\]/g, ')')}: ${directorEvent.description.replace(/\[/g, '(').replace(/\]/g, ')')}\n`
+        ? locale === 'en'
+          ? `\n## DIRECTOR INSTRUCTION\n[The GM has introduced this random event. Weave it organically into your narrative without interrupting the main plot]\n${directorEvent.title.replace(/\[/g, '(').replace(/\]/g, ')')}: ${directorEvent.description.replace(/\[/g, '(').replace(/\]/g, ')')}\n`
+          : `\n## INSTRUKCJA REŻYSERSKA\n[MG wrzucił to losowe wydarzenie. Wpleć je organicznie w swoją narrację, nie przerywając głównego wątku]\n${directorEvent.title.replace(/\[/g, '(').replace(/\]/g, ')')}: ${directorEvent.description.replace(/\[/g, '(').replace(/\]/g, ')')}\n`
         : undefined,
     truthAnchor: adventureContext?.truthAnchor,
     adventureDocumentType: adventureContext?.documentType,
@@ -904,7 +906,7 @@ export async function runChatPipeline({
 
   additionalContext.push(
     locale === 'en'
-      ? `\n## OUTPUT LANGUAGE: ENGLISH\nWrite every player-visible sentence, question, journal title, journal body, category and tag content in English only. Do not use Polish. Use only these canonical English structural tags: [JOURNAL:type:title]body[/JOURNAL] and [LOCATION: name: atmosphere]. Use English journal types such as clue, discovery, note, location, combat and item. End an opening scene with [What do you do?].`
+      ? `\n## OUTPUT LANGUAGE: ENGLISH\nWrite every player-visible sentence, question, journal title, journal body, category and tag content in English only. Do not use Polish. Use only these canonical English structural tags: [JOURNAL:type:title]body[/JOURNAL] and [LOCATION: Place Name | Atmosphere & Visual Prompt]. Use English journal types such as clue, discovery, note, location, combat and item. End an opening scene with [What do you do?].`
       : `\n## JĘZYK WYJŚCIA: POLSKI\nPisz wszystkie zdania widoczne dla gracza, pytania, tytuły i treści dziennika wyłącznie po polsku. Używaj tagów [DZIENNIK:typ:tytuł]treść[/DZIENNIK] oraz [LOKACJA: nazwa: atmosfera]. Kończ scenę otwierającą znacznikiem [Co robisz?].`
   );
 
@@ -1079,7 +1081,7 @@ export async function runChatPipeline({
 
     const correctiveDirective =
       locale === 'en'
-        ? `\n\n[CRITICAL ERROR - AGENCY VIOLATION DETECTED]\nYour previous draft violated player agency and physical immunity of the investigator:\n${violationDetails}\nRULE: You are the Game Master, NOT the player. NEVER move investigators, draw weapons, open first aid kits, examine bodies/wounds, or speak for investigators. Stop on the threshold of action, describe senses and environment, and immediately ask "[What do you do?]". Regenerate the entire response now, strictly respecting player agency.`
+        ? `\n\n[CRITICAL ERROR - AGENCY VIOLATION DETECTED]\nYour previous draft violated player agency and physical immunity of the investigator:\n${violationDetails}\nRULE: You are the Game Master, NOT the player. NEVER move investigators, draw weapons, open first aid kits, examine bodies/wounds, or speak for investigators. Stop on the threshold of action, describe senses and environment, and immediately ask "${isDuetSession ? '[What do you all do?]' : '[What do you do?]'}" passing the turn to the players. Regenerate the entire response now, strictly respecting player agency.`
         : `\n\n[KRYTYCZNY BŁĄD - NARUSZENIE SPRAWCZOŚCI I FIZYCZNEGO IMMUNITETU BADACZA]\nTwój poprzedni projekt odpowiedzi odebrał sprawczość graczowi:\n${violationDetails}\nBEZWZGLĘDNA ZASADA: Jesteś Strażnikiem Tajemnic, a NIE graczem. NIGDY nie poruszaj badaczami (nie decyduj, że wchodzą, zeskakują, jadą), nie sięgaj do ich ekwipunku (apteczka, broń), nie przeprowadzaj samowolnych oględzin/badań ran ani nie wkładaj im słów w usta. Zatrzymaj się na progu zdarzenia, opisz otoczenie oraz zmysły i natychmiast zapytaj "${isDuetSession ? '[Co robicie?]' : '[Co robisz?]'}" przekazując turę graczom. Wygeneruj całą odpowiedź ponownie od zera, bez naruszania sprawczości.`;
 
     try {

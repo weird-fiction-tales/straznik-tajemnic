@@ -422,7 +422,15 @@ export function useGameStart({
     // kolejne tury wracają do zwięzłej długości narzuconej przez gm-protocol.
     if (english && allPlayerCharacters.length > 1) {
       prompt +=
-        'This is the opening turn for the whole party. Start with an ordinary, period-appropriate scene, establish place and mood, then introduce the adventure hook naturally. Address the party in the plural. Do not play for the characters. Mark the starting place as [LOCATION: place name: brief atmosphere]. Add one opening journal entry as [JOURNAL:case:Beginning the investigation]1-2 sentences about why the party is here.[/JOURNAL] End with [What do you do?].\n';
+        'This is the OPENING TURN for the party (Hot Seat mode).\n\n' +
+        'PARTY INTRODUCTION - ORGANIC PLOT START:\n' +
+        '1. NARRATION & FORM: Address the investigators in the plural ("You see...", "You enter...") or smoothly alternate perspectives between characters.\n' +
+        '2. ORGANIC OPENING SCENE: DO NOT throw the players into a violent quest or direct threat immediately. Begin in an ordinary, period-appropriate social situation (e.g. dinner together at a restaurant, conversation in a study, a train journey, or casual chatter with an NPC).\n' +
+        '3. EXPOSITION & ATMOSPHERE: Allow the players to take in the time, place, and period atmosphere. Let them experience the world through environmental descriptions or NPC interaction (NEVER force players to debate among themselves in chat). Only after establishing the surroundings should you sow the first subtle note of dread and introduce the adventure HOOK.\n' +
+        '4. TURN CONCLUSION: Conclude the turn with an open question directed to the whole party: [What do you all do?] on its own separate line.\n\n' +
+        'DO NOT play for the player characters. Mark the starting location with the tag [LOCATION: Place Name | Atmosphere & Visual Prompt]. ' +
+        'Add an opening journal entry: [JOURNAL:case:Beginning the investigation]1-2 sentences about what brings our party to this place.[/JOURNAL] ' +
+        'Conclude with [What do you all do?] on its own separate line.\n';
     } else if (!english && allPlayerCharacters.length > 1) {
       prompt +=
         'To jest TURA WPROWADZAJĄCA do gry DLA DRUŻYNY (Hot Seat mode).\n\n' +
@@ -435,7 +443,15 @@ export function useGameStart({
         'Dodaj wpis otwierający do dziennika: [DZIENNIK:sprawa:Początek śledztwa]1-2 zdania: co sprowadza naszą drużynę w to miejsce.[/DZIENNIK]\n';
     } else if (english) {
       prompt +=
-        'This is the opening turn of the game. Begin with an ordinary, period-appropriate scene. Establish the location and atmosphere before introducing the adventure hook. Write in second person, do not play for the player character, and use slow-burn horror. Mark the starting place as [LOCATION: place name: brief atmosphere]. Add one opening journal entry as [JOURNAL:case:Beginning the investigation]1-2 sentences about where the character is and why they came here.[/JOURNAL] End with [What do you do?] on its own line.\n';
+        'This is the OPENING TURN of the game.\n\n' +
+        'ORGANIC WORLD INTRODUCTION - INSTRUCTIONS:\n' +
+        '1. OPENING SCENE: DO NOT throw the player into deep water and DO NOT thrust the quest hook in the very first sentence. Begin with an ordinary, period-appropriate situation (e.g. the investigator is drinking morning coffee, discussing mundane matters with a familiar NPC, browsing the daily press, or having dinner).\n' +
+        '2. SENSORY WORLD DISCOVERY: Build the period atmosphere and setting naturally. Immerse the investigator in the acoustics, smells, and lighting of the scene, or through casual conversation with an NPC, so the player can first sense where they are and who they are before any threat arises.\n' +
+        '3. GRADUAL PLOT HOOK INTRODUCTION: Only after establishing the setting and mundane routine, sow the first subtle unease beneath the surface of everyday life and weave the adventure HOOK in as a natural call-to-action.\n' +
+        '4. LITERARY STYLE & AGENCY: Write in second person ("You see...", "You smell..."), cultivate slow-burn dread without cheap monster jumpscares, and strictly respect the investigator\'s physical immunity.\n\n' +
+        'DO NOT play for the player character. Mark the starting location with the tag [LOCATION: Place Name | Atmosphere & Visual Prompt]. ' +
+        'Add an opening journal entry: [JOURNAL:case:Beginning the investigation]1-2 sentences about where I am and what brings me here.[/JOURNAL] ' +
+        'Conclude with the open question [What do you do?] on its own separate line.\n';
     } else {
       prompt +=
         'To jest TURA WPROWADZAJĄCA do gry.\n\n' +
