@@ -19,12 +19,13 @@ PORT=4050
 URL="http://localhost:${PORT}"
 
 # --- Ustal APP_DIR ---
-# build-app.sh zaszywa realny APP_DIR. Detekcja fallbacku przez ISTNIENIE package.json,
-# NIE przez porownanie z literalem "__APP_DIR__": sed -g w build-app.sh podmienia kazde
-# wystapienie placeholdera, wiec porownanie w warunku tez by sie podmienilo i fallback
-# odpalalby sie zawsze (ladujac w bundlu .app zamiast w repo). Detekcja po pliku jest odporna.
-if [ ! -f "$APP_DIR/package.json" ]; then
-  APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Jeśli skrypt jest wewnątrz pakietu macOS (.app/Contents/MacOS/launcher),
+# runtime leży zawsze w ../Resources/runtime względem launchera.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -d "$SCRIPT_DIR/../Resources/runtime" ]; then
+  APP_DIR="$(cd "$SCRIPT_DIR/../Resources/runtime" && pwd)"
+elif [ ! -f "$APP_DIR/package.json" ] && [ ! -f "$APP_DIR/_tester/_base/.silnik/package.json" ]; then
+  APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 fi
 
 # Bundle moze zostac zlozony z katalogu glownego albo bezposrednio z silnika.
@@ -112,7 +113,8 @@ fi
 if curl -sf "$URL" >/dev/null 2>&1; then
   if [ -f "$GAME_DIR/.next/BUILD_ID" ]; then
     DISK_BUILD_ID="$(cat "$GAME_DIR/.next/BUILD_ID")"
-    # HTTP 200 may be the application's HTML fallback, not a real manifest.
+    # Next middleware can answer an unknown static URL with HTML and HTTP 200.
+    # A status code alone therefore cannot prove that this is the on-disk build.
     if ! curl -fsS "$URL/_next/static/${DISK_BUILD_ID}/_buildManifest.js" 2>/dev/null | grep -q 'self.__BUILD_MANIFEST'; then
       echo "$(date) serwer ma przestarzaly BUILD_ID - zatrzymuje stary proces" >>"$LOG"
       lsof -ti :$PORT 2>/dev/null | xargs kill -9 2>/dev/null || true
@@ -138,10 +140,6 @@ fi
 
 STARTED_SERVER=0
 if ! curl -sf "$URL" >/dev/null 2>&1; then
-  if [ ! -f ".next/BUILD_ID" ]; then
-    echo "$(date) brak buildu - buduje (to potrwa)..." >>"$LOG"
-    PORT=$PORT npm run build >>"$LOG" 2>&1
-  fi
   echo "$(date) startuje serwer (next start)..." >>"$LOG"
   STRAZNIK_DESKTOP_COLD_START=1 STRAZNIK_DESKTOP_UPDATE=$STRAZNIK_DESKTOP_UPDATE ZEW_DESKTOP_SELF_UPDATE=$ZEW_DESKTOP_SELF_UPDATE ZEW_UPDATE_MANIFEST_URL="$ZEW_UPDATE_MANIFEST_URL" ZEW_APP_BUNDLE="$ZEW_APP_BUNDLE" ZEW_DATA_DIR="$ZEW_DATA_DIR" RAG_DATA_DIR="$RAG_DATA_DIR" ZEW_APP_PORT=$PORT PORT=$PORT nohup npm start >>"$LOG" 2>&1 &
   echo $! >"$PID_FILE"
@@ -160,6 +158,7 @@ if [ -x "$CHROME" ]; then
   open -na "Google Chrome" --args \
     --app="$URL" \
     --start-fullscreen \
+    --autoplay-policy=no-user-gesture-required \
     --user-data-dir="$PROFILE_DIR" \
     --no-first-run --no-default-browser-check >>"$LOG" 2>&1
 else

@@ -5,12 +5,14 @@ import { formatVersionWithCommit } from './update-client';
 import {
   canPerformSelfUpdate,
   checkForDesktopUpdate,
+  getCandidateWorkerPaths,
   getCurrentCommitSha,
   getUpdatePackageForPlatform,
   isNewerStableVersion,
   isSameCommit,
   readUpdateStatus,
   resolveAppTarget,
+  resolveUpdateWorkerPath,
   validateManifest,
 } from './update-service';
 
@@ -306,6 +308,42 @@ describe('desktop update service', () => {
       delete process.env.ZEW_DESKTOP_SELF_UPDATE;
 
       expect(canPerformSelfUpdate()).toBe(true);
+    });
+  });
+
+  describe('resolveUpdateWorkerPath and candidate worker paths', () => {
+    it('includes root relative paths (../../..) and bundle paths in candidate paths', () => {
+      process.env.ZEW_APP_BUNDLE = '/Applications/TestApp.app';
+      const candidates = getCandidateWorkerPaths('/Volumes/Karta/Developer/straznik-tajemnic/_tester/_base/.silnik');
+      expect(candidates).toContain(
+        path.resolve('/Volumes/Karta/Developer/straznik-tajemnic/_tester/_base/.silnik', '../../..', 'desktop', 'update-worker.mjs')
+      );
+      expect(candidates).toContain(
+        path.join('/Applications/TestApp.app', 'Contents', 'Resources', 'runtime', 'desktop', 'update-worker.mjs')
+      );
+      delete process.env.ZEW_APP_BUNDLE;
+    });
+
+    it('resolves update-worker.mjs from root directory when running inside _tester/_base/.silnik', () => {
+      const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'worker-root-'));
+      const desktopDir = path.join(tmpRoot, 'desktop');
+      fs.mkdirSync(desktopDir, { recursive: true });
+      const workerFile = path.join(desktopDir, 'update-worker.mjs');
+      fs.writeFileSync(workerFile, '// worker content');
+
+      const engineDir = path.join(tmpRoot, '_tester', '_base', '.silnik');
+      fs.mkdirSync(engineDir, { recursive: true });
+
+      const resolved = resolveUpdateWorkerPath(engineDir);
+      expect(resolved).toBe(workerFile);
+
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    });
+
+    it('throws a descriptive error when update-worker.mjs cannot be found', () => {
+      const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'empty-dir-'));
+      expect(() => resolveUpdateWorkerPath(emptyDir, false)).toThrow('Update worker script (update-worker.mjs) not found');
+      fs.rmSync(emptyDir, { recursive: true, force: true });
     });
   });
 });
