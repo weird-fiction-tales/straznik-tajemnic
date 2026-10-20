@@ -70,6 +70,14 @@ describe('event-parser (Visual Prompt Leak & Location Sanitization)', () => {
       expect(loc?.description).toBe('misty mountain path, dense pine trees, ominous fog, vintage photograph');
     });
 
+    it('obsługuje angielski tag z separatorem pionowej kreski [LOCATION: Name | Visual Prompt]', () => {
+      const text = 'You step into the building. [LOCATION: Boston Harbor | cold morning mist rising over dark water, 1920s vintage photograph] What do you do?';
+      const loc = extractLatestTagLocation(text);
+      expect(loc).not.toBeNull();
+      expect(loc?.name).toBe('Boston Harbor');
+      expect(loc?.description).toBe('cold morning mist rising over dark water, 1920s vintage photograph');
+    });
+
     it('naprawia wyciek przy przecinku w tagu ze starego przykładu (Issue #570 repro)', () => {
       const text = 'Docierasz na miejsce. [LOKACJA: Miskatonic University Library, towering gothic bookshelves, dust motes dancing in shafts of pale sunlight, dark mahogany study tables] Czekasz.';
       const loc = extractLatestTagLocation(text);
