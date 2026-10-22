@@ -1,5 +1,6 @@
 {
   "caseId": "case-q01-cien-nad-prabutami",
+  "assetDirectory": "cien-nad-prabutami",
   "era": "1973-prl",
   "predefinedAdventureId": "cien-nad-prabutami",
   "visualDna": {
@@ -13,7 +14,7 @@
       "category": "item-clue",
       "file": "clue-01-teczka-sb.webp",
       "aspectRatio": "16:9",
-      "clueId": "clue-01-teczka-sb",
+      "clueId": "clue-sb-file-klin",
       "tagsPl": ["teczka sb", "tajne", "kryptonim klin", "elbląg", "1973", "prl"],
       "tagsEn": ["sb file", "secret police", "codename klin", "elbląg", "1973", "communist poland"]
     },
@@ -22,13 +23,13 @@
       "category": "item-clue",
       "file": "clue-02-ruiny-kosciola.webp",
       "aspectRatio": "16:9",
-      "clueId": "clue-02-ruiny-kosciola",
+      "clueId": "clue-photo-prabuty",
       "tagsPl": ["ruiny", "kościół św wojciecha", "prabuty", "gotyk", "cegła"],
       "tagsEn": ["ruins", "st adalbert church", "prabuty", "gothic", "brick"]
     },
     {
       "id": "npc-ojciec-klimuszko",
-      "category": "npc-portrait",
+      "category": "npc",
       "file": "npc-ojciec-klimuszko.webp",
       "aspectRatio": "3:4",
       "npcId": "ojciec-klimuszko",
@@ -37,14 +38,16 @@
     },
     {
       "id": "npc-kapitan-sb",
-      "category": "npc-portrait",
+      "category": "npc",
       "file": "npc-kapitan-sb.webp",
       "aspectRatio": "3:4",
       "npcId": "kapitan-sb",
       "tagsPl": ["kapitan sb", "oficer", "bezpieka", "prl", "portret"],
       "tagsEn": ["sb captain", "secret police officer", "prl", "portrait"]
-    },
-    {
+    }
+  ],
+  "audioAssets": [
+{
       "id": "audio-tasma-sb-elblag",
       "category": "audio-handout",
       "file": "audio/tasma-sb-elblag.mp3",

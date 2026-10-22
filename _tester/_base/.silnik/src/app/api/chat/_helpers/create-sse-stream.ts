@@ -32,8 +32,14 @@ import type { Character, NPC } from '@/lib/types';
 import { enrichMeleeAttackReferences } from '@/lib/combat/npc-combat-profile';
 import type { RagMeta } from './run-rag-summary';
 import type { CampaignMemoryScope } from '@/core/memory/types';
-import { commitMemoryTurn, retainFailedTurn } from '@/core/memory/commit-turn';
+import { commitMemoryTurn, retainFailedTurn, stageDossierTurn, type DossierNarrativeTurn } from '@/core/memory/commit-turn';
 import { extractRevealedTurn } from '@/core/memory/revealed-facts';
+import { stripPushedRollConsequenceEntries } from '@/lib/parsers/mechanics-parser';
+import type {
+  PushedRollResolutionContext,
+  PushedRollStakeRequestContext,
+} from '@/lib/parsers/types';
+import { extractJournalTags } from '@/lib/parsers/journal-parser';
 import type { MemoryCommit } from '@/core/memory/types';
 import { beginAiGeneration } from '@/lib/desktop/generation-state';
 import {
@@ -43,6 +49,10 @@ import {
 } from './sanity-resolution';
 
 export interface CreateSseStreamOpts {
+  /** Defer narrative memory/director until the local dossier transaction succeeds. */
+  deferDossierFinalization?: boolean;
+  dossierCorrectionContextHash?: string;
+  dossierCorrectionAttempt?: boolean;
   providerStream: AsyncIterable<StreamChunk>;
   getUsage: () => Promise<CompletionUsage | null>;
   /** Odczyt po skonsumowaniu providerStream. */
@@ -68,6 +78,16 @@ export interface CreateSseStreamOpts {
   combatMechanicsEnabled?: boolean;
   memoryScope?: CampaignMemoryScope | null;
   pendingSanityResolutions?: PendingSanityResolution[];
+  /** Stable clue record IDs that the local dossier RAG exposed in this turn. */
+  dossierClueRecordIds?: string[];
+  /** Exact handout locator IDs that the local dossier RAG exposed in this turn. */
+  dossierHandoutRecordIds?: string[];
+  /** Referee outcome permits material changes; a pending check must not grant items. */
+  dossierInventoryWritesAllowed?: boolean;
+  /** Validated, accepted pushed-roll result for conditional consequence persistence. */
+  pushedRoll?: PushedRollResolutionContext;
+  /** Validated stake proposal request; model output must not advance game time. */
+  pushedRollStakeRequest?: PushedRollStakeRequestContext;
 }
 
 export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
@@ -92,6 +112,11 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
     combatMechanicsEnabled = false,
     memoryScope,
     pendingSanityResolutions,
+    dossierHandoutRecordIds = [],
+    dossierClueRecordIds = [],
+    dossierInventoryWritesAllowed = false,
+    pushedRoll,
+    pushedRollStakeRequest,
   } = opts;
 
   const encoder = new TextEncoder();
@@ -140,10 +165,14 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
           }
         }
 
+        const stateText = stripPushedRollConsequenceEntries(fullText);
+
         // Parsuj pełną odpowiedź i wyślij metadane (z osłoną przed nieobsłużonym błędem)
         let parsed;
         try {
-          parsed = parseAIResponse(fullText);
+          parsed = parseAIResponse(stateText);
+          // The local pushed-roll resolver owns clock changes in this turn.
+          if (pushedRoll || pushedRollStakeRequest) parsed.timeUpdate = null;
         } catch (parseErr) {
           console.warn('⚠️ parseAIResponse failed on full text:', parseErr);
           parsed = {
@@ -165,7 +194,7 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
             timeUpdate: null,
             refereeVetoEvents: [],
             gmMetadata: undefined,
-            rawText: fullText,
+            rawText: stateText,
           };
         }
 
@@ -182,6 +211,37 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
           console.warn('Rejected melee attack tags', melee.rejected);
         }
 
+        const usage = await getUsage();
+        const finishReason = getFinishReason();
+        let memoryCommit: (MemoryCommit & {retryToken?:string}) | undefined;
+        let narrativeTurn: DossierNarrativeTurn['turn'] | undefined;
+        if (memoryScope) {
+          const revealed = extractRevealedTurn(stateText,assistantMessageId ?? traceId,characters,character);
+          const pushedConsequence = pushedRoll && !pushedRoll.passedRequirement
+            ? [{
+                kind: 'consequence' as const,
+                text: `Forsowanie testu ${pushedRoll.skillName}: ${pushedRoll.failureStake}`,
+                status: 'confirmed' as const,
+                sourceJournalEntryId: `journal-${assistantMessageId ?? traceId}-${extractJournalTags(stateText).length}`,
+                provenance: 'pushed_roll_resolver',
+                tags: ['pushed_roll'],
+              }]
+            : [];
+          narrativeTurn = {scope:memoryScope,sessionId:sessionId ?? memoryScope.playthroughId,
+            messageId:assistantMessageId ?? traceId,userMessageId,userText:message,
+            assistantText:revealed.narrative,facts:[...revealed.facts, ...pushedConsequence],
+            recipientIds:character ? [character.id] : undefined};
+        }
+        const commitNarrative = () => {
+        if (narrativeTurn) {
+          const turn=narrativeTurn;
+          try { memoryCommit = commitMemoryTurn(turn); }
+          catch (error) {
+            console.warn('Campaign memory ledger write failed:',error);
+            memoryCommit = {messageId:turn.messageId,status:'failed',retryToken:retainFailedTurn(turn)};
+          }
+        }
+
         // Director's State update (warunkowo)
         if (sessionId && parsed.gmMetadata) {
           try {
@@ -195,21 +255,14 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
           }
         }
 
-        const usage = await getUsage();
-        const finishReason = getFinishReason();
-        let memoryCommit: (MemoryCommit & {retryToken?:string}) | undefined;
-        if (memoryScope) {
-          const revealed = extractRevealedTurn(fullText,assistantMessageId ?? traceId,characters,character);
-          const turn = {scope:memoryScope,sessionId:sessionId ?? memoryScope.playthroughId,
-            messageId:assistantMessageId ?? traceId,userMessageId,userText:message,
-            assistantText:revealed.narrative,facts:revealed.facts,
-            recipientIds:character ? [character.id] : undefined};
-          try { memoryCommit = commitMemoryTurn(turn); }
-          catch (error) {
-            console.warn('Campaign memory ledger write failed:',error);
-            memoryCommit = {messageId:turn.messageId,status:'failed',retryToken:retainFailedTurn(turn)};
-          }
-        }
+          return { memoryCommit };
+        };
+        if (opts.deferDossierFinalization && !memoryScope) throw new Error('DOSSIER_MEMORY_SCOPE_REQUIRED');
+        const dossierFinalizationToken = opts.deferDossierFinalization
+          ? stageDossierTurn({turn:narrativeTurn!, correctionContextHash:opts.dossierCorrectionContextHash, correctionAttempt:opts.dossierCorrectionAttempt, ...(sessionId && parsed.gmMetadata ? {
+              director:{sessionId,metadata:parsed.gmMetadata,journalEntries:parsed.journalEntries},
+            } : {})}) : undefined;
+        if (!opts.deferDossierFinalization) commitNarrative();
 
         // Telemetry namespace dla PostHog client-side emit (spawn task 2026-05-22).
         // Client (useChat.onMetadata) odbiera te pola → trackEvent('ai_request_completed').
@@ -250,6 +303,10 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
           finishReason,
           telemetry,
           memoryCommit,
+          dossierFinalizationToken,
+          dossierClueRecordIds,
+          dossierHandoutRecordIds,
+          dossierInventoryWritesAllowed: dossierInventoryWritesAllowed && (parsed.skillTests?.length ?? 0) === 0,
         };
 
         controller.enqueue(
@@ -306,11 +363,11 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
         }
 
         // Conversation memory persist (fire-and-forget local RAG)
-        if (!memoryScope && sessionId && fullText) {
+        if (!opts.deferDossierFinalization && !memoryScope && sessionId && fullText) {
           conversationMemory
             .saveConversationTurn({
               userMessage: message,
-              aiResponse: extractRevealedTurn(fullText,assistantMessageId ?? traceId).narrative,
+              aiResponse: extractRevealedTurn(stateText,assistantMessageId ?? traceId).narrative,
               sessionId,
               characterName: character?.name,
               memoryScope,

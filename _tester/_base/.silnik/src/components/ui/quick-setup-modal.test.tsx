@@ -1,11 +1,19 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { QuickSetupModal } from './quick-setup-modal';
+import { QUICK_SETUP_SHOWCASE_PROFILE } from './quick-setup-showcase-profile';
+
+const originalShowcaseEnabled = QUICK_SETUP_SHOWCASE_PROFILE.enabled;
 
 describe('QuickSetupModal (Issue #121)', () => {
   const originalLocale = process.env.NEXT_INTL_TEST_LOCALE;
 
+  beforeEach(() => {
+    QUICK_SETUP_SHOWCASE_PROFILE.enabled = false;
+  });
+
   afterEach(() => {
+    QUICK_SETUP_SHOWCASE_PROFILE.enabled = originalShowcaseEnabled;
     process.env.NEXT_INTL_TEST_LOCALE = originalLocale;
   });
 

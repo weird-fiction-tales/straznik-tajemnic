@@ -36,6 +36,35 @@ export interface AgencyLintResult {
 export interface AgencyLintOptions {
   isDuet?: boolean;
   locale?: 'pl' | 'en';
+  /** Exact current human declaration, never assistant text or history. */
+  declaredAction?: {characterName:string;text:string};
+}
+
+/** Narrow permission: a declared entry authorizes that investigator and that literal destination only. */
+function isDeclaredEntry(text:string,index:number,options:AgencyLintOptions,characterName?:string):boolean {
+  const declaration=options.declaredAction;
+  if(!declaration?.text||!declaration.characterName)return false;
+  if(characterName&&!extractNameVariants(declaration.characterName).some(name=>name.toLocaleLowerCase()===characterName.toLocaleLowerCase()))return false;
+  if(!characterName&&options.isDuet)return false;
+  const en=options.locale==='en';
+  const response=text.slice(index).replace(/[*_]/g,'').toLocaleLowerCase();
+  const destination=response.match(en
+    ? /^(?:you\s+)?(?:enter(?:s|ed|ing)?|step(?:s|ped)?\s+(?:into|inside)|walk(?:s|ed)?\s+into)\s+(?:the\s+|a\s+)?([\p{L}\p{N}-]+)/u
+    : /^(?:wchodzi(?:sz|cie)?|wszedł(?:eś)?|weszła(?:ś)?|weszli(?:ście)?)\s+(?:do|w)\s+([\p{L}\p{N}-]+)/u);
+  const singleTargetTail=(value:string)=>/^(?:\s*$|\s*[,.;:!?\n]|\s+za zaproszeniem(?=\s*[,.;:!?\n]|\s*$))/u.test(value);
+  const target=destination?.[1];
+  if(!target||!singleTargetTail(response.slice(destination![0].length)))return false;
+  // Quoted dialogue and hypothetical/negated actions do not authorize physical movement.
+  const human=declaration.text.replace(/[„“"][^”"\n]*[”"]/g,'').replace(/(?<![\p{L}])'[^'\n]*'(?![\p{L}])/gu,'').toLocaleLowerCase();
+  if(/(?<![\p{L}\p{N}])(?:jeżeli|jeśli|gdyby\w*|pod warunkiem|if|unless|would|could)(?![\p{L}\p{N}])/u.test(human))return false;
+  const entry=en ? /\bi\s+(?:enter|step\s+(?:into|inside)|walk\s+into)\s+(?:the\s+|a\s+)?([\p{L}\p{N}-]+)/gu
+    : /(?<![\p{L}\p{N}])(?:wchodzę|wejdę)\s+(?:do|w)\s+([\p{L}\p{N}-]+)/gu;
+  for(const match of human.matchAll(entry)){
+    if(human.slice(match.index!+match[0].length).match(/[.!?;\n]/)?.[0]==='?')continue;
+    const prefix=human.slice(0,match.index).split(/[.!?;\n]/).at(-1)||'';
+    if(match[1]===target&&singleTargetTail(human.slice(match.index!+match[0].length))&&!isNegatedBefore(prefix)&&!/(?:^|\s)(?:jeśli|gdyby\w*|czy|if|unless|would|could)(?:\s|$)/u.test(prefix))return true;
+  }
+  return false;
 }
 
 function escapeRegex(str: string): string {
@@ -585,6 +614,7 @@ export function lintAgencyViolations(
               continue;
             }
 
+            if(check.type==='movement'&&isDeclaredEntry(text,globalOffset,options,charName))continue;
             violations.push({
               characterName: charName,
               type: check.type,
@@ -645,6 +675,7 @@ export function lintAgencyViolations(
     if (!validateSecondPersonMatch(match[0].trim(), text.slice(0, match.index))) {
       continue;
     }
+    if(isDeclaredEntry(text,match.index,{...options,isDuet},undefined))continue;
     violations.push({
       type: 'movement',
       matchedSnippet: match[0].trim(),
@@ -825,38 +856,50 @@ function findSentenceBoundaryBefore(
 function extractTrailingTags(text: string): string[] {
   const trailingTags: string[] = [];
 
-  // 1. Tagi sparowane: [DZIENNIK:...]...[/DZIENNIK], [KARTA_SCENY:...]...[/KARTA_SCENY]
-  const pairedRegex = /\[(DZIENNIK|KARTA_SCENY)(?::[^\]]*)?\][\s\S]*?\[\/\1\]/gi;
+  // 1. Tagi sparowane: [DZIENNIK:...]...[/DZIENNIK], [JOURNAL:...]...[/JOURNAL], [KARTA_SCENY:...]...[/KARTA_SCENY]
+  const pairedRegex = /\[(DZIENNIK|JOURNAL|KARTA_SCENY)(?::[^\]]*)?\][\s\S]*?\[\/\1\]/gi;
   let match: RegExpExecArray | null;
 
   while ((match = pairedRegex.exec(text)) !== null) {
     trailingTags.push(match[0]);
   }
 
-  // 2. Tagi pojedyncze: [LOKACJA:...], [OBECNI_NPC:...], [ZMIANA_SCENY], [AKTUALNY CZAS:...], etc.
+  // 2. Tagi pojedyncze: [LOKACJA:...], [LOCATION:...], [OBECNI_NPC:...], [PRESENT_NPCS:...], [ZMIANA_SCENY], [SCENE_CHANGE], etc.
   const singleTagNames = [
     'AKTUALNY CZAS',
+    'CURRENT TIME',
     'SFX',
     'SANITY',
     'HP',
     'LOKACJA',
+    'LOCATION',
     'OBECNI_NPC',
+    'PRESENT_NPCS',
     'ZMIANA_SCENY',
+    'SCENE_CHANGE',
     'NPC',
     'PRZEDMIOT',
+    'ITEM',
     'ZDOBYTY_PRZEDMIOT',
     'ZAGROŻENIE',
+    'HAZARD',
     'WETO_SEDZIEGO',
+    'REFEREE_VETO',
     'GAME_OVER',
     'NASTRÓJ',
     'CEL_NARRACYJNY',
     'MYŚLI_MG',
     'OBSERWACJA',
+    'OBSERVATION',
     'CZAR',
+    'SPELL',
     'OBRONA_MAGIA',
+    'OPPOSED_MAGIC',
     'WALKA_ATAK',
     'OBRONA_WALKA',
+    'OPPOSED_MELEE',
     'MAGIA_SPONTANICZNA',
+    'SPONTANEOUS_MAGIC',
   ];
   const singleRegex = new RegExp(`\\[(${singleTagNames.join('|')})(?::[^\\]]*)?\\]`, 'gi');
   while ((match = singleRegex.exec(text)) !== null) {
@@ -876,17 +919,24 @@ function sanitizeTextAtBoundary(
   isEn: boolean
 ): string {
   const questionMarker = isEn
-    ? '[What do you do?]'
+    ? (isDuet ? '[What do you all do?]' : '[What do you do?]')
     : (isDuet ? '[Co robicie?]' : '[Co robisz?]');
 
   let baseText = text.slice(0, cutoffIndex).trimEnd();
   baseText = baseText.replace(/[—–,:]\s*$/, '').trimEnd();
 
   const trailingTags = extractTrailingTags(text.slice(cutoffIndex));
-  const timeTag = trailingTags.find((t) => t.includes('AKTUALNY CZAS'));
-  const otherSafeTags = trailingTags.filter(
-    (t) => !t.includes('AKTUALNY CZAS') && !baseText.includes(t)
+  const timeTag = trailingTags.find(
+    (t) => t.includes('AKTUALNY CZAS') || t.includes('CURRENT TIME')
   );
+  const otherSafeTags = trailingTags.filter(
+    (t) =>
+      !t.includes('AKTUALNY CZAS') &&
+      !t.includes('CURRENT TIME') &&
+      !baseText.includes(t)
+  );
+
+  const alreadyHasQuestion = /\[(Co robisz\?|Co robicie\?|What do you do\?|What do you all do\?)\]\s*$/i.test(baseText);
 
   if (!baseText) {
     baseText = isEn
@@ -894,11 +944,10 @@ function sanitizeTextAtBoundary(
       : (isDuet
           ? `Stoicie na progu zdarzenia, obserwując otoczenie.`
           : `Stoisz na progu zdarzenia, obserwując otoczenie.`);
-  } else if (!/[.!?…]$/.test(baseText)) {
+  } else if (!alreadyHasQuestion && !/[.!?…\]]$/.test(baseText)) {
     baseText += '.';
   }
 
-  const alreadyHasQuestion = /\[(Co robisz\?|Co robicie\?|What do you do\?)\]\s*$/i.test(baseText);
   let result = alreadyHasQuestion ? baseText : `${baseText}\n\n${questionMarker}`;
 
   if (otherSafeTags.length > 0) {

@@ -11,6 +11,7 @@ export type ClueStatus = 'unconfirmed' | 'confirmed' | 'disproven' | 'superseded
 export type ClueDiscoveryStatus = 'unrevealed' | 'discovered' | 'verified';
 export type EpistemicLayerType = 'keeper_truth' | 'player_clue';
 export type ClueProvenance = 'observed' | 'testimony' | 'deduction' | 'handout';
+export type ClueAcquisitionCause = 'fail_forward';
 
 /**
  * Wektor dramatyczny M.I.C.E. Quotient (Orson Scott Card / Mary Robinette Kowal):
@@ -37,6 +38,10 @@ export interface ClueEntry {
   clueType?: ClueType;
   /** Status odkrycia poszlaki w ramach epistemicznej mgły wojny (Concordia pattern) */
   discoveryStatus?: ClueDiscoveryStatus;
+  /** Stabilny ID odpowiadającego rekordu `clue` z aktywnej teczki wydania. */
+  dossierRecordId?: string;
+  /** Jawny powód zdobycia tropu, przekazany przez rozstrzygniętą mechanikę. */
+  acquisitionCause?: ClueAcquisitionCause;
   /** Warstwa epistemiczna: obiektywna prawda MG vs wiedza badacza */
   epistemicLayer?: EpistemicLayerType;
   /** Epistemiczna proweniencja / źródło poznawcze poszlaki (LIMIT / anty-zapaść wektorowa) */
@@ -277,6 +282,8 @@ export function isClueEntry(item: unknown): item is ClueEntry {
     typeof c.title === 'string' &&
     typeof c.category === 'string' &&
     typeof c.status === 'string' &&
+    (c.dossierRecordId === undefined || typeof c.dossierRecordId === 'string') &&
+    (c.acquisitionCause === undefined || c.acquisitionCause === 'fail_forward') &&
     (rawClueType === undefined || rawClueType === null || rawClueType === 'core' || rawClueType === 'flavor')
   );
 }

@@ -12,6 +12,7 @@ import { SafeImage } from '@/components/ui/safe-image';
 
 import type { ReactNode } from 'react';
 import type { Section } from './types';
+import type { DossierHandoutBinding } from '@/lib/adventure-dossier/local-handouts';
 import type { AnyAdventureContext } from '@/lib/handout-resolver';
 import { renderHandout } from './render-handout';
 import { renderPerspective } from './render-perspective';
@@ -32,7 +33,9 @@ export function renderSection(
   key: number,
   playerColors?: Map<string, string>,
   onImageClick?: (imgUrl: string, allImages: string[]) => void,
-  adventureContext?: AnyAdventureContext | null
+  adventureContext?: AnyAdventureContext | null,
+  allowedDossierHandoutRecordIds?: string[],
+  dossierHandoutBinding?: DossierHandoutBinding,
 ): ReactNode {
   switch (section.type) {
     case 'dialogue': {
@@ -73,7 +76,7 @@ export function renderSection(
     }
 
     case 'handout':
-      return renderHandout(section, key, adventureContext);
+      return renderHandout(section, key, adventureContext, allowedDossierHandoutRecordIds, dossierHandoutBinding);
 
     case 'roll':
       return (
@@ -119,7 +122,7 @@ export function renderSection(
         return (
           <div
             key={key}
-            className="my-1.5 text-xs text-amber-400/85 font-serif italic tracking-wide select-none flex items-center gap-1.5"
+            className="my-1.5 text-xs text-brass/85 font-serif italic tracking-wide select-none flex items-center gap-1.5"
           >
             <span>📑</span>
             <span>{section.content}</span>
@@ -144,6 +147,6 @@ export function renderSection(
 
     case 'narrative':
     default:
-      return renderNarrativeWithImages(section.content, key, onImageClick);
+      return renderNarrativeWithImages(section.content, key, onImageClick, !dossierHandoutBinding);
   }
 }

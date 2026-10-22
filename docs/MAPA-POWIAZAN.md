@@ -60,3 +60,9 @@ flowchart LR
 - Polecenie `graft` nie jest dostępne w środowisku, więc grafu nie można dziś odtworzyć ani uznać za żywy gate.
 - Rejestr nawigacji ma 11 tras, 18 modali, 2 stany i 30 akcji. Jest sprawdzany przez `navigation:check` oraz `navigation:guard`.
 - Faktyczny przepływ należy potwierdzać testami runtime i E2E, nie samym grafem statycznym.
+
+## Lokalne przygotowanie i odbiór teczki
+
+Źródło przygody -> `prepare-quicksetup.mjs` -> prywatny szkic rekordów i manifest mediów -> `scene-review.mjs` -> podgląd `review-scenes.mjs` -> eksport decyzji autora -> walidowany rejestr decyzji -> ponowna kompilacja szkicu. Hash zestawu łączy zgodę z rekordami, warunkami, referencjami, grafem, zasadami i mediami. Ten przepływ przygotowania nie aktywuje samodzielnie teczki w sesji gry. [Instrukcja](adventure-dossiers/GROUPED-REVIEW.md).
+
+Scenariusz + prywatny szkic teczki + inwentaryzacja mediów + opcjonalny początek gracza -> `adventure-map-model.mjs` -> węzły i relacje autora -> prywatna paczka `build-adventure-map.mjs` -> przestrzenny HTML `adventure-map-render.mjs`. Źródłowe sceny, zdarzenia adaptacji, materiały i sekrety zachowują odrębne znaczenie. [Opis mapy](adventure-dossiers/ADVENTURE-MAP.md).

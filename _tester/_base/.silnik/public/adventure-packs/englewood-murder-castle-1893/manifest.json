@@ -1,5 +1,6 @@
 {
   "caseId": "case-q05-englewood-murder-castle-1893",
+  "assetDirectory": "englewood-murder-castle-1893",
   "era": "1894-chicago",
   "predefinedAdventureId": "englewood-murder-castle-1893",
   "visualDna": {
@@ -13,7 +14,7 @@
       "category": "item-clue",
       "file": "clue-01-castle-blueprint.webp",
       "aspectRatio": "16:9",
-      "clueId": "clue-01-castle-blueprint",
+      "clueId": "clue-blueprint-castle-2nd-floor",
       "tagsPl": ["cyjanotypia", "plan hotelu", "zamek holmesa", "chicago", "1893"],
       "tagsEn": ["cyanotype", "hotel blueprint", "holmes castle", "chicago", "1893"]
     },
@@ -22,13 +23,13 @@
       "category": "item-clue",
       "file": "clue-02-vault-footprint.webp",
       "aspectRatio": "16:9",
-      "clueId": "clue-02-vault-footprint",
+      "clueId": "clue-vault-footprint-etching",
       "tagsPl": ["skarbiec", "odcisk stopy", "emeline cigrand", "drzwi stalowe"],
       "tagsEn": ["vault", "footprint", "emeline cigrand", "steel door"]
     },
     {
       "id": "npc-hh-holmes",
-      "category": "npc-portrait",
+      "category": "npc",
       "file": "npc-hh-holmes.webp",
       "aspectRatio": "3:4",
       "npcId": "hh-holmes",
@@ -37,14 +38,16 @@
     },
     {
       "id": "npc-detective-geyer",
-      "category": "npc-portrait",
+      "category": "npc",
       "file": "npc-detective-geyer.webp",
       "aspectRatio": "3:4",
       "npcId": "detective-geyer",
       "tagsPl": ["detektyw geyer", "pinkerton", "śledczy", "portret"],
       "tagsEn": ["detective geyer", "pinkerton", "investigator", "portrait"]
-    },
-    {
+    }
+  ],
+  "audioAssets": [
+{
       "id": "audio-edison-wax-cylinder-1893",
       "category": "audio-handout",
       "file": "audio/edison-wax-cylinder-1893.mp3",

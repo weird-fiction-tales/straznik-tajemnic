@@ -379,12 +379,12 @@ function hasHandoutBodyContent(buffer: string[]): boolean {
 }
 
 function isHandoutStart(line: string): boolean {
-  // IND-224: tagi protokołu (DZIENNIK:typ:..., MYŚLI_MG:, NASTRÓJ:, CEL_NARRACYJNY:)
+  // IND-224: tagi protokołu (DZIENNIK:typ:..., (?:MYŚLI_MG|THOUGHTS):, NASTRÓJ:, CEL_NARRACYJNY:)
   // to NIE handouty. "DZIENNIK" jest aliasem gazety (H9), więc bare/niedomknięty tag
   // mylił parser → fałszywy "WYCINEK PRASOWY" + surowe tagi w środku. Protokół ma ':'
   // tuż po słowie-kluczu; tytuł gazety ("Dziennik Polski") ma spację, więc nietknięty.
   if (
-    /^\[?(?:DZIENNIK|JOURNAL|MYŚLI_MG|NASTRÓJ|CEL_NARRACYJNY|MASKA_NPC|RETRO_ZIARNO|KORELACJA|ECHO_AKCJI)\s*:/i.test(
+    /^\[?(?:DZIENNIK|JOURNAL|(?:MYŚLI_MG|THOUGHTS)|NASTRÓJ|CEL_NARRACYJNY|MASKA_NPC|RETRO_ZIARNO|KORELACJA|ECHO_AKCJI)\s*:/i.test(
       line
     )
   )
@@ -408,7 +408,7 @@ function isHandoutStart(line: string): boolean {
 }
 
 function isHandoutTerminator(line: string): boolean {
-  return /^\[(Co robi(?:sz|cie)\?|RZUT|TEST|WYNIK|HANDOUT|Zaktualizowano dziennik|Journal updated|Lokacja zbadana wyczerpująco|Location thoroughly searched)/i.test(line);
+  return /^\[(Co robi(?:sz|cie)\?|What do you(?: all)? do\?|RZUT|TEST|WYNIK|HANDOUT|Zaktualizowano dziennik|Journal updated|Lokacja zbadana wyczerpująco|Location thoroughly searched)/i.test(line);
 }
 
 function isHandoutEnd(line: string, buffer?: string[]): boolean {

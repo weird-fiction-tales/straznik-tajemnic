@@ -29,6 +29,10 @@ export { AMERICAN_COLD_CASES_ADVENTURES };
 export interface AdventureHandout {
   /** Stabilny identyfikator handoutu w obrębie przygody (np. 'mapa-walimia'). */
   slug: string;
+  /** ID rekordu `handout_locator` przypisanego po inspekcji dokładnego wydania PDF-u. */
+  dossierRecordId?: string;
+  /** Jawne, pełne aliasy dla starszych identyfikatorów; resolver nie zgaduje po fragmencie. */
+  aliases?: string[];
   /** Tytuł widoczny dla gracza (alt obrazu). */
   title: string;
   /** Ścieżka publiczna obrazu, np. '/handouts/cienie-tatr/pociag_do_szalenstwa-mapa-walimia.png'. */
@@ -741,15 +745,15 @@ export const STREFA_11_ADVENTURES: AdventureContext[] = [
       {
         slug: 'clue-photo-prabuty-1947',
         title: 'Fotografia z ruin w Prabutach (1947)',
-        image: '/handouts/cien-nad-prabutami/clue-photo-prabuty.webp',
+        image: '/handouts/cien-nad-prabutami/playtest/photo-1947.png',
         handoutType: 'newspaper',
         nodeId: 'node-warszawa-redakcja',
-        textContent: 'Czarno-biała fotografia przedstawiająca ruiny kościoła w Prabutach z odręczną notatką o. Klimuszki: „To nie światło słoneczne przenikało przez sklepienie...”.',
+        textContent: 'Fotografia ruin kościoła w Prabutach z 1947 roku. Na odwrocie adnotacja ojca Klimuszki kieruje do klasztoru w Elblągu i przechowywanych tam dzienników wizji.',
       },
       {
         slug: 'clue-sb-file-klin',
         title: 'Teczka SB: Kryptonim KLIN',
-        image: '/handouts/cien-nad-prabutami/clue-sb-file-klin.webp',
+        image: '/handouts/cien-nad-prabutami/playtest/klin-report.png',
         handoutType: 'report',
         nodeId: 'node-msw-warszawa',
         textContent: 'Ściśle tajny meldunek Departamentu IV MSW z 1973 r. dotyczący inwigilacji franciszkanina z Elbląga i anomalnych zjawisk elektromagnetycznych w celi klasztornej.',
@@ -757,19 +761,19 @@ export const STREFA_11_ADVENTURES: AdventureContext[] = [
       {
         slug: 'clue-herbal-recipe-152',
         title: 'Rękopis receptury ziołowej nr 152',
-        image: '/handouts/cien-nad-prabutami/clue-herbal-recipe-152.webp',
+        image: '/handouts/cien-nad-prabutami/playtest/recipe-152.png',
         handoutType: 'letter',
         nodeId: 'node-elblag-klasztor',
         textContent: 'Zapis proporcji ziół z dopiskiem: „Pić przed snem, by uciszyć głosy czwartego wymiaru”.',
       },
       {
         slug: 'audio-sb-wiretap-elblag',
-        title: 'Taśma szpulowa ZK-140: Podsłuch celi w Elblągu',
-        image: '/handouts/cien-nad-prabutami/clue-sb-file-klin.webp',
+        title: 'Taśma ZK-140: Meldunek z obserwacji celi w Elblągu',
+        image: '/handouts/cien-nad-prabutami/playtest/tape-zk140.png',
         audioUrl: '/audio/handouts/cien-nad-prabutami/tasma-sb-elblag.mp3',
         handoutType: 'report',
         nodeId: 'node-msw-warszawa',
-        textContent: 'Nagranie operacyjne SB: szum taśmy szpulowej, modlitwa i nagły trzask pękającego szkła pod wpływem nieznanej energii.',
+        textContent: 'Meldunek oficera z 12 października 1973 roku. Relacjonuje szept modlitewny, pisk aparatury, skok pola elektromagnetycznego i drżenie szyb. Twierdzi, że słyszał drugi głos; mikrofon go nie zarejestrował. Jest to relacja oficera, a nie dowód obecności drugiej osoby.',
       },
     ],
   },

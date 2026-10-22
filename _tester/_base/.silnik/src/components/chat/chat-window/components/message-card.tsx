@@ -22,6 +22,7 @@ import { NarrativeFormatter } from '../../NarrativeFormatter';
 import { SkillTestCard } from './skill-test-card';
 import { DiceRollCard } from './dice-roll-card';
 import { HazardCard } from './hazard-card';
+import { extractHazardEvents } from '@/lib/parsers/mechanics-parser';
 import { SpellCard } from './spell-card';
 import { TomeCard } from './tome-card';
 import { OpposedMagicCard } from './opposed-magic-card';
@@ -146,6 +147,14 @@ export function MessageCard({
   const locale = useLocale();
   const intlLocale = locale === 'en' ? 'en-US' : 'pl-PL';
   const currentEra = era || activeCharacter?.era || '1920s';
+  // Older saves may contain the former 0 m -> 3 m parser fallback. Keep event
+  // IDs and completed results, but never offer damage unsupported by its source.
+  const sourceHazards = /\[(?:ZAGROŻENIE|ZAGROZENIE|HAZARD):/i.test(message.content)
+    ? extractHazardEvents(message.content) : null;
+  const hazardEvents = message.hazardEvents?.filter(event => event.type !== 'falling' || sourceHazards === null ||
+    sourceHazards.some(source => source.type === 'falling' && source.fallHeightMeters === event.fallHeightMeters &&
+      source.characterName === event.characterName && source.description === event.description));
+
 
   return (
     <Card
@@ -288,12 +297,14 @@ export function MessageCard({
                   onImageClick={onImageClick}
                   isDirectorMode={isDirectorMode}
                   adventureContext={adventureContext}
+                  allowedDossierHandoutRecordIds={message.dossierHandoutRecordIds}
+                  dossierHandoutBinding={message.dossierHandoutBinding}
                 />
                 {(message.content.includes('[KONIEC_SESJI:POTWIERDZENIE]') || (isSessionEnded && isLastMessage)) && (
                   <>
                     {sessionSaveStatus === 'saving' && (
-                      <div className="mt-6 p-4 rounded-lg border border-amber-950/50 bg-amber-950/20 text-amber-200/90 font-special-elite text-sm text-center tracking-wider animate-pulse shadow-md flex items-center justify-center gap-2.5">
-                        <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                      <div className="mt-6 p-4 rounded-lg border border-brass/30 bg-card text-card-foreground font-special-elite text-sm text-center tracking-wider animate-pulse shadow-md flex items-center justify-center gap-2.5">
+                        <Loader2 className="w-4 h-4 animate-spin text-brass" />
                         <p className="italic">{t('chronicleSaving')}</p>
                       </div>
                     )}
@@ -392,9 +403,9 @@ export function MessageCard({
             )}
 
             {/* Zagrożenia środowiskowe i trucizny CoC 7e RAW (Issue #60) */}
-            {message.hazardEvents && message.hazardEvents.length > 0 && (
+            {hazardEvents && hazardEvents.length > 0 && (
               <div className="mt-3 space-y-2">
-                {message.hazardEvents.map((hazard) => {
+                {hazardEvents.map((hazard) => {
                   const normalizeName = (value: string) =>
                     value.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
                   const characterPool = activeCharacter

@@ -21,6 +21,8 @@ export interface PdfMemoryAttachments {
   adventureGeminiFileUri?: string;
   adventureGeminiMimeType?: string;
   adventureId?: string;
+  adventureDossierFingerprint?: string;
+  adventureDossierStatus?: 'ready' | 'unavailable';
 }
 
 export interface BuildPdfStrategyOpts {

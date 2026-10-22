@@ -5,6 +5,7 @@ import { parseAIResponse } from '@/lib/response-parser';
 import { logApiEvent } from '@/lib/telemetry';
 import type { ParsedResponse } from '@/lib/parsers/types';
 import type { StreamChunk } from '@/lib/ai-providers/types';
+import { updateDirectorState } from '@/lib/director-state';
 import { commitMemoryTurn } from '@/core/memory/commit-turn';
 import { conversationMemory } from '@/lib/vector-db/conversation-memory';
 
@@ -35,9 +36,11 @@ jest.mock('@/lib/user-usage', () => ({
 }));
 
 const mockRecordCompletedTurn = jest.fn();
+const mockStageDossierTurn = jest.fn();
 jest.mock('@/core/memory/commit-turn', () => ({
   commitMemoryTurn: (turn:unknown) => mockRecordCompletedTurn(turn),
   retainFailedTurn:jest.fn(()=>'retry-token'),
+  stageDossierTurn:(commit:unknown)=>mockStageDossierTurn(commit),
 }));
 
 function parsedResponse(rawText: string): ParsedResponse {
@@ -81,6 +84,34 @@ describe('createSseStream', () => {
     jest.mocked(logApiEvent).mockClear();
     jest.mocked(conversationMemory.saveConversationTurn).mockClear();
     mockRecordCompletedTurn.mockClear();
+  });
+
+  it('returns only the dossier clue IDs retrieved for this turn in SSE metadata', async () => {
+    const stream = createSseStream({
+      providerStream: streamChunks('A clue is revealed.'),
+      getUsage: async () => null,
+      getFinishReason: () => 'STOP',
+      message: 'Investigate the archive.',
+      modelId: 'gemini-test',
+      traceId: 'trace-dossier',
+      timer: { elapsed: () => 0 },
+      embeddingDim: 768,
+      ragVersion: 'v1',
+      userId: 'local',
+      dossierClueRecordIds: ['dossier.clue.archive'],
+      dossierHandoutRecordIds: ['dossier.handout.archive-letter'],
+    });
+
+    const events = (await readStream(stream))
+      .trim()
+      .split('\n\n')
+      .map((event) => JSON.parse(event.slice('data: '.length)) as Record<string, unknown>);
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'metadata',
+      dossierClueRecordIds: ['dossier.clue.archive'],
+      dossierHandoutRecordIds: ['dossier.handout.archive-letter'],
+    });
   });
 
   it('reports failed durable memory while retaining the streamed narration and a retry token', async () => {
@@ -311,5 +342,26 @@ describe('createSseStream', () => {
         weapon: { damageFormula: '1d3' },
       }],
     });
+  });
+});
+
+
+test('dossier SSE stages memory and director until local effects are accepted', async () => {
+  mockStageDossierTurn.mockReturnValue('volatile-token');
+  mockRecordCompletedTurn.mockClear();
+  jest.mocked(updateDirectorState).mockClear();
+  jest.mocked(parseAIResponse).mockImplementation(text => ({...parsedResponse(text), gmMetadata: {tone:'quiet'} as ParsedResponse['gmMetadata']}));
+  const stream = createSseStream({providerStream:streamChunks('An unverified consequence.'),getUsage:async()=>null,
+    getFinishReason:()=> 'STOP',message:'Act',modelId:'test',traceId:'staged-test',timer:{elapsed:()=>0},
+    embeddingDim:768,ragVersion:'v1',userId:'local',sessionId:'s',deferDossierFinalization:true,
+    memoryScope:{schemaVersion:1,campaignDefinitionId:'c',playthroughId:'p',adventureId:'a',kind:'custom'}});
+  const text = await readStream(stream);
+  expect(text).toContain('"dossierFinalizationToken":"volatile-token"');
+  expect(mockRecordCompletedTurn).not.toHaveBeenCalled();
+  expect(updateDirectorState).not.toHaveBeenCalled();
+  expect(mockStageDossierTurn).toHaveBeenCalledTimes(1);
+  expect(mockStageDossierTurn.mock.calls[0][0]).toMatchObject({
+    turn:{assistantText:'An unverified consequence.',messageId:'staged-test'},
+    director:{sessionId:'s'},
   });
 });

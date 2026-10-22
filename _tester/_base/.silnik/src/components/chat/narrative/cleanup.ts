@@ -50,13 +50,13 @@ export function cleanupContent(content: string): string {
     .replace(/\[TEST:[^\]]*\]/gi, '')
     .replace(/\[WYNIK:[^\]]*\]/gi, '')
     // GM Protocol tags - ukryte metadane, nie do wyświetlania.
-    // MYŚLI_MG/NASTRÓJ/CEL_NARRACYJNY niosą swobodny tekst, w który AI wplata
+    // (?:MYŚLI_MG|THOUGHTS)/NASTRÓJ/CEL_NARRACYJNY niosą swobodny tekst, w który AI wplata
     // audio-tagi - dlatego ciało odporne na zagnieżdżenie (NESTED_TAG_BODY).
-    .replace(new RegExp(`\\[MYŚLI_MG:${NESTED_TAG_BODY}\\]`, 'gi'), '')
+    .replace(new RegExp(`\\[(?:MYŚLI_MG|THOUGHTS):${NESTED_TAG_BODY}\\]`, 'gi'), '')
     .replace(new RegExp(`\\[NASTRÓJ:${NESTED_TAG_BODY}\\]`, 'gi'), '')
     .replace(new RegExp(`\\[CEL_NARRACYJNY:${NESTED_TAG_BODY}\\]`, 'gi'), '')
     .replace(/\[NPC:[^\]]*\]/gi, '')
-    .replace(/\[LOKACJA:[^\]]*\]/gi, '')
+    .replace(/\[(?:LOKACJA|LOCATION)\s*:[^\]]*\]/gi, '')
     .replace(/\[PRZEDMIOT:[^\]]*\]/gi, '')
     .replace(/\[ZDOBYTY_PRZEDMIOT:[^\]]*\]/gi, '')
     .replace(/\[(?:WALKA|WALKA_ATAK|OBRONA_WALKA|ATAK_WALKA|OPPOSED_MELEE|MELEE_DEFENSE|DIVE_FOR_COVER|RZUT_ZA_OSŁONĘ|RZUT_ZA_OSLONE):[^\]]*\]/gi, '')
@@ -83,7 +83,7 @@ export function cleanupContent(content: string): string {
     .replace(/\[HP:[^\]]*\]/gi, '')
     // clock-debt: znacznik czasu [AKTUALNY CZAS: ...] przesuwa zegar gry
     // (parsowany przez extractTimeUpdate), ale nie pokazujemy go w czacie
-    .replace(/\[AKTUALNY CZAS:[^\]]*\]/gi, '')
+    .replace(/\[(?:AKTUALNY CZAS|CURRENT TIME):[^\]]*\]/gi, '')
     // Sceny i Karta Akt (Issue #402): zamiana na subtelne powiadomienie wielkości [Co robisz?]
     .replace(/\[(?:KARTA_SCENY|SCENE_CARD):?[^\]]*\][\s\S]*?\[\/(?:KARTA_SCENY|SCENE_CARD)\]/gi, '\n\n[Zaktualizowano dziennik]\n\n')
     .replace(/\[(?:ZMIANA_SCENY|SCENE_CHANGE):[^\]]*\]/gi, '\n\n[Zaktualizowano dziennik]\n\n')
@@ -117,7 +117,7 @@ export function cleanupContent(content: string): string {
     // PRASOWY"). Wymóg ':' tuż po słowie-kluczu chroni prozę ("Dziennik leżał na
     // biurku" - brak dwukropka - oraz tytuł gazety "Dziennik Polski" zostają).
     .replace(
-      /^\s*\[?(?:MYŚLI_MG|NASTRÓJ|CEL_NARRACYJNY|DZIENNIK|JOURNAL|MASKA_NPC|RETRO_ZIARNO|KORELACJA|ECHO_AKCJI|OBSERWACJA|OBSERVATION|SEKRETY_MG|KEEPER_SECRETS)\s*:[^\n]*$/gim,
+      /^\s*\[?(?:(?:MYŚLI_MG|THOUGHTS)|NASTRÓJ|CEL_NARRACYJNY|DZIENNIK|JOURNAL|MASKA_NPC|RETRO_ZIARNO|KORELACJA|ECHO_AKCJI|OBSERWACJA|OBSERVATION|SEKRETY_MG|KEEPER_SECRETS|LOKACJA|LOCATION|AKTUALNY CZAS|CURRENT TIME)\s*:[^\n]*$/gim,
       ''
     )
     // IND-165 - Audio tags TTS (Gemini Flash TTS): regex restrictive whitelist
@@ -128,6 +128,9 @@ export function cleanupContent(content: string): string {
       /\[(?:whispers|trembling|panicked|serious|curious|sarcastic|tired|crying|amazed|excited|mischievously|sighs|gasp|giggles|laughs|shouting|very fast|very slow|sarcastically)\]/gi,
       ''
     )
+    // Pełny inline tag audio musi zniknąć przed wariantem bez nawiasów,
+    // który usuwa resztę linii i pozostawiał samotny `[` w narracji.
+    .replace(new RegExp(`\\[(?:SFX|DŹWIĘK|DZWIEK)\\s*:${NESTED_TAG_BODY}\\]`, 'gi'), '')
     // Usuń ukryte instrukcje MG i tagi techniczne (już wyciągnięte z {})
     .replace(
       /(?:INSTRUKCJA|GM|META|UKRYTE|HIDDEN|SFX|DŹWIĘK|DZWIEK|THINKING|SYSTEM|ACTION|AKCJA):[^\n]*/gi,

@@ -6,6 +6,8 @@ export type EquipmentEventAction = 'use' | 'remove' | 'add';
 export interface EquipmentEvent {
   action: EquipmentEventAction;
   itemName: string;
+  /** Exact instance selected by application code, never fuzzy-matched. */
+  itemId?: string;
   quantity?: number;
   category?: EquipmentCategory;
   description?: string;
@@ -82,6 +84,7 @@ export interface SFXRequest {
 
 export interface JournalTagEntry {
   type:
+    | 'case'
     | 'combat'
     | 'discovery'
     | 'npc'
@@ -104,6 +107,8 @@ export interface JournalTagEntry {
   sourceNpc?: string;
   /** Opcjonalna lokacja odnalezienia poszlaki */
   foundLocation?: string;
+  /** Stabilny identyfikator zatwierdzonej poszlaki teczki, dozwolony przez RAG w tej turze. */
+  dossierRecordId?: string;
 }
 
 // === SYSTEM ROZWOJU COC 7E ===
@@ -119,7 +124,22 @@ export interface CombinedSkillSubtest {
   skillValue: number;
 }
 
+/** Final result from the existing dice modal. Dossier access requires all identity fields. */
+export interface SkillRollResolution {
+  outcome: import('../dice-utils').RollOutcome;
+  luckSpent: number;
+  skillNames: string[];
+  targetNpcId?: string;
+  testId?: string;
+  resolutionId?: string;
+  characterId?: string;
+  requiredDifficulty?: import('../dice-utils').RequiredDifficulty;
+  passedRequirement?: boolean;
+}
+
 export interface SkillTestData {
+  /** Proposal only. The local dossier validates this ID before binding the test. */
+  dossierConditionId?: string;
   id: string;
   skillName: string;
   skillValue: number;
@@ -132,13 +152,148 @@ export interface SkillTestData {
   characterName?: string;
   /** Rozwiązane po stronie klienta ID postaci. */
   characterId?: string;
+  /** NPC explicitly selected as the target of a social influence test. */
+  targetNpcId?: string;
   /** Wspólna grupa testów z jednej odpowiedzi MG. */
   groupId?: string;
+  /** Test należy do aktywnego starcia; forsowanie jest wtedy zablokowane. */
+  isCombat?: boolean;
   /** Test łączony (RAW s. 103): operator 'OR' (LUB) lub 'AND' (I) oraz lista umiejętności */
   combined?: {
     operator: 'OR' | 'AND';
     skills: CombinedSkillSubtest[];
   };
+}
+
+/** Resolved normal pushed roll; the stake was shown and accepted before reroll. */
+export interface PushedRollResolutionContext {
+  source: 'chat_skill_test';
+  originalTestId: string;
+  pushedRollId: string;
+  skillName: string;
+  initialOutcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble';
+  initialTestFailed: true;
+  outcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble';
+  requiredDifficulty: 'regular' | 'hard' | 'extreme';
+  passedRequirement: boolean;
+  failureStake: string;
+  stakePresented: true;
+  playerAcceptedStake: true;
+}
+
+/** Initial failed roll awaiting a Keeper-proposed pushed-roll stake. */
+export interface PushedRollStakeRequestContext {
+  source: 'chat_skill_test';
+  testId: string;
+  skillName: string;
+  initialOutcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble';
+  initialTestFailed: true;
+  initialRoll: number;
+  targetValue: number;
+  requiredDifficulty: 'regular' | 'hard' | 'extreme';
+}
+
+/** Completed local sanity-recovery procedure; used only to select dossier guidance. */
+export interface SanityRecoveryResolutionContext {
+  source: 'local_sanity_recovery';
+  resolutionId: string;
+  characterId: string;
+  procedure: 'anchor' | 'self_help' | 'hospitalization';
+  outcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble' | 'success' | 'failure';
+  sanityDelta: number;
+}
+
+/** Completed medical-care expense from the local recovery resolver. */
+export interface MedicalExpenseResolutionContext {
+  source: 'local_medical_care';
+  resolutionId: string;
+  characterId: string;
+  facility: 'public_hospital' | 'private_clinic' | 'home' | 'poor_conditions';
+  period: '1_day' | '3_days' | '1_week' | '2_weeks' | '1_month';
+  totalCost: number;
+  cashBefore: number | null;
+  cashAfter: number | null;
+}
+
+/** Saved investigator setup/change; carries field names only, never character values. */
+export interface InvestigatorChangeResolutionContext {
+  source: 'local_investigator_change';
+  resolutionId: string;
+  characterId: string;
+  operation: 'created' | 'updated';
+  changedFields: Array<'characteristics' | 'age' | 'occupation' | 'skills' | 'wealth' | 'alternate_creation' | 'weapons'>;
+}
+
+/** Local firearm resolver output used to select adventure-specific weapon guidance. */
+export interface FirearmResolutionContext {
+  source: 'local_firearm_resolution';
+  resolutionId: string;
+  attackerId: string;
+  targetName?: string;
+  weaponName: string;
+  roll: number;
+  distanceMeters?: number;
+  distanceCategory?: 'point_blank' | 'base_range' | 'long_range' | 'extreme_range' | 'out_of_range';
+  requiredDifficulty?: 'regular' | 'hard' | 'extreme' | 'critical' | 'impossible';
+  malfunctionThreshold: number;
+  isMalfunction: boolean;
+  malfunctionEffect?: 'dud_round' | 'jam';
+  fireMode: 'single' | 'burst' | 'fixed_burst' | 'continuous';
+  bulletsFired: number;
+  bulletsHit: number;
+  penaltyDice?: number;
+  difficultyIncrease?: number;
+  targetSwitched?: boolean;
+  targetSwitchAmmoCost?: number;
+}
+
+/** Completed firearm repair; sent to the dossier after its combat-round delay. */
+export interface JamClearingResolutionContext {
+  source: 'local_jam_clearing';
+  resolutionId: string;
+  actorId: string;
+  weaponName: string;
+  weaponCategory: 'handgun' | 'rifle' | 'shotgun' | 'smg' | 'machine_gun';
+  malfunctionEffect: 'dud_round' | 'jam';
+  roundsRequired: number;
+  skillName?: string;
+  skillValue?: number;
+  skillRoll?: number;
+  skillOutcome?: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble';
+  cleared: boolean;
+}
+
+export interface VehicleCollisionPassengerResolution {
+  characterId: string;
+  damage: number;
+  killedInstantly: boolean;
+}
+
+/** Local vehicle-collision result used to select adventure-specific guidance. */
+export interface VehicleCollisionResolutionContext {
+  source: 'local_vehicle_collision';
+  resolutionId: string;
+  vehicleId: string;
+  severity: 'minor' | 'moderate' | 'major' | 'catastrophic' | 'road_kill';
+  initialBuild: number;
+  maxBuild: number;
+  buildDamage: number;
+  remainingBuild: number;
+  passengers: VehicleCollisionPassengerResolution[];
+  destroyedInSingleEvent: boolean;
+}
+
+/** A locally generated reroll from a narrative dice card, sent to chat and dossier retrieval. */
+export interface DiceRollResolutionContext {
+  source: 'local_dice_card_reroll' | 'local_chat_command';
+  originalEventId: string;
+  resolutionId: string;
+  formula: string;
+  diceValues: number[];
+  modifier: number;
+  total: number;
+  characterName?: string;
+  label?: string;
 }
 
 export interface TimeUpdate {

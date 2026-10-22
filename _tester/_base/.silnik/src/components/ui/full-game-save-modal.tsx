@@ -214,6 +214,7 @@ export function FullGameSaveModal({
       onSaved?.();
     } catch (error) {
       console.error('Error while saving:', error);
+      toast({title:currentLocale==='en'?'Save unavailable':'Nie można zapisać gry',description:error instanceof Error?error.message:t('unknownError'),variant:'destructive'});
       setError(error instanceof Error ? error.message : t('unknownError'));
     } finally {
       setIsSaving(false);

@@ -22,7 +22,31 @@ describe('model-fallback helper functions', () => {
   });
 
   describe('isInvalidKeyError', () => {
-    it('returns true for 400 with INVALID_ARGUMENT', () => {
+    it.each([
+      { status: 400, message: '{"error":{"code":400,"message":"Request contains an invalid argument.","status":"INVALID_ARGUMENT"}}' },
+      { status: 400, message: 'INVALID_ARGUMENT: temperature/topP/topK are unsupported for this model' },
+      { status: 400, message: 'INVALID_ARGUMENT: thinkingBudget is not supported' },
+      { status: 403, message: 'PERMISSION_DENIED: this project cannot access the selected model' },
+      { status: 403, message: 'PERMISSION_DENIED: API key restrictions block this service' },
+      { status: 429, message: 'RESOURCE_EXHAUSTED: daily quota exceeded' },
+      { status: 503, message: 'UNAVAILABLE: high demand' },
+    ])('does not classify configuration, permission or availability failures as an invalid key: %j', (error) => {
+      expect(isInvalidKeyError(error)).toBe(false);
+    });
+
+    it.each([
+      { status: 400, message: 'API key expired. Please renew the API key.' },
+      { status: 403, message: 'API key is invalid' },
+      { status: 400, message: 'Invalid API key supplied' },
+      { status: 401, message: 'UNAUTHENTICATED: credentials are invalid' },
+      { status: 'UNAUTHENTICATED', message: 'Request has invalid authentication credentials' },
+      { code: 401, message: 'Unauthorized' },
+      { status: 400, message: '{"error":{"status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}' },
+    ])('retains explicit authentication failures: %j', (error) => {
+      expect(isInvalidKeyError(error)).toBe(true);
+    });
+
+    it('returns true for the explicit API_KEY_INVALID reason', () => {
       expect(isInvalidKeyError({ status: 400, message: 'API_KEY_INVALID' })).toBe(true);
     });
 

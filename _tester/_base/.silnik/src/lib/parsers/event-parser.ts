@@ -1,3 +1,4 @@
+import { isAcceptedLocationLength, isCanonicalAdventureLocation } from '../canonical-adventure-location';
 import { ParsedEvent } from './types';
 import {
   NPC_PATTERNS,
@@ -20,8 +21,10 @@ export function isVisualPromptLeak(text?: string | null): boolean {
 /**
  * Czyści nazwę lokacji ze zbędnych prefiksów, separatorów i resztek promptów technicznych.
  */
-export function sanitizeLocationName(name?: string | null): string {
+export function sanitizeLocationName(name?: string | null, adventureId?: string): string {
   if (!name) return '';
+  if (isCanonicalAdventureLocation(name.trim(), adventureId)) return name.trim();
+  if (adventureId && name.trim().length > 45) return '';
   let clean = name
     .replace(/^Lokacja:\s*/i, '')
     .replace(/^Location:\s*/i, '');
@@ -53,6 +56,7 @@ export function sanitizeLocationName(name?: string | null): string {
 
   // Twarde zabezpieczenie: jeśli nazwa nadal przekracza 45 znaków, przytnij na granicy słowa
   if (clean.length > 45) {
+    if (adventureId) return '';
     const truncated = clean.substring(0, 45);
     const lastSpace = truncated.lastIndexOf(' ');
     clean = (lastSpace > 20 ? truncated.substring(0, lastSpace) : truncated).trim();
@@ -68,7 +72,8 @@ export function sanitizeLocationName(name?: string | null): string {
  * wstrzykiwanego z powrotem do promptu. Zwraca `null`, gdy w tekście nie ma znacznika.
  */
 export function extractLatestTagLocation(
-  text: string
+  text: string,
+  adventureId?: string
 ): { name: string; description: string } | null {
   const regex = new RegExp(TAG_LOCATION_PATTERN.source, 'gi');
   let match;
@@ -83,7 +88,7 @@ export function extractLatestTagLocation(
       continue;
     }
 
-    const cleanName = sanitizeLocationName(rawTagContent);
+    const cleanName = sanitizeLocationName(rawTagContent, adventureId);
     let desc = (match[2] || '').trim();
 
     // Jeśli nie było separatora : ani |, ale w rawTagContent był przecinek z opisem, wyciągnij opis
@@ -98,7 +103,7 @@ export function extractLatestTagLocation(
       }
     }
 
-    if (cleanName && cleanName.length <= 45 && !isVisualPromptLeak(cleanName)) {
+    if (cleanName && isAcceptedLocationLength(cleanName, adventureId) && !isVisualPromptLeak(cleanName)) {
       last = { name: cleanName, description: desc };
     }
   }

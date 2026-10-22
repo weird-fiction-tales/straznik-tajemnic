@@ -143,6 +143,9 @@ export function extractJournalTags(text: string): JournalTagEntry[] {
 
     // Mapowanie typów
     const typeMap: Record<string, JournalTagEntry['type']> = {
+      case: 'case',
+      sprawa: 'case',
+      cel: 'case',
       walka: 'combat',
       combat: 'combat',
       fight: 'combat',
@@ -189,6 +192,7 @@ export function extractJournalTags(text: string): JournalTagEntry[] {
     let inGameDate: string | undefined;
     let sourceNpc: string | undefined;
     let foundLocation: string | undefined;
+    let dossierRecordId: string | undefined;
 
     const parseSegment = (part: string) => {
       if (!part) return;
@@ -207,6 +211,8 @@ export function extractJournalTags(text: string): JournalTagEntry[] {
         inGameDate = dateMatch[1].trim();
         return;
       }
+      const dossierRecordMatch = part.match(/^(?:dossier_record_id|teczka_record_id)\s*:\s*(.+)$/i);
+      if (dossierRecordMatch) dossierRecordId = dossierRecordMatch[1].trim().slice(0, 200);
     };
 
     // Obsługa nagłówka z pipe'ami lub tradycyjnym dwukropkiem z datą
@@ -256,6 +262,7 @@ export function extractJournalTags(text: string): JournalTagEntry[] {
         who,
         sourceNpc,
         foundLocation,
+        ...(dossierRecordId ? { dossierRecordId } : {}),
       });
     }
   }

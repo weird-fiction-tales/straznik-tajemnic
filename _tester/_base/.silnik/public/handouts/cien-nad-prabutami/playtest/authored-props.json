@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "props": [
+    {
+      "file": "klin-report.png",
+      "label": "Meldunek operacyjny",
+      "title": "Kryptonim KLIN",
+      "lines": [
+        "MINISTERSTWO SPRAW WEWNĘTRZNYCH",
+        "DEPARTAMENT IV — WARSZAWA · 1973",
+        "Przedmiot: obserwacja ojca Andrzeja Czesława Klimuszki, franciszkanina z Elbląga.",
+        "W celi klasztornej odnotowano anomalne zjawiska elektromagnetyczne. Zjawiska wymagają dalszej kontroli.",
+        "Materiały dotyczące Prabut pozostają w aktach operacji KLIN.",
+        "ŚCIŚLE TAJNE — DO UŻYTKU SŁUŻBOWEGO"
+      ],
+      "sha256": "ff072826481fefa0c31e709fcf44a5d82c06421de37e1877a5808a27b946dc55",
+      "provenance": "authored-game-prop",
+      "costPLN": 0
+    },
+    {
+      "file": "recipe-152.png",
+      "label": "Notatki ojca Klimuszki",
+      "title": "Mieszanka nr 152",
+      "lines": [
+        "Osłona ziołowa",
+        "Zioła zbierane w okolicach ruin cmentarza w Prabutach.",
+        "Mieszanka tłumi percepcję strachu i odbiór szumów astralnych.",
+        "Przed wejściem pod ołtarz potrzebna jest osłona. Sam zapis receptury nie zastępuje przygotowanej mieszanki.",
+        "Andrzej Czesław Klimuszko"
+      ],
+      "sha256": "62de8150199483c3c7dd78c0cb0464b3639e6ed9d9061d99c243ac51db381f18",
+      "provenance": "authored-game-prop",
+      "costPLN": 0
+    },
+    {
+      "file": "tape-zk140.png",
+      "label": "Archiwum operacji KLIN",
+      "title": "Taśma szpulowa ZK-140",
+      "lines": [
+        "ELBLĄG — ZAPIS Z OBSERWACJI",
+        "Materiał dźwiękowy z celi ojca Klimuszki.",
+        "Egzemplarz przechowywany w aktach Departamentu IV MSW w Warszawie.",
+        "Odtwarzanie: magnetofon szpulowy. Taśma jest materiałem śledztwa; jej odsłuchanie nie oznacza zabrania oryginału."
+      ],
+      "sha256": "6c28d8f92b5fdc4aea081ceb72b91fdde5139f96632ef0b0364281f5eca073ef",
+      "provenance": "authored-game-prop",
+      "costPLN": 0
+    }
+  ]
+}

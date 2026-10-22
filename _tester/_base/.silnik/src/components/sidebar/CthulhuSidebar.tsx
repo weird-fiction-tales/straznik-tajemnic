@@ -64,6 +64,7 @@ import {
 } from '@/lib/types';
 import { AdventureContext, CustomAdventure } from '@/lib/adventures-data';
 import { useResolvedPortrait } from '@/hooks/useResolvedPortrait';
+import { useLocalPlaytestTransport } from '@/hooks/useLocalPlaytestTransport';
 import { getEraImageFilter } from '@/lib/era-visual-style';
 import { resolveGameEraContext } from '@/lib/era';
 import { mergeAdventureJournalEntries } from '@/lib/journal/shared-adventure-journal';
@@ -193,6 +194,34 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
   const [adventureContext, setAdventureContext] =
     useState<AdventureContext | null>(null);
   const effectiveAdventureContext = adventureContextProp ?? adventureContext;
+  const localTransport = useLocalPlaytestTransport();
+  const isPrabutySolo = effectiveAdventureContext?.id === 'cien-nad-prabutami' && !hotSeatConfig?.enabled;
+  const pilotProbeKey = isPrabutySolo && localTransport.serverConfigured && !localTransport.loading
+    ? `${effectiveAdventureContext?.id}:${activeCharacter?.id ?? ''}` : null;
+  const [pilotMode, setPilotMode] = useState<{ key: string; allowed: boolean } | null>(null);
+  const isLocalPrabuty = pilotProbeKey !== null && pilotMode?.key === pilotProbeKey && pilotMode.allowed;
+  const awaitingPilotCapability = isPrabutySolo && (localTransport.loading ||
+    (pilotProbeKey !== null && pilotMode?.key !== pilotProbeKey));
+  useEffect(() => {
+    setPilotMode(null);
+    if (!pilotProbeKey) return;
+    let current = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    void fetch('/api/adventure-dossier/playtest', { cache: 'no-store', signal: controller.signal })
+      .then(async response => {
+        const data = response.status === 200 ? await response.json() : null;
+        const allowed = data?.mode === 'local_playtest' && data?.adventureId === 'cien-nad-prabutami' &&
+          typeof data?.editionFingerprint === 'string' && /^sha256:[a-f0-9]{64}$/.test(data.editionFingerprint);
+        if (current) setPilotMode({ key: pilotProbeKey, allowed });
+      })
+      .catch(() => { if (current) setPilotMode({ key: pilotProbeKey, allowed: false }); })
+      .finally(() => clearTimeout(timeout));
+    return () => { current = false; clearTimeout(timeout); controller.abort(); };
+  }, [pilotProbeKey]);
+  const [pilotEndStep, setPilotEndStep] = useState<'closed' | 'options' | 'confirm'>('closed');
+  useEffect(() => { setPilotEndStep('closed'); }, [isLocalPrabuty, effectiveAdventureContext?.id, activeCharacter?.id, isSessionEnded, sessionEndStatus, hideSidebarPanel]);
+
   const resolvedEraContext = useMemo(() => {
     if (effectiveAdventureContext) {
       return resolveGameEraContext({ adventure: effectiveAdventureContext });
@@ -654,6 +683,25 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                     <Lock className="w-4 h-4 text-muted-foreground shrink-0" />
                     <span className="leading-tight">{t('sessionClosed')}</span>
                   </Button>
+                ) : isLocalPrabuty && sessionEndStatus === 'idle' ? (
+                  <div className="space-y-2" role="group" aria-label={t('pilotEndOrSave')}>
+                    {pilotEndStep === 'closed' ? (
+                      <Button variant="outline" className="w-full border-brass/40 text-brass font-special-elite" onClick={() => setPilotEndStep('options')}>{t('pilotEndOrSave')}</Button>
+                    ) : pilotEndStep === 'options' ? (
+                      <>
+                        <p className="text-xs text-muted-foreground">{t('pilotSaveBeforeBreak')}</p>
+                        <Button data-testid="pilot-save-game" variant="outline" className="w-full" disabled={!onSaveGame} onClick={() => { setPilotEndStep('closed'); onSaveGame?.(); }}>{t('saveGame')}</Button>
+                        <Button variant="outline" className="w-full h-auto whitespace-normal" disabled={!handleSendMessage} onClick={() => setPilotEndStep('confirm')}>{t('pilotWithdraw')}</Button>
+                        <Button variant="ghost" className="w-full" onClick={() => setPilotEndStep('closed')}>{t('pilotReturnToGame')}</Button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-foreground">{t('pilotWithdrawDescription')}</p>
+                        <Button data-testid="pilot-withdraw-confirm" variant="outline" className="w-full h-auto whitespace-normal border-brass/60 text-brass" disabled={!handleSendMessage} onClick={() => { setPilotEndStep('closed'); handleSendMessage?.('Wycofuję się ze śledztwa.'); }}>{t('pilotConfirmWithdrawal')}</Button>
+                        <Button variant="ghost" className="w-full" onClick={() => setPilotEndStep('closed')}>{t('pilotReturnToGame')}</Button>
+                      </>
+                    )}
+                  </div>
                 ) : sessionEndStatus === 'awaiting_player_closure' ? (
                   <Button
                     disabled
@@ -666,8 +714,9 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                   </Button>
                 ) : (
                   <Button
+                    disabled={awaitingPilotCapability}
                     onClick={() => {
-                      if (handleSendMessage) {
+                      if (!awaitingPilotCapability && handleSendMessage) {
                         handleSendMessage('[KONIEC_SESJI]');
                       }
                     }}

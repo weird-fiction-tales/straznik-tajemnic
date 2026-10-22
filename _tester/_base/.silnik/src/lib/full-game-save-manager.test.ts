@@ -5,6 +5,48 @@ import type { WorldSetupBundleV1 } from './world-setup';
 import { PREDEFINED_CHARACTERS } from './immersion/predefined-characters';
 
 describe('FullGameSaveManager duet persistence', () => {
+  it('preserves a dossier clue record ID across a full save and load', () => {
+    const character: Character = {
+      ...PREDEFINED_CHARACTERS[0],
+      id: 'char-dossier-clue',
+      investigatorDossier: {
+        clues: [{
+          id: 'player-clue-1',
+          dossierRecordId: 'adventure.synthetic.clue.lead',
+          title: 'Ślad w archiwum',
+          description: 'Zapisany testowy ślad.',
+          category: 'document',
+          status: 'confirmed',
+          discoveryStatus: 'discovered',
+          epistemicLayer: 'player_clue',
+        }],
+        npcs: [],
+        locations: [],
+        notes: [],
+      },
+    };
+    const save = FullGameSaveManager.createFullSave({
+      name: 'Dossier clue save',
+      userId: 'local',
+      messages: [],
+      gameSettings: { aiSettings: {} as AISettings },
+      characters: [character],
+      campaigns: [],
+      npcs: [],
+      locations: [],
+    });
+
+    const loaded = FullGameSaveManager.decompressSave(
+      FullGameSaveManager.compressSave(save)
+    );
+
+    expect(loaded?.characters[0].investigatorDossier?.clues[0]).toMatchObject({
+      id: 'player-clue-1',
+      dossierRecordId: 'adventure.synthetic.clue.lead',
+      discoveryStatus: 'discovered',
+    });
+  });
+
   it('preserves scene chronicle text across a full save and load', () => {
     const character: Character = {
       ...PREDEFINED_CHARACTERS[0],
@@ -80,6 +122,31 @@ describe('FullGameSaveManager duet persistence', () => {
       .toEqual(campaignMemory);
     expect(FullGameSaveManager.decompressSave(FullGameSaveManager.compressSave(save))?.memorySnapshot)
       .toEqual(save.memorySnapshot);
+  });
+
+  it('round-trips edition-bound dossier world state with the full save', () => {
+    const dossierWorldState = {
+      schemaVersion: 1 as const,
+      playthroughId: 'run-one',
+      adventureId: 'ancient-trees',
+      editionFingerprint: `sha256:${'a'.repeat(64)}`,
+      objects: [{ entityId: 'obj-hoist', state: 'disabled', updatedByTurnId: 'turn-1', lastTransitionId: 'disable' }],
+      appliedTurnIds: ['turn-1'],
+    };
+    const save = FullGameSaveManager.createFullSave({
+      name: 'Dossier world state',
+      userId: 'local',
+      messages: [],
+      gameSettings: { aiSettings: {} as AISettings },
+      characters: [],
+      campaigns: [],
+      dossierWorldState,
+      npcs: [],
+      locations: [],
+    });
+
+    expect(FullGameSaveManager.decompressSave(FullGameSaveManager.compressSave(save))?.dossierWorldState)
+      .toEqual(dossierWorldState);
   });
 
   it('loads a 2.0.0 save without campaign memory and without dropping data', () => {

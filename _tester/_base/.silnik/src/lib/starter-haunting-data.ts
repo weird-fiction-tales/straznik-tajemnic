@@ -18,6 +18,7 @@ export const HAUNTING_HANDOUTS: AdventureHandout[] = [
   },
   {
     slug: 'clue-02-boston-globe-1918',
+    aliases: ['boston-globe-1918'],
     title: 'Nieopublikowany artykuł, „Boston Globe” (1918)',
     image: '/adventure-packs/case-s11-01/clue-02-boston-globe-1918.webp',
     handoutType: 'newspaper',

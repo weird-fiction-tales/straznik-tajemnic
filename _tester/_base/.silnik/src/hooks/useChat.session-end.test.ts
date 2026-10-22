@@ -32,6 +32,12 @@ jest.mock('@/lib/api-keys-service', () => ({
 jest.mock('@/lib/time-manager', () => ({
   timeManager: {
     getTime: jest.fn(() => ({ year: 1920, month: 9, day: 1, hour: 20, minute: 0 })),
+    getSnapshot: jest.fn(() => ({
+      time: { year: 1920, month: 9, day: 1, hour: 20, minute: 0 },
+      weather: '',
+      deadline: null,
+      deadlineTotalHours: 0,
+    })),
   },
 }));
 

@@ -1,4 +1,5 @@
 'use client';
+import type { DossierHandoutBinding } from '@/lib/adventure-dossier/local-handouts';
 
 /**
  * NarrativeFormatter renderHandout - IND-144 micro 4/8 (extract z NarrativeFormatter.tsx)
@@ -8,6 +9,7 @@
  * z 7 case switch matchującym HandoutType (IND-173 unifikacja z handout-generator).
  */
 
+import { RuntimeDossierHandout } from './runtime-dossier-handout';
 import { useState, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
@@ -23,7 +25,7 @@ import {
 import { AudioReelPlayer } from '@/components/ui/audio-reel-player';
 import { DocumentViewer } from '@/components/ui/document-viewer';
 import type { AnyAdventureContext } from '@/lib/handout-resolver';
-import { resolveHandoutBySlug } from '@/lib/handout-resolver';
+import { isDossierHandoutReference, resolveHandoutBySlug } from '@/lib/handout-resolver';
 import { useSettingsSubscription } from '@/hooks/use-settings-subscription';
 
 const LOCALIZED_AUDIO_SLUGS = [
@@ -113,9 +115,11 @@ export function HandoutAudioPlayer({ audioUrl }: { audioUrl: string }) {
 function HandoutCard({
   section,
   adventureContext,
+  allowedDossierHandoutRecordIds,
 }: {
   section: Section;
   adventureContext?: AnyAdventureContext | null;
+  allowedDossierHandoutRecordIds?: string[];
 }) {
   const t = useTranslations('NarrativeFormatter');
   const tAudio = useTranslations('AudioHandouts');
@@ -129,7 +133,7 @@ function HandoutCard({
   }
 
   const resolved = section.handoutSlug
-    ? resolveHandoutBySlug(section.handoutSlug, adventureContext)
+    ? resolveHandoutBySlug(section.handoutSlug, adventureContext, allowedDossierHandoutRecordIds)
     : null;
 
   const localizedAudio = resolved?.audioUrl
@@ -157,6 +161,12 @@ function HandoutCard({
 
   // Dokument z notatka startuje zwiniety (!hasStickyNote). Dlugie dokumenty bez notatki startuja rozwiniete, ale gracz moze je zwinac.
   const [isExpanded, setIsExpanded] = useState(!hasStickyNote);
+
+  if (
+    section.handoutSlug &&
+    isDossierHandoutReference(section.handoutSlug, adventureContext) &&
+    !resolved
+  ) return null;
 
   if (settings.qualityPreset === 'low') {
     const displayTitle =
@@ -235,10 +245,10 @@ function HandoutCard({
             )}
             {section.stickyNote.clue && (
               <div className="flex flex-col sm:flex-row sm:items-baseline gap-1">
-                <span className="font-semibold text-amber-400 min-w-[90px] shrink-0 font-sans text-[11px] uppercase tracking-wide">
+                <span className="font-semibold text-gold min-w-[90px] shrink-0 font-sans text-[11px] uppercase tracking-wide">
                   {t('stickyNoteClue')}
                 </span>
-                <span className="text-amber-200 font-semibold">
+                <span className="text-gold font-semibold">
                   {section.stickyNote.clue}
                 </span>
               </div>
@@ -356,13 +366,23 @@ function HandoutCard({
 export function renderHandout(
   section: Section,
   key: number,
-  adventureContext?: AnyAdventureContext | null
+  adventureContext?: AnyAdventureContext | null,
+  allowedDossierHandoutRecordIds?: string[],
+  dossierHandoutBinding?: DossierHandoutBinding,
 ): ReactNode {
+  // Active dossier handouts have no public asset fallback, including while the stream is incomplete.
+  if (dossierHandoutBinding) {
+    if (!section.handoutSlug || adventureContext?.id !== dossierHandoutBinding.adventureId) return null;
+    return <RuntimeDossierHandout key={key} recordId={section.handoutSlug} binding={dossierHandoutBinding}
+      allowedIds={allowedDossierHandoutRecordIds ?? []} />;
+  }
+  if (section.handoutSlug?.startsWith('auto.')) return null;
   return (
     <HandoutCard
       key={key}
       section={section}
       adventureContext={adventureContext}
+      allowedDossierHandoutRecordIds={allowedDossierHandoutRecordIds}
     />
   );
 }

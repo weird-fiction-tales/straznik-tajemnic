@@ -83,8 +83,8 @@ describe('System Prompt - Wymogi jakości językowej [LNG-01] & [LNG-02]', () =>
       expect(fullProtocol).toMatch(/ABSOLUTNY ZAKAZ GRANIA ZA GRACZA/i);
       expect(fullProtocol).toMatch(/nie pisz wypowiedzi.*postaci gracza/i);
       expect(compactProtocol).toMatch(/SPRAWCZOŚĆ GRACZA \(absolutny zakaz\)/i);
-      expect(prompt).toMatch(/postacią gracza steruje/i);
-      expect(prompt).toMatch(/ABSOLUTNY ZAKAZ GRANIA ZA GRACZA/i);
+      expect(prompt).toMatch(/nie opisuj myśli, decyzji, słów/i);
+      expect(prompt).toMatch(/za gracza/i);
     });
 
     it('różnicuje Matrycę 4 Biegów Kadencji i eliminuje monotonię (anti-monotony)', () => {
@@ -181,4 +181,16 @@ describe('System Prompt - Wymogi jakości językowej [LNG-01] & [LNG-02]', () =>
       expect(styleEn).toMatch(/Psychological Dilemmas & NPC Trust Crises/i);
     });
   });
+});
+
+
+describe('default prompt assets are text, not a successful HTML fallback',()=>{
+ it.each(['content-type','body'] as const)('rejects a 200 application shell by %s without treating it as instructions',async kind=>{
+  const spy=jest.spyOn(global,'fetch').mockResolvedValue({ok:true,headers:new Headers({'content-type':kind==='content-type'?'text/html; charset=utf-8':'text/plain'}),text:async()=>kind==='body'?'<!DOCTYPE html><html><body>Not found</body></html>':'Not found'} as Response);
+  try{await expect(loadDefaultPrompt('pl')).resolves.toBe('');}finally{spy.mockRestore();}
+ });
+ it.each(['pl','en'] as const)('accepts the actual markdown shape in %s',async locale=>{
+  const spy=jest.spyOn(global,'fetch').mockResolvedValue({ok:true,headers:new Headers({'content-type':'text/markdown; charset=utf-8'}),text:async()=> '# Keeper instructions\nKeep player agency.'} as Response);
+  try{await expect(loadDefaultPrompt(locale)).resolves.toContain('Keeper instructions');}finally{spy.mockRestore();}
+ });
 });

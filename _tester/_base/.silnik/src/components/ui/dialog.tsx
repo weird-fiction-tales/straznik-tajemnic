@@ -1,5 +1,8 @@
+'use client';
+
 import type { HTMLAttributes } from 'react';
 import { forwardRef } from 'react';
+import { useTranslations } from 'next-intl';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
@@ -56,32 +59,45 @@ const dialogContentVariants = cva(
 export interface DialogContentProps
   extends
     React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>,
-    VariantProps<typeof dialogContentVariants> {}
+    VariantProps<typeof dialogContentVariants> {
+  screenContentClassName?: string;
+}
 
 const DialogContent = forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, size, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(dialogContentVariants({ size }), className)}
-      {...props}
-    >
-      {size === 'screen' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto p-6">{children}</div>
-      ) : (
-        children
-      )}
+>(({ className, children, size, screenContentClassName, ...props }, ref) => {
+  const t = useTranslations('Dialog');
 
-      <DialogPrimitive.Close className="absolute right-4 top-4 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-brass/35 bg-[#120f0c] text-muted-foreground opacity-95 shadow-lg ring-offset-background backdrop-blur-sm transition-all hover:border-brass/70 hover:text-brass hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
-        <X className="h-5 w-5" />
-        <span className="sr-only">Zamknij</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(dialogContentVariants({ size }), className)}
+        {...props}
+      >
+        {size === 'screen' ? (
+          <div
+            className={cn(
+              'min-h-0 flex-1 overflow-y-auto p-6',
+              screenContentClassName
+            )}
+          >
+            {children}
+          </div>
+        ) : (
+          children
+        )}
+
+        <DialogPrimitive.Close className="absolute right-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-brass/35 bg-[#120f0c] text-muted-foreground opacity-95 shadow-lg ring-offset-background backdrop-blur-sm transition-all hover:border-brass/70 hover:text-brass hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none">
+          <X className="h-5 w-5" />
+          <span className="sr-only">{t('close')}</span>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({

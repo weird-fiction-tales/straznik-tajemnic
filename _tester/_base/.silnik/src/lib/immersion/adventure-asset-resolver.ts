@@ -23,8 +23,19 @@ export interface AdventurePackAsset {
   tagsEn?: string[];
 }
 
+export interface AdventurePackAudioAsset {
+  id: string;
+  category: 'audio-handout';
+  file: string;
+  audioId: string;
+  tagsPl?: string[];
+  tagsEn?: string[];
+}
+
 export interface AdventurePackManifest {
   caseId: string;
+  /** Physical public/adventure-packs directory when it differs from the logical case ID. */
+  assetDirectory?: string;
   era: string;
   pdfFingerprints?: string[];
   predefinedAdventureId?: string;
@@ -34,6 +45,7 @@ export interface AdventurePackManifest {
     cssFilterOverride?: string;
   };
   assets: AdventurePackAsset[];
+  audioAssets?: AdventurePackAudioAsset[];
 }
 
 export interface AssetResolveResult {
@@ -83,6 +95,11 @@ export function resolveAdventureAsset({
   const query = slugOrQuery.trim();
   const queryNorm = normalizeNameForHash(query);
   const queryHash = computeNameHash(query);
+  const assetDirectory = manifest?.assetDirectory === undefined ? manifest?.caseId : manifest.assetDirectory;
+  if (manifest && (typeof assetDirectory !== 'string' || assetDirectory.length > 200 ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(assetDirectory))) {
+    return { priority: 3, assetUrl: null, aspectRatio: '16:9', enhancedPrompt: query };
+  }
 
   // --- Priorytet 1: Teczka Aktywnej Przygody ---
   if (manifest && manifest.assets.length > 0) {
@@ -101,7 +118,7 @@ export function resolveAdventureAsset({
     if (byIdOrFile) {
       return {
         priority: 1,
-        assetUrl: `/adventure-packs/${manifest.caseId}/${byIdOrFile.file}`,
+        assetUrl: `/adventure-packs/${assetDirectory}/${byIdOrFile.file}`,
         aspectRatio: byIdOrFile.aspectRatio,
         cssFilter,
         matchedAsset: byIdOrFile,
@@ -118,7 +135,7 @@ export function resolveAdventureAsset({
     if (byOverride) {
       return {
         priority: 1,
-        assetUrl: `/adventure-packs/${manifest.caseId}/${byOverride.file}`,
+        assetUrl: `/adventure-packs/${assetDirectory}/${byOverride.file}`,
         aspectRatio: byOverride.aspectRatio,
         cssFilter,
         matchedAsset: byOverride,
@@ -133,7 +150,7 @@ export function resolveAdventureAsset({
     if (byHash) {
       return {
         priority: 1,
-        assetUrl: `/adventure-packs/${manifest.caseId}/${byHash.file}`,
+        assetUrl: `/adventure-packs/${assetDirectory}/${byHash.file}`,
         aspectRatio: byHash.aspectRatio,
         cssFilter,
         matchedAsset: byHash,
@@ -154,7 +171,7 @@ export function resolveAdventureAsset({
     if (byTag) {
       return {
         priority: 1,
-        assetUrl: `/adventure-packs/${manifest.caseId}/${byTag.file}`,
+        assetUrl: `/adventure-packs/${assetDirectory}/${byTag.file}`,
         aspectRatio: byTag.aspectRatio,
         cssFilter,
         matchedAsset: byTag,

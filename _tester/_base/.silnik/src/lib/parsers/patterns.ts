@@ -14,7 +14,7 @@ export const TAG_LOCATION_PATTERN = /\[(?:LOKACJA|LOCATION):\s*([^:\]|]+)(?:[:|]
 export const TAG_ITEM_PATTERN = /\[PRZEDMIOT:\s*([^:\]]+):\s*([^\]]+)\]/gi;
 
 /** [MYŚLI_MG: treść] — ukryty monolog wewnętrzny AI (nie wyświetlany graczowi) */
-export const TAG_GM_THOUGHTS_PATTERN = /\[MYŚLI_MG:\s*([^\]]+)\]/gi;
+export const TAG_GM_THOUGHTS_PATTERN = /\[(?:MYŚLI_MG|THOUGHTS):\s*([^\]]+)\]/gi;
 
 /** [NASTRÓJ: przymiotnik] — dyrektywa tonu sceny */
 export const TAG_MOOD_PATTERN = /\[NASTRÓJ:\s*([^\]]+)\]/gi;

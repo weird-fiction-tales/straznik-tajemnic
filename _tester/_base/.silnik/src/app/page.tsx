@@ -22,6 +22,7 @@ import { CharacterWizardV2 } from '@/components/ui/character-wizard';
 
 // === HOOKI ===
 import { useTTS } from '@/hooks/useTTS';
+import {resetActiveAdventure} from '@/lib/new-adventure-reset';
 import { usePdfMemory } from '@/hooks/usePdfMemory';
 import { useCharacterManagement } from '@/hooks/useCharacterManagement';
 import { useFullSave } from '@/hooks/useFullSave';
@@ -31,6 +32,9 @@ import { useCutscene } from '@/hooks/useCutscene';
 import { useSceneSummary } from '@/hooks/useSceneSummary';
 import { useGameStart } from '@/hooks/useGameStart';
 import { useHealthCheck } from '@/hooks/useHealthCheck';
+import { useLocalPlaytestTransport } from '@/hooks/useLocalPlaytestTransport';
+import { sanitizeHistoryForApi } from '@/lib/chat-history-sanitizer';
+import { hasLocalPlaytestTransport } from '@/lib/local-playtest-transport';
 import { getApiKeyHeaders, hasRequiredKeys } from '@/lib/api-keys-service';
 import { hydrateCharacterImages } from '@/lib/character-image-store';
 import { persistCharacters } from '@/lib/character-cloud-sync';
@@ -117,6 +121,7 @@ const PredefinedCharactersSelector = dynamic(
  * Zrefaktoryzowany z użyciem dedykowanych hooków i layoutu
  */
 export default function Home() {
+  const localTransport = useLocalPlaytestTransport();
   // === CORE HOOKS ===
   const tts = useTTS('pl');
   const charMgmt = useCharacterManagement();
@@ -195,9 +200,11 @@ export default function Home() {
 
   const save = useFullSave({
     setMessages: chat.setMessages,
+    setHasStartedGame,
     setCharacters: charMgmt.setCharacters,
     setActiveCharacter: charMgmt.setActiveCharacter,
     setCampaigns,
+    setAdventureContext,
     setPdfMemory: pdf.setPdfMemory,
     setActiveGameState: charMgmt.setActiveGameState,
     setAiSettings,
@@ -264,6 +271,7 @@ export default function Home() {
     setActiveCharacter: charMgmt.setActiveCharacter,
     setCharacters: charMgmt.setCharacters,
     pdfMemory: pdf.pdfMemory,
+    activateDossierForSession: pdf.activateDossierForSession,
     adventureContext,
     hotSeatConfig: hotSeat.config,
     setMessages: chat.setMessages,
@@ -407,7 +415,7 @@ export default function Home() {
   // fallbacku z bindCharactersByPlayerName, który po cichu przydzielał pierwszą
   // wolną postać). Solo: przepuszczamy prosto do handleStartGame.
   const handleStartGameGuarded = useCallback(() => {
-    if (!hasRequiredKeys()) {
+    if (!(hasRequiredKeys() || hasLocalPlaytestTransport())) {
       setShowApiKeysModal(true);
       return;
     }
@@ -496,12 +504,12 @@ export default function Home() {
   }, [runHealthCheck]);
 
   useEffect(() => {
-    if (!hasRequiredKeys()) setShowApiKeysModal(true);
+    if (!localTransport.loading && !(hasRequiredKeys() || hasLocalPlaytestTransport())) setShowApiKeysModal(true);
 
     const handleOpenModal = () => setShowApiKeysModal(true);
     window.addEventListener('open-api-keys-modal', handleOpenModal);
     return () => window.removeEventListener('open-api-keys-modal', handleOpenModal);
-  }, []);
+  }, [localTransport.loading, localTransport.serverConfigured]);
 
   // 1a-bis. IND-273 T5b: auto-odświeżenie cennika Gemini (TTL 24h po stronie
   // serwera). Fire-and-forget; tanie gdy cache świeży (bez LLM). Po sukcesie serwer
@@ -660,7 +668,9 @@ export default function Home() {
 
   // 2. Load localStorage data (chat / characters / campaigns / pdf)
   useEffect(() => {
-    const savedChat = localStorage.getItem('chat-messages');
+    // useChat owns the complete history. Legacy is a fallback only, never an overwrite.
+    const savedChat = localStorage.getItem('zew_chat_messages') === null
+      ? localStorage.getItem('chat-messages') : null;
     if (savedChat) {
       try {
         const loadedMessages = (
@@ -673,7 +683,7 @@ export default function Home() {
           .filter(
             (msg) => !msg.content.match(/^!\[[^\]]*\]\(\[IMG_BASE64\]\)$/)
           );
-        chat.setMessages(loadedMessages);
+        chat.setMessages(sanitizeHistoryForApi(loadedMessages));
       } catch (e) {
         console.error('Error loading chat:', e);
       }
@@ -753,16 +763,7 @@ export default function Home() {
 
   useEffect(() => {
     if (chat.messages.length > 0) {
-      const messagesToSave = chat.messages.slice(-500).map((msg) => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content.replace(
-          /!\[([^\]]*)\]\(data:image\/[^)]+\)/g,
-          '![obraz]([IMG_BASE64])'
-        ),
-        timestamp: msg.timestamp,
-        mechanicsContext: msg.mechanicsContext,
-      }));
+      const messagesToSave = sanitizeHistoryForApi(chat.messages.slice(-500));
       localStorage.setItem('chat-messages', JSON.stringify(messagesToSave));
     }
   }, [chat.messages]);
@@ -778,6 +779,7 @@ export default function Home() {
   // Czyści czat + wybraną przygodę + Sesję Zero, ale ZACHOWUJE postacie (roster) i
   // zasady (pdf_memory). Kontynuacja sesji z sejwu jest niezależna (handleLoadFullSave).
   const handleNewAdventure = () => {
+    chat.stopGeneration();
     chat.setMessages([]);
     chat.setActiveChaseState(null);
     chat.resetSessionEndState();
@@ -801,6 +803,9 @@ export default function Home() {
     localStorage.removeItem('adventure_context');
     // #7: tryb gry (Solo / duet) jest per-przygoda - nowa przygoda wraca do Solo.
     hotSeat.disableHotSeat();
+    resetActiveAdventure(localStorage);
+    // Reload disposes every hook/ref, pending voice queue and old campaign callback.
+    window.location.reload();
   };
 
   // #7: wybór trybu Solo - wyłącza Hot Seat i (jeśli jest aktywna postać)
@@ -1084,7 +1089,7 @@ export default function Home() {
           save.setShowFullSaveModal(true);
         }}
         onColdStart={fullReset.handleFullReset}
-        hasRules={!!pdf.pdfMemory.rulesUrl}
+        hasRules={!!pdf.pdfMemory.rulesUrl || (localTransport.serverConfigured && localTransport.serverHasBaseRules)}
         hasSessionZero={sessionZeroCompleted}
         hasStartedGame={hasStartedGame}
         onOpenApiKeys={() => setShowApiKeysModal(true)}
@@ -1099,6 +1104,9 @@ export default function Home() {
         sessionEndStatus={chat.sessionEndStatus}
         sessionSaveStatus={chat.sessionSaveStatus}
         onRetrySessionSave={chat.retrySessionSave}
+        dossierProtocolFailure={chat.dossierProtocolFailure}
+          pendingDossierSkillRollRetry={chat.pendingDossierSkillRollRetry}
+          retryDossierSkillRoll={chat.retryDossierSkillRoll}
         onConfirmAcquiredItem={chat.confirmAcquiredItem}
         onDismissAcquiredItem={chat.dismissAcquiredItem}
         onCharacterUpdate={charMgmt.handleUpdateCharacter}

@@ -86,6 +86,7 @@ describe('Challenger M3-2 Empirical Adversarial Test Harness', () => {
     handouts: [
       {
         slug: 'tajny-list-mecenasa',
+        aliases: ['mecenasa'],
         title: 'Poufny list mecenasa',
         image: '/handouts/list.webp',
         textContent: 'Oryginalna treść listu adwokata z 1932 roku.',
@@ -485,9 +486,10 @@ describe('Challenger M3-2 Empirical Adversarial Test Harness', () => {
       const stripped = resolveHandoutBySlug('mapa-piwnic', mockContext);
       expect(stripped?.title).toBe('Plan piwnic kamienicy');
 
-      // Tier 5: Substring containment (minimum 4 chars)
+      // Tier 5: Declared full aliases preserve legacy references without substring guessing
       const sub = resolveHandoutBySlug('mecenasa', mockContext);
       expect(sub?.title).toBe('Poufny list mecenasa');
+      expect(resolveHandoutBySlug('mecenas', mockContext)).toBeNull();
     });
   });
 

@@ -1,3 +1,4 @@
+import { isAcceptedLocationLength, resolveCanonicalAdventureLocation, extractLatestCanonicalLocationTag } from '../canonical-adventure-location';
 import type { Character, NPC } from '@/lib/types';
 import type { ResolvedEraContext } from '@/lib/era';
 import { WorldEngineDirector } from './index';
@@ -221,15 +222,16 @@ function addVisitedMacro(list: string[], locationName: string): void {
   }
 }
 
-function extractLastLocationTagFromContent(content: string): string | undefined {
+function extractLastLocationTagFromContent(content: string, adventureId?: string, canonicalOnly = false): string | undefined {
   if (!content) return undefined;
-  const regex = /\[(?:LOKACJA|LOCATION):\s*([^:\]\n]+)/gi;
+  if (canonicalOnly) return extractLatestCanonicalLocationTag(content, adventureId)?.name;
+  const regex = /\[(?:LOKACJA|LOCATION):\s*([^:|\]\n]+)/gi;
   let lastMatch: string | undefined;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(content)) !== null) {
     const candidate = match[1]?.trim();
-    if (candidate && candidate.length <= 45) {
-      lastMatch = candidate;
+    if (candidate && isAcceptedLocationLength(candidate, adventureId)) {
+      lastMatch = canonicalOnly ? resolveCanonicalAdventureLocation(adventureId,candidate)?.name ?? lastMatch : candidate;
     }
   }
   return lastMatch;
@@ -242,7 +244,9 @@ function extractLastLocationTagFromContent(content: string): string | undefined 
  */
 export function deriveSceneSensoryMemoryFromMessages(
   messages?: Array<{ role?: string; content?: string }> | null,
-  fallbackLocation?: string | null
+  fallbackLocation?: string | null,
+  adventureId?: string,
+  canonicalOnly = false
 ): DerivedSceneSensoryMemory {
   const visitedMacroLocations: string[] = [];
   let activeLocation = '';
@@ -253,7 +257,7 @@ export function deriveSceneSensoryMemoryFromMessages(
       if (!msg || msg.role !== 'assistant' || typeof msg.content !== 'string') {
         continue;
       }
-      const tagLoc = extractLastLocationTagFromContent(msg.content);
+      const tagLoc = extractLastLocationTagFromContent(msg.content, adventureId, canonicalOnly);
       if (tagLoc) {
         if (!activeLocation || activeLocation.toLowerCase() === tagLoc.toLowerCase()) {
           activeLocation = tagLoc;

@@ -26,6 +26,7 @@ import { persistCharacters } from '@/lib/character-cloud-sync';
 
 
 import { useTTS } from '@/hooks/useTTS';
+import {resetActiveAdventure} from '@/lib/new-adventure-reset';
 import { usePdfMemory } from '@/hooks/usePdfMemory';
 import { useCharacterManagement } from '@/hooks/useCharacterManagement';
 import { useFullSave } from '@/hooks/useFullSave';
@@ -35,6 +36,9 @@ import { useCutscene } from '@/hooks/useCutscene';
 import { useSceneSummary } from '@/hooks/useSceneSummary';
 import { useGameStart } from '@/hooks/useGameStart';
 import { useHealthCheck } from '@/hooks/useHealthCheck';
+import { useLocalPlaytestTransport } from '@/hooks/useLocalPlaytestTransport';
+import { sanitizeHistoryForApi } from '@/lib/chat-history-sanitizer';
+import { hasLocalPlaytestTransport, hasLocalPlaytestRules } from '@/lib/local-playtest-transport';
 import { getApiKeyHeaders, hasRequiredKeys } from '@/lib/api-keys-service';
 import { useRulesStatus } from '@/hooks/useRulesStatus';
 import { hydrateCharacterImages } from '@/lib/character-image-store';
@@ -169,6 +173,7 @@ const BetaFeedbackModal = dynamic(
 
 
 export default function Home() {
+  const localTransport = useLocalPlaytestTransport();
   const t = useTranslations('Page');
   
   const locale = useLocale();
@@ -275,9 +280,11 @@ export default function Home() {
 
   const save = useFullSave({
     setMessages: chat.setMessages,
+    setHasStartedGame,
     setCharacters: charMgmt.setCharacters,
     setActiveCharacter: charMgmt.setActiveCharacter,
     setCampaigns,
+    setAdventureContext,
     setPdfMemory: pdf.setPdfMemory,
     setActiveGameState: charMgmt.setActiveGameState,
     setAiSettings,
@@ -307,7 +314,7 @@ export default function Home() {
     if (
       typeof window !== 'undefined' &&
       languageSelectionRequired === false &&
-      hasRequiredKeys() &&
+      (hasRequiredKeys() || hasLocalPlaytestTransport()) &&
       !rulesStatus.loading &&
       rulesStatus.hasRules &&
       !showApiKeysModal &&
@@ -395,6 +402,7 @@ export default function Home() {
     setActiveCharacter: charMgmt.setActiveCharacter,
     setCharacters: charMgmt.setCharacters,
     pdfMemory: pdf.pdfMemory,
+    activateDossierForSession: pdf.activateDossierForSession,
     adventureContext,
     hotSeatConfig: hotSeat.config,
     setMessages: chat.setMessages,
@@ -539,11 +547,11 @@ export default function Home() {
   
   
   const handleStartGameGuarded = useCallback(() => {
-    if (!hasRequiredKeys()) {
+    if (!(hasRequiredKeys() || hasLocalPlaytestTransport())) {
       setShowApiKeysModal(true);
       return;
     }
-    if (!rulesStatus.hasRules) {
+    if (!rulesStatus.hasRules && !hasLocalPlaytestRules()) {
       setShowRulebookModal(true);
       return;
     }
@@ -677,7 +685,7 @@ export default function Home() {
       mode?: 'solo' | 'hot-seat',
       player2CharacterId?: string
     ) => {
-      if (!hasRequiredKeys()) {
+      if (!(hasRequiredKeys() || hasLocalPlaytestTransport())) {
         setShowApiKeysModal(true);
         return;
       }
@@ -818,8 +826,8 @@ export default function Home() {
   const handleApiKeysChange = useCallback(
     (open: boolean) => {
       setShowApiKeysModal(open);
-      if (!open && hasRequiredKeys()) {
-        if (rulesOnboardingCompleted === false || !rulesStatus.hasRules) {
+      if (!open && (hasRequiredKeys() || hasLocalPlaytestTransport())) {
+        if (!hasLocalPlaytestRules() && (rulesOnboardingCompleted === false || !rulesStatus.hasRules)) {
           setShowRulebookModal(true);
         }
       }
@@ -851,12 +859,12 @@ export default function Home() {
 
   // Sekwencja pierwszego startu: Język -> Klucz API -> Podręcznik Zasad CoC 7e -> Ekran Główny
   useEffect(() => {
-    if (languageSelectionRequired === false) {
-      if (!hasRequiredKeys()) {
+    if (languageSelectionRequired === false && !localTransport.loading) {
+      if (!(hasRequiredKeys() || hasLocalPlaytestTransport())) {
         setShowApiKeysModal(true);
       } else if (
-        rulesOnboardingCompleted === false ||
-        (!rulesStatus.loading && !rulesStatus.hasRules)
+        !hasLocalPlaytestRules() && (rulesOnboardingCompleted === false ||
+        (!rulesStatus.loading && !rulesStatus.hasRules))
       ) {
         setShowRulebookModal(true);
       }
@@ -866,6 +874,9 @@ export default function Home() {
     rulesOnboardingCompleted,
     rulesStatus.loading,
     rulesStatus.hasRules,
+    localTransport.loading,
+    localTransport.serverConfigured,
+    localTransport.serverHasBaseRules,
   ]);
 
   useEffect(() => {
@@ -979,7 +990,9 @@ export default function Home() {
 
   
   useEffect(() => {
-    const savedChat = localStorage.getItem('chat-messages');
+    // useChat owns the complete history. Legacy is a fallback only, never an overwrite.
+    const savedChat = localStorage.getItem('zew_chat_messages') === null
+      ? localStorage.getItem('chat-messages') : null;
     if (savedChat) {
       try {
         const loadedMessages = (
@@ -992,7 +1005,7 @@ export default function Home() {
           .filter(
             (msg) => !msg.content.match(/^!\[[^\]]*\]\(\[IMG_BASE64\]\)$/)
           );
-        chat.setMessages(loadedMessages);
+        chat.setMessages(sanitizeHistoryForApi(loadedMessages));
       } catch (e) {
         console.error('Error loading chat:', e);
       }
@@ -1068,16 +1081,7 @@ export default function Home() {
 
   useEffect(() => {
     if (chat.messages.length > 0) {
-      const messagesToSave = chat.messages.slice(-500).map((msg) => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content.replace(
-          /!\[([^\]]*)\]\(data:image\/[^)]+\)/g,
-          '![obraz]([IMG_BASE64])'
-        ),
-        timestamp: msg.timestamp,
-        mechanicsContext: msg.mechanicsContext,
-      }));
+      const messagesToSave = sanitizeHistoryForApi(chat.messages.slice(-500));
       localStorage.setItem('chat-messages', JSON.stringify(messagesToSave));
     }
   }, [chat.messages]);
@@ -1093,6 +1097,7 @@ export default function Home() {
   
   
   const handleNewAdventure = () => {
+    chat.stopGeneration();
     chat.setMessages([]);
     chat.setActiveChaseState(null);
     chat.resetSessionEndState();
@@ -1116,6 +1121,9 @@ export default function Home() {
     localStorage.removeItem('adventure_context');
     
     hotSeat.disableHotSeat();
+    resetActiveAdventure(localStorage);
+    // Reload disposes every hook/ref, pending voice queue and old campaign callback.
+    window.location.reload();
   };
 
   
@@ -1448,7 +1456,7 @@ export default function Home() {
             save.setShowFullSaveModal(true);
           }}
           onColdStart={fullReset.handleFullReset}
-          hasRules={rulesStatus.hasRules}
+          hasRules={rulesStatus.hasRules || (localTransport.serverConfigured && localTransport.serverHasBaseRules)}
           hasSessionZero={sessionZeroCompleted}
           hasStartedGame={hasStartedGame}
           onOpenApiKeys={() => setShowApiKeysModal(true)}
@@ -1468,6 +1476,9 @@ export default function Home() {
           sessionEndStatus={chat.sessionEndStatus}
           sessionSaveStatus={chat.sessionSaveStatus}
           onRetrySessionSave={chat.retrySessionSave}
+          dossierProtocolFailure={chat.dossierProtocolFailure}
+          pendingDossierSkillRollRetry={chat.pendingDossierSkillRollRetry}
+          retryDossierSkillRoll={chat.retryDossierSkillRoll}
           onConfirmAcquiredItem={chat.confirmAcquiredItem}
           onDismissAcquiredItem={chat.dismissAcquiredItem}
           onCharacterUpdate={charMgmt.handleUpdateCharacter}

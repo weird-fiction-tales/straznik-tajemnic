@@ -82,12 +82,12 @@ export const AMERICAN_COLD_CASES_ADVENTURES: AdventureContext[] = [
     doomClock: {
       deadline: {
         year: 1894,
-        month: 11,
+        month: 10,
         day: 20,
         hour: 2,
         minute: 0,
       },
-      totalHours: 8,
+      totalHours: 7.5,
       stages: [
         {
           phase: 0,

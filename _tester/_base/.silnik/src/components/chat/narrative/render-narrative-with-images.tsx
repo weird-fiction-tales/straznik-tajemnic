@@ -19,9 +19,11 @@ import { isPureTextMode } from '@/lib/api-keys-service';
 export function renderNarrativeWithImages(
   content: string,
   key: number,
-  onImageClick?: (imgUrl: string, allImages: string[]) => void
+  onImageClick?: (imgUrl: string, allImages: string[]) => void,
+  allowInlineImages = true,
 ): ReactNode {
-  if (isPureTextMode()) {
+  // Dossier assets must use an acquired record ID, never a model-supplied URL.
+  if (!allowInlineImages || isPureTextMode()) {
     const cleanText = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '').trim();
     return (
       <p

@@ -23,14 +23,17 @@ describe('Strefa 11 & American Mythos Cold Cases Adventures & Handouts Assets (I
     }
   });
 
-  it('każdy handout w Strefie 11 posiada fizycznie istniejący plik obrazu WebP na dysku', () => {
+  it('każdy handout w Strefie 11 posiada fizycznie istniejący plik obrazu PNG lub WebP na dysku', () => {
     for (const adv of STREFA_11_ADVENTURES) {
       for (const handout of adv.handouts || []) {
-        expect(handout.image).toMatch(/^\/handouts\/.*\.webp$/);
+        expect(handout.image).toMatch(/^\/handouts\/.*\.(?:webp|png)$/);
         const diskPath = path.join(publicDir, handout.image);
         expect(fs.existsSync(diskPath)).toBe(true);
         const stats = fs.statSync(diskPath);
         expect(stats.size).toBeGreaterThan(1000); // nie pusty plik
+        const bytes = fs.readFileSync(diskPath);
+        if (handout.image.endsWith('.png')) expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
+        else { expect(bytes.subarray(0,4).toString()).toBe('RIFF'); expect(bytes.subarray(8,12).toString()).toBe('WEBP'); }
       }
     }
   });

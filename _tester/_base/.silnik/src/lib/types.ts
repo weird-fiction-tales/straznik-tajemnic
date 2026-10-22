@@ -12,6 +12,11 @@ export type {
 import type { CharacterMagicState } from './magic/types';
 import type { DiceRollTrace } from './dice-roll-trace';
 import type {
+  FirearmResolutionContext,
+  VehicleCollisionResolutionContext,
+  DiceRollResolutionContext,
+} from './parsers/types';
+import type {
   InvestigatorRequirements,
   AdventurePuzzle,
   AdventureHandout,
@@ -178,11 +183,30 @@ export interface Message {
   mechanicsContext?: {
     chase?: ChaseState;
     combat?: { resolutions: CombatResolution[] };
+    firearmResolutions?: FirearmResolutionContext[];
+    vehicleCollisionResolutions?: VehicleCollisionResolutionContext[];
+    diceRollResolutions?: DiceRollResolutionContext[];
+    development?: { completed: true; luckRecovered: boolean };
+    ideaRoll?: {
+      completed: true;
+      outcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble';
+      subjectTitle?: string;
+      miceLens: 'milieu' | 'inquiry' | 'character' | 'event';
+    };
+    skillRolls?: import('./parsers/types').SkillRollResolution[];
+    /** Scope of the actual local roll, retained in history and full saves. */
+    skillRollScope?: { playthroughId: string; adventureId: string };
+    sanity?: { activeBoutOfMadness: true };
   };
   // IND-262: klucze obrazów w IndexedDB (persistentMediaCache, store chat-images).
   // Lekkie - przeżywają localStorage (sanitizer wycina tylko base64). Po reloadzie
   // hydrują generatedImages z cache → obrazy "wracają na miejsce".
   generatedImageCacheIds?: string[];
+  /** Acquired local dossier handouts; legacy adventures may use a retrieval allowlist. */
+  dossierHandoutRecordIds?: string[];
+  dossierInventoryWritesAllowed?: boolean;
+  /** Edition for locally acquired original handouts; image bytes live only in the local library. */
+  dossierHandoutBinding?: { adventureId: string; editionFingerprint: string };
   skillTests?: SkillTestData[]; // Tacka testów [TEST:...] (skillValue dociągnięte z karty postaci)
   diceRollEvents?: DiceRollEventData[]; // Bezpośrednie rzuty kośćmi [DICE:...] z fizyczną animacją 3D
   hazardEvents?: HazardEventData[]; // Zagrożenia środowiskowe CoC 7e RAW [ZAGROŻENIE:...]
@@ -512,6 +536,8 @@ export type DocumentSubType =
   | 'journal_page'; // Pamiętnik / notatka ręczna
 
 export interface EquipmentItem {
+  /** Identity of a unique acquired dossier object; no source document contents. */
+  dossierBinding?: { adventureId: string; editionFingerprint: string; recordId: string };
   id: string;
   /** Stabilny identyfikator wzorca katalogowego, jeśli ten egzemplarz go ma. */
   templateId?: string;
@@ -619,6 +645,8 @@ export interface ActiveBoutOfMadness {
 
 export interface Character {
   id: string;
+  /** Characteristic-generation method selected in the investigator wizard. */
+  creationMethod?: 'standard' | 'alternate';
   /** Identyfikator wzorca, jeśli postać powstała z gotowego badacza. */
   sourcePresetId?: string;
   name: string;
@@ -1079,18 +1107,8 @@ export interface SkillTestModifier {
 }
 
 // Dane testu umiejętności (parsowane z odpowiedzi AI)
-export interface SkillTestData {
-  id: string;
-  skillName: string;
-  skillValue: number; // wartość z karty postaci
-  difficulty: 'zwykly' | 'trudny' | 'ekstremalny';
-  modifiers: SkillTestModifier[];
-  justification: string; // fabularny opis sytuacji
-  stake?: string; // stawka testu (konsekwencje sukcesu/porażki) wyodrębniona z tagu [STAWKA: ...] (Issue #737)
-  characterName?: string; // adresat testu w duecie
-  characterId?: string; // ID rozwiązane z rosteru sesji
-  groupId?: string; // testy z jednej odpowiedzi MG
-}
+// Share parser metadata with persisted messages, including combined and targeted tests.
+export type SkillTestData = import('./parsers/types').SkillTestData;
 
 // Aktywny test oczekujący na wynik gracza
 export interface ActiveSkillTest {
@@ -1127,10 +1145,14 @@ export interface CutsceneState {
 // === PDF MEMORY & ADVENTURE CONTEXT ===
 
 export interface PdfMemory {
+  adventureId?: string;
   rulesUrl?: string;
   adventureUrl?: string;
   rulesFileName?: string;
   adventureFileName?: string;
+  /** Fingerprint of an exact locally recognized adventure edition with a released dossier pack. */
+  adventureDossierFingerprint?: string;
+  adventureDossierStatus?: 'ready' | 'unavailable';
   isProcessing?: boolean;
 }
 

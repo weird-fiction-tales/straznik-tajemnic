@@ -1,7 +1,22 @@
 import { cleanupContent } from './cleanup';
 import { formatNarrative } from './formatter';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 describe('cleanupContent', () => {
+  it('usuwa inline SFX bez pozostawienia nawiasu i bez ucinania dalszej narracji', () => {
+    const input = 'Trzask rozlega się niczym wystrzał z pistoletu [SFX: camera_shutter]\n\nTadeusz: „Co pan robi?”';
+    const cleaned = cleanupContent(input);
+    expect(cleaned).toBe('Trzask rozlega się niczym wystrzał z pistoletu \n\nTadeusz: „Co pan robi?”');
+    const markup = formatNarrative(input).map(node => renderToStaticMarkup(node)).join('');
+    expect(markup).toContain('niczym wystrzał z pistoletu');
+    expect(markup).toContain('Co pan robi?');
+    expect(markup).not.toContain('[');
+  });
+
+  it('usuwa pełny angielski tag SFX i zachowuje tekst po nim w tej samej linii', () => {
+    expect(cleanupContent('A flash. [SFX: camera_shutter] The room falls silent.'))
+      .toBe('A flash.  The room falls silent.');
+  });
   it('wycina tag [KONIEC_SESJI:POTWIERDZENIE] z tekstu narracji', () => {
     const input = 'Fabuła dochodzi do końca. Mrok spowija gabinet.\n\n[KONIEC_SESJI:POTWIERDZENIE]';
     const output = cleanupContent(input);
@@ -111,3 +126,12 @@ Wkraczasz do gabinetu.`;
 });
 
 
+
+test.each([
+ '[THOUGHTS: hidden culprit | NPC_MASK: guarded [calm] | CORRELATION: secret]\nThe door creaks.',
+ '[THOUGHTS: hidden culprit | NPC_MASK: guarded | ENEMY_RE\n\nThe door creaks.',
+])('English keeper-only planning never reaches rendered player prose: %s',text=>{
+ expect(cleanupContent(text)).toBe('The door creaks.');
+ const html=formatNarrative(text,undefined,undefined,false).map(node=>renderToStaticMarkup(node)).join('');
+ expect(html).toContain('The door creaks.');expect(html).not.toMatch(/hidden culprit|NPC_MASK|THOUGHTS/);
+});

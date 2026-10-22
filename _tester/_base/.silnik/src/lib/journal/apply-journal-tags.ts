@@ -32,6 +32,7 @@ import {
   type NpcDossierEntry,
   type NpcRelationshipStatus,
   type ClueEntry,
+  type ClueAcquisitionCause,
   type ClueProvenance,
   type LocationDossierEntry,
   normalizeClueType,
@@ -250,7 +251,9 @@ export function processCharacterJournalAndDossier(
   sceneCard: ExtractedSceneCard | null = null,
   sharedLocationName?: string,
   locationExhausted?: { locationName?: string } | null,
-  actReport?: ActReport | null
+  actReport?: ActReport | null,
+  clueAcquisitionCause?: ClueAcquisitionCause,
+  allowedDossierRecordIds: string[] = []
 ): { character: Character; changed: boolean } {
   const charWithDossier = ensureCharacterDossier(character);
   const dossier: InvestigatorDossier = {
@@ -260,6 +263,9 @@ export function processCharacterJournalAndDossier(
     locations: [...charWithDossier.investigatorDossier.locations],
     notes: [...charWithDossier.investigatorDossier.notes],
   };
+  const allowedDossierRecordIdSet = new Set(
+    allowedDossierRecordIds.map((id) => id.trim()).filter(Boolean),
+  );
 
   const existingJournal = [...(charWithDossier.journal ?? [])];
   const existingJournalIds = new Set(existingJournal.map((e) => e.id));
@@ -680,6 +686,7 @@ export function processCharacterJournalAndDossier(
   }
 
   // 2. Obsługa pozostałych tagów dziennika (w tym poszlak z syntezą 1-zdaniową i wektorem M.I.C.E.)
+  let failForwardCauseAssigned = false;
   tags.forEach((tag, index) => {
     // Tagi typu 'npc' oraz 'item' zostały już obsłużone powyżej
     if (tag.type === 'npc' || tag.type === 'item') return;
@@ -868,6 +875,10 @@ export function processCharacterJournalAndDossier(
       if (!existingClue) {
         const isKey = /klucz|core|key|główn/i.test(`${cleanClueTitle} ${tag.content}`);
         const resolvedMiceType = explicitMiceType || inferClueMiceType(cleanClueTitle, fact);
+        const isFailForwardClue = clueAcquisitionCause === 'fail_forward' && !failForwardCauseAssigned;
+        const dossierRecordId = tag.dossierRecordId && allowedDossierRecordIdSet.has(tag.dossierRecordId)
+          ? tag.dossierRecordId
+          : undefined;
         const newClue: ClueEntry = {
           id: `clue-${messageId}-${index}`,
           title: cleanClueTitle,
@@ -875,6 +886,8 @@ export function processCharacterJournalAndDossier(
           category: resolvedCategory,
           status: parseRevealedClue(tag).status,
           discoveryStatus: 'discovered',
+          ...(isFailForwardClue ? { acquisitionCause: 'fail_forward' as const } : {}),
+          ...(dossierRecordId ? { dossierRecordId } : {}),
           epistemicLayer: 'player_clue',
           provenance: resolvedProvenance,
           sourceNpc,
@@ -890,9 +903,18 @@ export function processCharacterJournalAndDossier(
           sourceJournalEntryId: `journal-${messageId}-${index}`,
         };
         dossier.clues.push(newClue);
+        if (isFailForwardClue) failForwardCauseAssigned = true;
         changed = true;
       } else {
         // Aktualizacja istniejącej poszlaki
+        if (
+          !existingClue.dossierRecordId &&
+          tag.dossierRecordId &&
+          allowedDossierRecordIdSet.has(tag.dossierRecordId)
+        ) {
+          existingClue.dossierRecordId = tag.dossierRecordId;
+          changed = true;
+        }
         const explicitStatus=parseRevealedClue(tag).explicitStatus;
         if(explicitStatus && existingClue.status!==explicitStatus) {existingClue.status=explicitStatus;changed=true;}
         if (existingClue.description !== fact && fact) {
@@ -1227,7 +1249,9 @@ function appendJournalToPartyWithoutActTag(
   characters: Character[],
   activeCharacter: Character,
   rawText: string,
-  messageId: string
+  messageId: string,
+  clueAcquisitionCause?: ClueAcquisitionCause,
+  allowedDossierRecordIds: string[] = []
 ): { characters: Character[]; activeCharacter: Character; changed: boolean } {
   const parsed = parseRevealedTags(rawText);
   const {journalTags:tags,npcTags,itemTags}=parsed;
@@ -1331,7 +1355,9 @@ function appendJournalToPartyWithoutActTag(
       sceneCard,
       locationEntry?.title,
       locationExhausted,
-      actReport
+      actReport,
+      clueAcquisitionCause,
+      allowedDossierRecordIds
     );
     if (res.changed) changedAny = true;
     return res.character;
@@ -1580,7 +1606,9 @@ export function appendJournalToParty(
   characters: Character[],
   activeCharacter: Character,
   rawText: string,
-  messageId: string
+  messageId: string,
+  clueAcquisitionCause?: ClueAcquisitionCause,
+  allowedDossierRecordIds: string[] = []
 ): {
   characters: Character[];
   activeCharacter: Character;
@@ -1601,7 +1629,9 @@ export function appendJournalToParty(
     nextCharacters,
     nextActive,
     stripNarrativeActTags(rawText),
-    messageId
+    messageId,
+    clueAcquisitionCause,
+    allowedDossierRecordIds
   );
   return { ...result, changed: result.changed || actChanged };
 }

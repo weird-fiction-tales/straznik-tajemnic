@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import type { Message, Character, Campaign, HotSeatConfig } from '@/lib/types';
+import type { Message, Character, Campaign, HotSeatConfig, AdventureContext } from '@/lib/types';
+import { getAdventureById } from '@/lib/adventures-data';
 import type { FullGameSave } from '@/lib/full-game-save-manager';
 import { normalizePdfMemory, type PdfMemory } from './usePdfMemory';
 import type { ActiveGameState } from '@/lib/types';
@@ -12,6 +13,9 @@ import type { EquipmentVisualEra } from '@/lib/types';
 import { clearStoredWorldSetup, storeWorldSetup } from '@/lib/world-setup';
 import { ensureCharacterDossier } from '@/lib/journal/dossier-migration';
 import { toast } from '@/components/ui/use-toast';
+import { timeManager, isCampaignClockSnapshot, isGameTime } from '@/lib/time-manager';
+import { isDossierInventoryState, storeDossierInventory, emptyDossierInventory } from '@/lib/adventure-dossier/inventory-state';
+import { isDossierWorldState, storeDossierWorldState } from '@/lib/adventure-dossier/world-object-state';
 import {
   clearCampaignMemoryScope,
   isCampaignMemoryScope,
@@ -54,6 +58,8 @@ export interface FullSaveRouterLike {
 export interface UseFullSaveOptions {
   equipmentVisualEra?: EquipmentVisualEra;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  setHasStartedGame?: (started: boolean) => void;
+  setAdventureContext?: (adventure: AdventureContext | null) => void;
   setCharacters: React.Dispatch<React.SetStateAction<Character[]>>;
   setActiveCharacter: React.Dispatch<React.SetStateAction<Character | null>>;
   setCampaigns: React.Dispatch<React.SetStateAction<Campaign[]>>;
@@ -75,6 +81,8 @@ export interface UseFullSaveOptions {
 export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
   const {
     setMessages,
+    setHasStartedGame,
+    setAdventureContext,
     setCharacters,
     setActiveCharacter,
     setCampaigns,
@@ -102,6 +110,34 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
       if (loading.current) return false;
       loading.current = true;
       try {
+        if (save.clockState !== undefined && !isCampaignClockSnapshot(save.clockState)) {
+          throw new Error(currentLocale === 'en' ? 'The saved game clock is invalid.' : 'Zapis zegara gry jest nieprawidłowy.');
+        }
+        if (save.dossierInventory && (!isDossierInventoryState(save.dossierInventory) ||
+          save.dossierInventory.editionFingerprint !== (save.pdfMemory as PdfMemory)?.adventureDossierFingerprint ||
+          save.dossierInventory.adventureId !== (save.pdfMemory as PdfMemory)?.adventureId)) {
+          throw new Error(currentLocale === 'en' ? 'The saved item state does not match this adventure.' : 'Zapis przedmiotów nie odpowiada tej przygodzie.');
+        }
+        if (save.dossierWorldState && (!isDossierWorldState(save.dossierWorldState) ||
+          save.dossierWorldState.editionFingerprint !== (save.pdfMemory as PdfMemory)?.adventureDossierFingerprint ||
+          save.dossierWorldState.adventureId !== (save.pdfMemory as PdfMemory)?.adventureId)) {
+          throw new Error(currentLocale === 'en' ? 'The saved world state does not match this adventure.' : 'Zapis stanu świata nie odpowiada tej przygodzie.');
+        }
+        // A save's source identity, never its prose/name or the current profile,
+        // binds the restored title and dossier handouts to their exact adventure.
+        const savedPdf = save.pdfMemory as PdfMemory | undefined;
+        const savedAdventureId = savedPdf?.adventureId ?? save.campaignMemory?.adventureId;
+        const savedAdventure = savedAdventureId ? getAdventureById(savedAdventureId) ?? null : null;
+        const hasDossier = Boolean(savedPdf?.adventureDossierFingerprint || save.dossierInventory ||
+          save.dossierWorldState || save.messages.some(message => message.dossierHandoutBinding));
+        if ((savedPdf?.adventureId && save.campaignMemory?.adventureId &&
+          savedPdf.adventureId !== save.campaignMemory.adventureId) ||
+          (hasDossier && (!savedAdventure || !savedPdf?.adventureId || !savedPdf.adventureDossierFingerprint)) ||
+          save.messages.some(message => message.dossierHandoutBinding &&
+            (message.dossierHandoutBinding.adventureId !== savedAdventureId ||
+              message.dossierHandoutBinding.editionFingerprint !== savedPdf?.adventureDossierFingerprint))) {
+          throw new Error(currentLocale === 'en' ? 'The save does not identify a matching adventure edition.' : 'Zapis nie wskazuje zgodnej przygody i edycji.');
+        }
         if (restoreRequest.current?.save !== save) {
           restoreRequest.current = { save, requestId: crypto.randomUUID() };
         }
@@ -124,6 +160,9 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
           throw new Error(restored.error || 'Nie udało się odtworzyć pamięci');
         }
         const campaignMemory = restored.scope;
+        if (savedAdventureId && campaignMemory.adventureId !== savedAdventureId) {
+          throw new Error(currentLocale === 'en' ? 'The restored memory belongs to another adventure.' : 'Odtworzona pamięć należy do innej przygody.');
+        }
         clearDeclarations?.();
         resetSessionEndState?.();
         // Wczytaj wiadomości
@@ -134,15 +173,30 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
             ? msg.content.replace(/\[KONIEC_SESJI:POTWIERDZENIE\]/gi, '').trimEnd()
             : msg.content,
           timestamp: new Date(msg.timestamp),
+          gameTime: isGameTime(msg.gameTime) ? msg.gameTime : undefined,
+          dossierHandoutRecordIds: msg.dossierHandoutRecordIds,
+          dossierHandoutBinding: msg.dossierHandoutBinding,
+          dossierInventoryWritesAllowed: msg.dossierInventoryWritesAllowed,
           illustrations: msg.illustrations || [],
           // Obrazy scen żyją w generatedImages (nie illustrations) - bez tego
           // wczytany save tracił ilustracje scen.
           generatedImages: msg.generatedImages || [],
+          generatedImageTypes: msg.generatedImageTypes,
+          generatedImageCacheIds: msg.generatedImageCacheIds,
+          skillTests: msg.skillTests,
           // Status urwanej narracji (MAX_TOKENS + zamówiona kontynuacja) musi
           // przeżyć pełny load, inaczej przycisk "Kontynuuj narrację" znikał.
           finishReason: msg.finishReason,
           continuationRequested: msg.continuationRequested,
-          mechanicsContext: msg.mechanicsContext,
+          mechanicsContext: msg.mechanicsContext && {
+            ...msg.mechanicsContext,
+            ...(msg.mechanicsContext.skillRollScope && save.campaignMemory &&
+              msg.mechanicsContext.skillRollScope.playthroughId === save.campaignMemory.playthroughId &&
+              msg.mechanicsContext.skillRollScope.adventureId === save.campaignMemory.adventureId &&
+              campaignMemory.adventureId === save.campaignMemory.adventureId
+              ? { skillRollScope: { playthroughId: campaignMemory.playthroughId, adventureId: campaignMemory.adventureId } }
+              : {}),
+          },
         }));
         setMessages(loadedMessages);
 
@@ -196,6 +250,11 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
         setCampaigns(save.campaigns);
         safeSetItem('campaigns', JSON.stringify(save.campaigns));
 
+        // Restore both in one React batch: usePdfMemory must not see the new
+        // edition paired with the previous adventure and archive it as foreign.
+        setAdventureContext?.(savedAdventure);
+        safeSetItem('adventure_context', JSON.stringify(savedAdventure));
+
         // Wczytaj PDF Memory
         if (save.pdfMemory) {
           const migratedPdfMemory = normalizePdfMemory(save.pdfMemory);
@@ -210,10 +269,41 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
         }
 
         storeCampaignMemoryScope(campaignMemory);
+        if (save.clockState) {
+          timeManager.restoreSnapshot(save.clockState);
+        } else {
+          // Old saves may retain a timestamp in the last message. Do not parse
+          // narration or carry a deadline over from another loaded campaign.
+          const lastTime = [...loadedMessages].reverse().find(msg => isGameTime(msg.gameTime))?.gameTime;
+          timeManager.setDeadline(null);
+          if (lastTime) timeManager.setTime(lastTime);
+        }
+        if (save.dossierInventory) {
+          storeDossierInventory({ ...save.dossierInventory, playthroughId: campaignMemory.playthroughId });
+        } else if ((save.pdfMemory as PdfMemory)?.adventureDossierFingerprint && (save.pdfMemory as PdfMemory)?.adventureId) {
+          storeDossierInventory(emptyDossierInventory({ playthroughId: campaignMemory.playthroughId,
+            adventureId: (save.pdfMemory as PdfMemory).adventureId!, editionFingerprint: (save.pdfMemory as PdfMemory).adventureDossierFingerprint! }));
+        }
+        if (save.dossierWorldState) {
+          storeDossierWorldState({ ...save.dossierWorldState, playthroughId: campaignMemory.playthroughId });
+        }
 
         // Przywróć listę NPC oraz lokacji z pliku zapisu do pamięci podręcznej
         if (Array.isArray(save.npcs)) {
-          safeSetItem('gm_npcs', JSON.stringify(save.npcs));
+          // A memory restore forks the saved playthrough. Move only its exact
+          // actors, retaining every played fact; foreign/unscoped actors stay foreign.
+          const savedNpcSession = hasDossier && save.campaignMemory?.adventureId === campaignMemory.adventureId
+            ? save.campaignMemory?.playthroughId : undefined;
+          const restoredNpcs = savedNpcSession ? save.npcs.map(npc => npc.sessionId === savedNpcSession
+            ? { ...npc, sessionId: campaignMemory.playthroughId } : npc) : save.npcs;
+          if (savedNpcSession && restoredNpcs.some(npc => npc.sessionId === campaignMemory.playthroughId)) {
+            safeSetItem(`dossier_npcs_session:${encodeURIComponent(campaignMemory.playthroughId)}`, JSON.stringify({
+              schemaVersion: 1, sessionId: campaignMemory.playthroughId,
+              adventureId: campaignMemory.adventureId, editionFingerprint: savedPdf!.adventureDossierFingerprint,
+              npcs: restoredNpcs,
+            }));
+          }
+          safeSetItem('gm_npcs', JSON.stringify(restoredNpcs));
         }
         if (Array.isArray(save.locations)) {
           safeSetItem('gm_locations', JSON.stringify(save.locations));
@@ -231,6 +321,13 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
           session: null,
           players: [],
         });
+
+        // Resume only a saved playable session. Persist the same lifecycle flag
+        // as useGameStart before locale navigation can remount either page.
+        const hasPlayableSession = migratedCharacters.some(character => character.id === save.activeCharacterId) &&
+          loadedMessages.some(message => (message.role === 'assistant' || message.role === 'user') && Boolean(message.content?.trim()));
+        safeSetItem('has_started_game', String(hasPlayableSession));
+        setHasStartedGame?.(hasPlayableSession);
 
         // Auto-synchronizacja języka przy wczytywaniu zapisu (Issue #490)
         const activeLocale: 'pl' | 'en' =
@@ -275,6 +372,8 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
     },
     [
       setMessages,
+      setHasStartedGame,
+      setAdventureContext,
       setCharacters,
       setActiveCharacter,
       setCampaigns,
@@ -299,6 +398,8 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
     ) {
       clearDeclarations?.();
       resetSessionEndState?.();
+      safeSetItem('has_started_game', 'false');
+      setHasStartedGame?.(false);
       // Wyczyść wiadomości
       setMessages([]);
 
@@ -335,6 +436,7 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
     clearDeclarations,
     resetSessionEndState,
     setMessages,
+    setHasStartedGame,
     setPdfMemory,
     setActiveGameState,
     stopCurrentAudio,

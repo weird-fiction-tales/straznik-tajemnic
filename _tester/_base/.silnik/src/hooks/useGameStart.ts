@@ -1,3 +1,10 @@
+import { isAuthoredAdventureId } from '@/lib/adventure-dossier/authored-scenarios';
+import { isRuntimeAuthorizedDossierRecord } from '@/lib/adventure-dossier/runtime-authorization';
+import { createDossierOpeningCommit } from '@/lib/adventure-dossier/commit-opening';
+import { loadRuntimeDossierPayload } from '@/lib/adventure-dossier/client-activation';
+import type { SSECallbacks } from '@/lib/sse-parser';
+import { offloadCharacterImages } from '@/lib/character-image-store';
+import { loadNpcSnapshot } from '@/lib/adventure-dossier/actor-initialization';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Character,
@@ -37,6 +44,7 @@ import {
 import { initializeAdventureNpcVoices } from '@/lib/npc-voice-mapping';
 import {
   createCampaignMemoryScope,
+  loadCampaignMemoryScope,
   storeCampaignMemoryScope,
 } from '@/core/memory/campaign-scope';
 import { isDocumentModelUseBlocked } from '@/lib/document-model-policy';
@@ -218,6 +226,12 @@ interface UseGameStartProps {
   setActiveCharacter: React.Dispatch<React.SetStateAction<Character | null>>;
   setCharacters: React.Dispatch<React.SetStateAction<Character[]>>;
   pdfMemory: PdfMemory;
+  activateDossierForSession?: (sessionId: string, adventureId: string) => Promise<{
+    ok: boolean;
+    reason?: string;
+    adventureDossierFingerprint?: string;
+    adventureDossierStatus?: 'ready';
+  }>;
   adventureContext: AdventureContext | null;
   hotSeatConfig: { enabled: boolean; players: HotSeatPlayer[] };
   setMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
@@ -266,6 +280,7 @@ export function useGameStart({
   setActiveCharacter,
   setCharacters,
   pdfMemory,
+  activateDossierForSession,
   adventureContext,
   hotSeatConfig,
   setMessages,
@@ -275,6 +290,8 @@ export function useGameStart({
   requirePlayerConfirmation,
   locale = 'pl',
 }: UseGameStartProps) {
+  const currentAdventureId=useRef(adventureContext?.id);
+  currentAdventureId.current=adventureContext?.id;
   const [isStarting, setIsStarting] = useState(false);
   const [startProgress, setStartProgress] = useState(0);
   const [startStatus, setStartStatus] = useState('');
@@ -307,11 +324,11 @@ export function useGameStart({
     }
   }, []);
 
-  // Cichy pre-warmup tras API w tle podczas menu głównego (kompilacja JIT tras Next.js)
+  // Cichy pre-warmup endpointu zdrowia Gemini podczas menu głównego.
+  // /api/chat-test przyjmuje wyłącznie POST z testem klucza; GET zwraca 405.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const warmupTimer = setTimeout(() => {
-      fetch('/api/chat-test', { method: 'GET' }).catch(() => {});
       fetch('/api/health/gemini', { method: 'GET' }).catch(() => {});
     }, 1200);
     return () => clearTimeout(warmupTimer);
@@ -422,7 +439,15 @@ export function useGameStart({
     // kolejne tury wracają do zwięzłej długości narzuconej przez gm-protocol.
     if (english && allPlayerCharacters.length > 1) {
       prompt +=
-        'This is the opening turn for the whole party. Start with an ordinary, period-appropriate scene, establish place and mood, then introduce the adventure hook naturally. Address the party in the plural. Do not play for the characters. Mark the starting place as [LOCATION: place name: brief atmosphere]. Add one opening journal entry as [JOURNAL:case:Beginning the investigation]1-2 sentences about why the party is here.[/JOURNAL] End with [What do you do?].\n';
+        'This is the OPENING TURN for the party (Hot Seat mode).\n\n' +
+        'PARTY INTRODUCTION - ORGANIC PLOT START:\n' +
+        '1. NARRATION & FORM: Address the investigators in the plural ("You see...", "You enter...") or smoothly alternate perspectives between characters.\n' +
+        '2. ORGANIC OPENING SCENE: DO NOT throw the players into a violent quest or direct threat immediately. Begin in an ordinary, period-appropriate social situation (e.g. dinner together at a restaurant, conversation in a study, a train journey, or casual chatter with an NPC).\n' +
+        '3. EXPOSITION & ATMOSPHERE: Allow the players to take in the time, place, and period atmosphere. Let them experience the world through environmental descriptions or NPC interaction (NEVER force players to debate among themselves in chat). Only after establishing the surroundings should you sow the first subtle note of dread and introduce the adventure HOOK.\n' +
+        '4. TURN CONCLUSION: Conclude the turn with an open question directed to the whole party: [What do you all do?] on its own separate line.\n\n' +
+        'DO NOT play for the player characters. Mark the starting location with the tag [LOCATION: Place Name | Atmosphere & Visual Prompt]. ' +
+        'Add an opening journal entry: [JOURNAL:case:Beginning the investigation]1-2 sentences about what brings our party to this place.[/JOURNAL] ' +
+        'Conclude with [What do you all do?] on its own separate line.\n';
     } else if (!english && allPlayerCharacters.length > 1) {
       prompt +=
         'To jest TURA WPROWADZAJĄCA do gry DLA DRUŻYNY (Hot Seat mode).\n\n' +
@@ -435,7 +460,15 @@ export function useGameStart({
         'Dodaj wpis otwierający do dziennika: [DZIENNIK:sprawa:Początek śledztwa]1-2 zdania: co sprowadza naszą drużynę w to miejsce.[/DZIENNIK]\n';
     } else if (english) {
       prompt +=
-        'This is the opening turn of the game. Begin with an ordinary, period-appropriate scene. Establish the location and atmosphere before introducing the adventure hook. Write in second person, do not play for the player character, and use slow-burn horror. Mark the starting place as [LOCATION: place name: brief atmosphere]. Add one opening journal entry as [JOURNAL:case:Beginning the investigation]1-2 sentences about where the character is and why they came here.[/JOURNAL] End with [What do you do?] on its own line.\n';
+        'This is the OPENING TURN of the game.\n\n' +
+        'ORGANIC WORLD INTRODUCTION - INSTRUCTIONS:\n' +
+        '1. OPENING SCENE: DO NOT throw the player into deep water and DO NOT thrust the quest hook in the very first sentence. Begin with an ordinary, period-appropriate situation (e.g. the investigator is drinking morning coffee, discussing mundane matters with a familiar NPC, browsing the daily press, or having dinner).\n' +
+        '2. SENSORY WORLD DISCOVERY: Build the period atmosphere and setting naturally. Immerse the investigator in the acoustics, smells, and lighting of the scene, or through casual conversation with an NPC, so the player can first sense where they are and who they are before any threat arises.\n' +
+        '3. GRADUAL PLOT HOOK INTRODUCTION: Only after establishing the setting and mundane routine, sow the first subtle unease beneath the surface of everyday life and weave the adventure HOOK in as a natural call-to-action.\n' +
+        '4. LITERARY STYLE & AGENCY: Write in second person ("You see...", "You smell..."), cultivate slow-burn dread without cheap monster jumpscares, and strictly respect the investigator\'s physical immunity.\n\n' +
+        'DO NOT play for the player character. Mark the starting location with the tag [LOCATION: Place Name | Atmosphere & Visual Prompt]. ' +
+        'Add an opening journal entry: [JOURNAL:case:Beginning the investigation]1-2 sentences about where I am and what brings me here.[/JOURNAL] ' +
+        'Conclude with the open question [What do you do?] on its own separate line.\n';
     } else {
       prompt +=
         'To jest TURA WPROWADZAJĄCA do gry.\n\n' +
@@ -887,6 +920,52 @@ export function useGameStart({
     generateThumbnailsInBackground(thumbnailCharacter ?? undefined);
 
     try {
+      const activePdfMemory = pdfMemory.adventureId && pdfMemory.adventureId !== adventureContext.id
+        ? Object.fromEntries(Object.entries(pdfMemory).filter(([key]) => !key.startsWith('adventure'))) as PdfMemory
+        : pdfMemory;
+      if (activePdfMemory.adventureDossierStatus === 'unavailable') {
+        throw new Error(locale === 'en' ? 'This edition has no ready adventure dossier.' : 'To wydanie nie ma jeszcze gotowej teczki przygody.');
+      }
+      let startPdfMemory = activePdfMemory;
+      if (activePdfMemory.adventureDossierFingerprint || (isAuthoredAdventureId(adventureContext.id) && activateDossierForSession)) {
+        if (!memoryScope || !adventureContext?.id || !activateDossierForSession) {
+          throw new Error('DOSSIER_SESSION_ACTIVATION_UNAVAILABLE');
+        }
+        setStartProgress(65);
+        setStartStatus(
+          locale === 'en'
+            ? 'Unlocking the exact adventure dossier locally...'
+            : 'Lokalne odblokowanie teczki dokładnego wydania...'
+        );
+        const activation = await activateDossierForSession(
+          memoryScope.playthroughId,
+          adventureContext.id,
+        );
+        if (!activation.ok) {
+          throw new Error(activation.reason || 'DOSSIER_SESSION_ACTIVATION_FAILED');
+        }
+        if (activation.adventureDossierFingerprint) {
+          startPdfMemory = { ...activePdfMemory, adventureDossierFingerprint: activation.adventureDossierFingerprint, adventureDossierStatus: 'ready' };
+        }
+      }
+
+      const openingPayload = startPdfMemory.adventureDossierFingerprint && adventureContext?.id
+        ? await loadRuntimeDossierPayload(adventureContext.id,startPdfMemory.adventureDossierFingerprint) : undefined;
+      const openingSceneImage = locale === 'pl' && openingPayload?.adventure_id === 'cien-nad-prabutami' &&
+        openingPayload.records.some(record=>record.evidence.approval==='pending' && isRuntimeAuthorizedDossierRecord(record))
+          ? '/handouts/cien-nad-prabutami/playtest/newsroom-1973.png' : undefined;
+      const dossierOpening = openingPayload && startPdfMemory.adventureDossierFingerprint && memoryScope && adventureContext?.id
+        ? createDossierOpeningCommit({
+            payload: openingPayload,
+            playthroughId:memoryScope.playthroughId,adventureId:adventureContext.id,
+            editionFingerprint:startPdfMemory.adventureDossierFingerprint,turnId:assistantMessageId,
+            location:adventureContext.activeLocationId || adventureContext.location || '',
+            now:new Date(),gameTime:timeManager.getTime(),era:adventureContext.yearRange || adventureContext.era || '1920s',
+            characters:characters.map(character=>character.id===thumbnailCharacter?.id?thumbnailCharacter:character),
+            activeCharacter:thumbnailCharacter ?? activeCharacter,skillTests:[],skillRolls:[],
+            isCurrent:()=>loadCampaignMemoryScope()?.playthroughId===memoryScope.playthroughId && currentAdventureId.current===adventureContext.id,
+          }, openingSceneImage) : undefined;
+
       const resolvedHotSeat = hotSeatConfig?.enabled
         ? {
             ...hotSeatConfig,
@@ -922,7 +1001,7 @@ export function useGameStart({
           body: JSON.stringify({
             message: introPrompt,
             messages: [],
-            pdfMemory: pdfMemory,
+            pdfMemory: startPdfMemory,
             // Sanityzuj postać (portret + miniatury ekwipunku = base64 ~MB) by nie
             // przekroczyć limitu payloadu /api/chat (regresja B2 28.06).
             character: sanitizeCharacterForApi(activeCharacter),
@@ -933,6 +1012,7 @@ export function useGameStart({
             assistantMessageId,
             eraContext: loadStoredWorldSetup()?.eraContext,
             locale,
+            npcs: loadNpcSnapshot(),
             isGameStart: true,
             aiSettings: aiSettings,
             gameTime: timeManager.getTime(),
@@ -1015,8 +1095,20 @@ export function useGameStart({
       // połykany przez try/catch parsera, surfaced przez onParseError → Sentry
       // na każdym starcie gry). Ten sam fix co useChat.ts:293.
       let streamedFullText = '';
-      let introImageTriggered = false;
-      const fullText = await parseSSEStream(response, {
+      let introImageTriggered = Boolean(openingSceneImage);
+      const parseOpeningStream = dossierOpening ? async (stream:Response, callbacks:SSECallbacks) => {
+        const accepted=await dossierOpening(stream);
+        if(accepted.rosterChanged) {
+          setCharacters(accepted.characters);setActiveCharacter(accepted.activeCharacter);
+          void offloadCharacterImages(accepted.characters);
+        }
+        setMessages([accepted.message]);
+        if(accepted.memory) notifyMemoryCommit(accepted.memory,locale);
+        callbacks.onText?.(accepted.text);
+        callbacks.onMetadata?.(accepted.metadata);
+        return accepted.text;
+      } : parseSSEStream;
+      const fullText = await parseOpeningStream(response, {
         onText: (text) => {
           streamedFullText = text;
           setMessages((prev) =>
@@ -1039,7 +1131,7 @@ export function useGameStart({
           }
         },
         onMetadata: (metadata) => {
-          notifyMemoryCommit(metadata,locale);
+          if (!dossierOpening) notifyMemoryCommit(metadata,locale);
           // Generowanie obrazu intro na podstawie opisu pierwszej sceny lub wyemitowanego promptu
           if (!introImageTriggered && aiSettings?.imageGenerationEnabled !== false && !isPureTextMode()) {
             introImageTriggered = true;
@@ -1138,7 +1230,7 @@ export function useGameStart({
 
       // IND-201 / Issue #153: auto-dziennik dla openingu (opening idzie tym samym /api/chat
       // z gm-protocol, może nieść [DZIENNIK:] z prefiksem @Imię). Idempotentne (dedup po messageId).
-      if (activeCharacter) {
+      if (activeCharacter && !dossierOpening) {
         const j = appendJournalToParty(
           characters,
           activeCharacter,
@@ -1254,6 +1346,7 @@ export function useGameStart({
     setActiveCharacter,
     setCharacters,
     pdfMemory,
+    activateDossierForSession,
     adventureContext,
     hotSeatConfig,
     setMessages,
