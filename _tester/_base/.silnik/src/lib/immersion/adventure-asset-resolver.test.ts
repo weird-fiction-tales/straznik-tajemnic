@@ -118,3 +118,67 @@ describe('AdventureAssetResolver (Issue #661)', () => {
     });
   });
 });
+
+describe('explicit asset directory', () => {
+  const fs = require('node:fs') as typeof import('node:fs');
+  const path = require('node:path') as typeof import('node:path');
+  it.each(['cien-nad-prabutami', 'englewood-murder-castle-1893'])(
+    'resolves every real %s manifest asset to an existing file while preserving case identity', (directory) => {
+      const publicRoot = path.join(process.cwd(), 'public');
+      const manifest = JSON.parse(fs.readFileSync(path.join(publicRoot, 'adventure-packs', directory, 'manifest.json'), 'utf8')) as AdventurePackManifest;
+      expect(manifest.caseId).not.toBe(directory);
+      expect(manifest.assetDirectory).toBe(directory);
+      for (const asset of manifest.assets) {
+        const result = resolveAdventureAsset({slugOrQuery:asset.id, manifest});
+        expect(result.assetUrl).toBe('/adventure-packs/' + directory + '/' + asset.file);
+        expect(fs.statSync(path.join(publicRoot, result.assetUrl!.slice(1))).isFile()).toBe(true);
+      }
+    }
+  );
+  it.each(['cien-nad-prabutami', 'englewood-murder-castle-1893'])(
+    'uses source clue IDs, visual categories, and separate audio assets in %s', (directory) => {
+      const publicRoot = path.join(process.cwd(), 'public');
+      const raw = JSON.parse(fs.readFileSync(path.join(publicRoot, 'adventure-packs', directory, 'manifest.json'), 'utf8')) as {
+        assets: Array<{ category?: string; clueId?: string }>;
+        audioAssets?: Array<{ category?: string; file?: string }>;
+      };
+      const expectedClueIds = directory === 'cien-nad-prabutami'
+        ? ['clue-sb-file-klin', 'clue-photo-prabuty']
+        : ['clue-blueprint-castle-2nd-floor', 'clue-vault-footprint-etching'];
+      expect(raw.assets.map(asset => asset.clueId)).toEqual(expect.arrayContaining(expectedClueIds));
+      const manifest = raw as unknown as AdventurePackManifest;
+      for (const clueId of expectedClueIds) {
+        const resolved = resolveAdventureAsset({slugOrQuery:clueId, manifest});
+        expect(resolved.priority).toBe(1);
+        expect(resolved.matchedAsset?.clueId).toBe(clueId);
+      }
+      expect(raw.assets.every(asset => ['kv', 'node', 'npc', 'item-clue', 'item-gear'].includes(asset.category ?? ''))).toBe(true);
+      expect(raw.audioAssets).toEqual(expect.arrayContaining([expect.objectContaining({category:'audio-handout'})]));
+      for (const asset of raw.audioAssets ?? []) {
+        expect(asset.file).toBeTruthy();
+        expect(fs.statSync(path.join(publicRoot, 'adventure-packs', directory, asset.file!)).isFile()).toBe(true);
+      }
+    }
+  );
+  const fixture: AdventurePackManifest = {
+    caseId:'logical-case', assetDirectory:'physical-folder', era:'1920s',
+    visualDna:{styleCore:'fixture',colorAndLightingScript:'fixture'},
+    assets:[{id:'direct-id',file:'test.webp',category:'npc',aspectRatio:'3:4',
+      catalogItemIdOverride:'catalog-id',nameHashes:[computeNameHash('Unique Person')],tagsPl:['tag-fixture']}],
+  };
+  it.each(['direct-id','catalog-id','Unique Person','tag-fixture'])('uses explicit directory for %s matching', query => {
+    expect(resolveAdventureAsset({slugOrQuery:query,manifest:fixture}).assetUrl).toBe('/adventure-packs/physical-folder/test.webp');
+  });
+  it('keeps caseId fallback for existing manifests without a directory override', () => {
+    const {assetDirectory: _unused, ...legacy} = fixture;
+    expect(resolveAdventureAsset({slugOrQuery:'direct-id',manifest:legacy}).assetUrl).toBe('/adventure-packs/logical-case/test.webp');
+  });
+  it.each(['../escape','a/b','a\\b','%2e%2e','/absolute','','.','..',null,42])(
+    'fails closed for unsafe explicit directory %s', invalid => {
+      const malformed = {...fixture,assetDirectory:invalid} as unknown as AdventurePackManifest;
+      const result = resolveAdventureAsset({slugOrQuery:'direct-id',manifest:malformed,otherManifests:[fixture]});
+      expect(result.assetUrl).toBeNull();
+      expect(result.priority).toBe(3);
+    }
+  );
+});

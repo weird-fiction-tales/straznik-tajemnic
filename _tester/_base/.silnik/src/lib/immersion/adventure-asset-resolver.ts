@@ -18,13 +18,37 @@ export interface AdventurePackAsset {
   nameHashes?: string[];
   nodeId?: string;
   clueId?: string;
+  npcId?: string;
   catalogItemIdOverride?: string;
+  tagsPl?: string[];
+  tagsEn?: string[];
+}
+
+export interface AdventurePackAudioAsset {
+  id: string;
+  category: 'audio-handout';
+  file: string;
+  audioId: string;
+  tagsPl?: string[];
+  tagsEn?: string[];
+}
+
+export interface AdventurePackHandoutAsset {
+  /** Stable slug from the active adventure's handout list. */
+  slug: string;
+  title: string;
+  image: string;
+  aspectRatio: '16:9' | '3:4';
+  nodeId?: string;
+  clueId?: string;
   tagsPl?: string[];
   tagsEn?: string[];
 }
 
 export interface AdventurePackManifest {
   caseId: string;
+  /** Physical public/adventure-packs directory when it differs from the logical case ID. */
+  assetDirectory?: string;
   era: string;
   pdfFingerprints?: string[];
   predefinedAdventureId?: string;
@@ -34,6 +58,9 @@ export interface AdventurePackManifest {
     cssFilterOverride?: string;
   };
   assets: AdventurePackAsset[];
+  /** Player-facing clue cards use their canonical adventure handout path. */
+  handouts?: AdventurePackHandoutAsset[];
+  audioAssets?: AdventurePackAudioAsset[];
 }
 
 export interface AssetResolveResult {
@@ -43,6 +70,7 @@ export interface AssetResolveResult {
   cssFilter?: string;
   enhancedPrompt?: string;
   matchedAsset?: AdventurePackAsset;
+  matchedHandout?: AdventurePackHandoutAsset;
 }
 
 /**
@@ -83,6 +111,35 @@ export function resolveAdventureAsset({
   const query = slugOrQuery.trim();
   const queryNorm = normalizeNameForHash(query);
   const queryHash = computeNameHash(query);
+  const assetDirectory = manifest?.assetDirectory === undefined ? manifest?.caseId : manifest.assetDirectory;
+  if (manifest && (typeof assetDirectory !== 'string' || assetDirectory.length > 200 ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(assetDirectory))) {
+    return { priority: 3, assetUrl: null, aspectRatio: '16:9', enhancedPrompt: query };
+  }
+
+  // Canonical player-facing evidence cards are already rendered in the
+  // adventure data. Prefer them to older pack artwork and before live fallback.
+  const handout = manifest?.handouts?.find((entry) => {
+    const exact = [entry.slug, entry.clueId].some(
+      (value) => value?.toLowerCase() === query.toLowerCase(),
+    );
+    if (exact) return true;
+    const searchable = [entry.title, ...(entry.tagsPl ?? []), ...(entry.tagsEn ?? [])];
+    return searchable.some((value) => {
+      const normalized = normalizeNameForHash(value);
+      return normalized.length >= 5 && (normalized === queryNorm || queryNorm.includes(normalized));
+    });
+  });
+
+  if (handout && /^\/handouts\/[a-zA-Z0-9_./-]+\.(?:png|webp|jpg|jpeg)$/i.test(handout.image) && !handout.image.includes('..')) {
+    return {
+      priority: 1,
+      assetUrl: handout.image,
+      aspectRatio: handout.aspectRatio,
+      cssFilter: manifest?.visualDna?.cssFilterOverride,
+      matchedHandout: handout,
+    };
+  }
 
   // --- Priorytet 1: Teczka Aktywnej Przygody ---
   if (manifest && manifest.assets.length > 0) {
@@ -101,7 +158,7 @@ export function resolveAdventureAsset({
     if (byIdOrFile) {
       return {
         priority: 1,
-        assetUrl: `/adventure-packs/${manifest.caseId}/${byIdOrFile.file}`,
+        assetUrl: `/adventure-packs/${assetDirectory}/${byIdOrFile.file}`,
         aspectRatio: byIdOrFile.aspectRatio,
         cssFilter,
         matchedAsset: byIdOrFile,
@@ -118,7 +175,7 @@ export function resolveAdventureAsset({
     if (byOverride) {
       return {
         priority: 1,
-        assetUrl: `/adventure-packs/${manifest.caseId}/${byOverride.file}`,
+        assetUrl: `/adventure-packs/${assetDirectory}/${byOverride.file}`,
         aspectRatio: byOverride.aspectRatio,
         cssFilter,
         matchedAsset: byOverride,
@@ -133,7 +190,7 @@ export function resolveAdventureAsset({
     if (byHash) {
       return {
         priority: 1,
-        assetUrl: `/adventure-packs/${manifest.caseId}/${byHash.file}`,
+        assetUrl: `/adventure-packs/${assetDirectory}/${byHash.file}`,
         aspectRatio: byHash.aspectRatio,
         cssFilter,
         matchedAsset: byHash,
@@ -154,7 +211,7 @@ export function resolveAdventureAsset({
     if (byTag) {
       return {
         priority: 1,
-        assetUrl: `/adventure-packs/${manifest.caseId}/${byTag.file}`,
+        assetUrl: `/adventure-packs/${assetDirectory}/${byTag.file}`,
         aspectRatio: byTag.aspectRatio,
         cssFilter,
         matchedAsset: byTag,

@@ -1,4 +1,5 @@
 import { CombatState, ParsedEvent, SkillTestData, SkillTestResult, SkillTestModifier, HazardEventData, HazardType, MeleeAttackReference, SpellCastEventData, TomeStudyEventData, OpposedMagicEventData, OpposedMeleeEventData } from './types';
+import type { PushedRollResolutionContext } from './types';
 import { COMBAT_END_PATTERNS, COMBAT_START_PATTERNS, DAMAGE_PLAYER_PATTERNS, SANITY_PATTERNS } from './patterns';
 
 // Wykrywanie walki
@@ -133,6 +134,7 @@ export function detectSanity(text: string): ParsedEvent | null {
 // Wykrywanie testów umiejętności (żądania testów)
 export function extractSkillTests(text: string): SkillTestData[] {
     const tests: SkillTestData[] = [];
+    const isCombat = detectCombat(text)?.isActive === true;
 
     // Ekstrakcja samodzielnych tagów [STAWKA: ...] lub [STAKE: ...] (Issue #737)
     const standaloneStakes: string[] = [];
@@ -157,6 +159,10 @@ export function extractSkillTests(text: string): SkillTestData[] {
         const modifiersRaw = match[3]?.trim() || '';
         let justification = match[4].trim();
         let stake: string | undefined = undefined;
+        // Optional metadata inside the existing TEST tag; never a success assertion.
+        const accessRefs = [...justification.matchAll(/(?:^|\|\s*)DOSSIER_ACCESS:\s*([a-zA-Z0-9._:-]{1,200})(?=\s*(?:\||$))/g)];
+        const dossierConditionId = accessRefs.length === 1 ? accessRefs[0][1] : undefined;
+        justification = justification.replace(/(?:^|\|\s*)DOSSIER_ACCESS:[^|]*/g, '').trim();
 
         // Sprawdź czy justification zawiera osadzony segment stawki, np. "... | STAWKA: ..." lub "STAWKA: ..."
         const embeddedStakeMatch = justification.match(/(?:^|\|\s*)(?:STAWKA|STAKE):\s*([^|]+)$/i);
@@ -220,7 +226,9 @@ export function extractSkillTests(text: string): SkillTestData[] {
             justification,
             stake,
             characterName,
+            ...(dossierConditionId ? { dossierConditionId } : {}),
             combined,
+            isCombat,
         });
     }
 
@@ -243,6 +251,87 @@ export function extractSkillTests(text: string): SkillTestData[] {
     }
 
     return tests;
+}
+
+export function extractPushedRollStake(
+  text: string,
+  expectedTestId: string,
+): { testId: string; failureStake: string } | null {
+  const pattern = /\[STAWKA_FORSOWANIA:\s*([^|\]]+)\|\s*([^\]]+)\]/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    const testId = match[1].trim();
+    const failureStake = match[2].trim();
+    if (
+      testId === expectedTestId &&
+      failureStake.length > 0 &&
+      failureStake.length <= 1000
+    ) {
+      return { testId, failureStake };
+    }
+  }
+  return null;
+}
+
+/** Removes AI-authored consequence entries; only the accepted typed stake is persisted. */
+export function stripPushedRollConsequenceEntries(text: string): string {
+  return text.replace(
+    /\[(?:DZIENNIK|JOURNAL):journal:(?:Konsekwencja forsowania|Pushed-roll consequence)\][\s\S]*?\[\/(?:DZIENNIK|JOURNAL)\]/gi,
+    '',
+  );
+}
+
+/** Builds the local journal entry from the exact stake the player accepted. */
+export function buildPushedRollConsequenceJournalEntry(
+  pushedRoll: PushedRollResolutionContext | undefined,
+  locale: 'pl' | 'en',
+): string {
+  if (
+    !pushedRoll ||
+    pushedRoll.passedRequirement ||
+    pushedRoll.stakePresented !== true ||
+    pushedRoll.playerAcceptedStake !== true
+  ) return '';
+
+  const stake = pushedRoll.failureStake
+    .replace(/[\r\n\u0000-\u001f\u007f]/g, ' ')
+    .trim()
+    .slice(0, 1000);
+  if (!stake) return '';
+
+  const title = locale === 'en' ? 'Pushed-roll consequence' : 'Konsekwencja forsowania';
+  return `\n\n[DZIENNIK:journal:${title}]${stake}[/DZIENNIK]`;
+}
+
+/** Recognizes a single explicit time loss; ambiguous or inferred durations are ignored. */
+export function extractExplicitPushedRollTimeCostMinutes(stake: string): number | null {
+  const normalized = stake
+    .toLocaleLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  const durationPattern = /\b(\d{1,4})\s*(minutes?|mins?|minut\w*|hours?|hrs?|godzin\w*|days?|dzien\w*|dni|doby?)\b/g;
+  const durations = [...normalized.matchAll(durationPattern)];
+  if (durations.length !== 1) return null;
+
+  const duration = durations[0];
+  const start = duration.index ?? 0;
+  const end = start + duration[0].length;
+  const precedingText = normalized.slice(Math.max(0, start - 48), start);
+  const followingText = normalized.slice(end, Math.min(normalized.length, end + 36));
+  const timeLossVerb = /\b(?:lose|loses|lost|spend|spends|spent|waste|wastes|wasted|cost|costs|take|takes|pass|passes|elapse|elapses|delay|delays|trac\w*|strac\w*|marnuj\w*|poswiec\w*|zajm\w*|mij\w*|uplyw\w*|koszt\w*)\b/;
+  if (!timeLossVerb.test(precedingText) && !timeLossVerb.test(followingText)) return null;
+
+  const amount = Number(duration[1]);
+  const unit = duration[2];
+  const multiplier = /^(?:hour|hr|godzin)/.test(unit)
+    ? 60
+    : /^(?:day|dzien|dni|doby)/.test(unit)
+      ? 24 * 60
+      : 1;
+  const minutes = amount * multiplier;
+  return Number.isInteger(minutes) && minutes > 0 && minutes <= 7 * 24 * 60
+    ? minutes
+    : null;
 }
 
 // Wykrywanie wyników rzutów i oznaczanie do rozwoju
@@ -362,7 +451,7 @@ export function extractHazardEvents(text: string): HazardEventData[] {
         }
 
         const rawType = (kv.typ || kv.type || positional[0] || '').toLowerCase();
-        let type: HazardType = 'falling';
+        let type: HazardType | undefined;
         if (rawType.includes('upad') || rawType.includes('fall')) {
             type = 'falling';
         } else if (rawType.includes('ogie') || rawType.includes('fire') || rawType.includes('płom')) {
@@ -377,15 +466,18 @@ export function extractHazardEvents(text: string): HazardEventData[] {
             type = 'poison';
         }
 
+        // Unknown categories are not evidence of a fall.
+        if (!type) continue;
+
         // Parsowanie wysokości dla upadku
         let fallHeightMeters: number | undefined = undefined;
         if (type === 'falling') {
             const heightStr = kv.wys || kv.wysokosc || kv.height || (positional[1] && /\d+/.test(positional[1]) ? positional[1] : undefined);
-            if (heightStr) {
-                const m = heightStr.match(/(\d+)/);
-                if (m) fallHeightMeters = parseInt(m[1], 10);
-            }
-            if (!fallHeightMeters) fallHeightMeters = 3;
+            // A missing/zero/malformed height must never become an invented 3 m fall.
+            const measured = heightStr?.match(/^\s*(\d+(?:[.,]\d+)?)\s*(?:m|metry|metrów|meters?|metres?)?\s*$/i);
+            if (!measured) continue;
+            fallHeightMeters = Number(measured[1].replace(',', '.'));
+            if (!Number.isFinite(fallHeightMeters) || fallHeightMeters <= 0) continue;
         }
 
         // Parsowanie ognia

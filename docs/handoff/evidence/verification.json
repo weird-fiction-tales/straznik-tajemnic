@@ -1,0 +1,39 @@
+{
+  "verifiedAt": "2026-10-23T10:36:49.542275+00:00",
+  "branch": "codex/showcase-windows-handoff",
+  "baseCommit": "9b04a60affd11b8405da479fa2f4385cda9f7b72",
+  "platform": "macOS arm64",
+  "buildId": "djMoRxENfjP2kF5zr1KaX",
+  "qaQuick": "passed",
+  "unitTests": {
+    "suites": 9,
+    "passed": 180
+  },
+  "browserTests": {
+    "passed": 5,
+    "locales": [
+      "pl",
+      "en"
+    ],
+    "fatalBrowserErrors": 0,
+    "aiCalls": 0
+  },
+  "media": {
+    "cien-nad-prabutami": {
+      "visuals": 23,
+      "handouts": 4,
+      "audio": 1,
+      "missingFiles": 0
+    },
+    "englewood-murder-castle-1893": {
+      "visuals": 25,
+      "handouts": 4,
+      "audio": 1,
+      "missingFiles": 0
+    }
+  },
+  "realAiPlaythroughVerified": false,
+  "latencyTargetVerified": false,
+  "windowsLauncherExecuted": false,
+  "macShowcaseInstalledThisSession": false
+}

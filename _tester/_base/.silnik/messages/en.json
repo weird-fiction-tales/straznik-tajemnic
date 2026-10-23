@@ -1,4 +1,7 @@
 {
+  "Dialog": {
+    "close": "Close"
+  },
   "CampaignMemory": {
     "failed": "This turn could not be saved to memory",
     "retry": "Retry save",
@@ -146,13 +149,13 @@
   },
   "QuickSetupModal": {
     "kicker": "Quick Adventure",
-    "description": "Set up a session from the Strefa 11 programme. Choose a mode, scenario and ready investigators from the television team.",
+    "description": "Set up an American Mythos Cold Cases session. Choose a mode, scenario and ready investigator.",
     "stepMode": "1. Choose play mode",
     "solo": "Solo mode",
     "soloDescription": "One player, one character",
     "hotSeat": "Hot Seat (Duet)",
     "hotSeatDescription": "Two players on one device",
-    "stepAdventure": "2. Choose a Strefa 11 scenario",
+    "stepAdventure": "2. Choose an American Mythos Cold Cases scenario",
     "stepCharacters": "3. Choose characters",
     "playerOne": "Player 1 (Primary Character):",
     "yourCharacter": "Your Character:",
@@ -2734,9 +2737,9 @@
           "ideology": "There's always a logical explanation - and if it's not there, it means that science has a lot to learn.",
           "significantPerson": "The ex-wife who left him because of his obsession with \"these strange things.\"",
           "meaningfulLocation": "The television recording studio, the only place that feels like it's in full control.",
-          "treasuredPossession": "The tape recorder from Sony's 1990s, which once recorded an EVP voice.",
+          "treasuredPossession": "An old field recorder on which he once captured an EVP voice.",
           "description": "He wears a distinctive black leather jacket with dark glasses hanging on his collar.",
-          "backstory": "Tomasz grew up in the shadow of the concrete blocks of grey Warsaw, which early developed an instinct of inquisitiveness and a cold, almost cynical distance to reality. As the star of the criminal department of a large capital journal, he gained the fame of an objective analyst seeking truth hidden in militia records. He always said, \"Every phenomenon has a logical explanation, and ignorance is just proof of gaps in science\". The breach of this barrier became for him a case of disappearances in the outskirts of Kampino Forest. It was there, alone, at three o'clock in the morning, that he caught on his reporter, tape recorder brand Sony (with whom he has not broken up for years) freezing blood in his veins the crack of the EVP, refusing the name of a being that should never be in the woods. This violent collision with the unknown ruined not only him a conventional career, but above all a marriage - the wife left, unable to withstand nostrils extended from fear and his obsessive nightly search for further \"Signals\". Today, he feels safe only in a cable surrounded, dark television studio, in his famous black leather coat with a raised collar, behind dark glasses. Despite the mastery and skepticism of the exposer swindlers and esoteric magicians, Thomas struggles every day to prove to himself that what he heard years ago on the tape was not the result of early insanity.",
+          "backstory": "Tomasz grew up in the shadow of the concrete blocks of grey Warsaw, which early developed an instinct of inquisitiveness and a cold, almost cynical distance to reality. As the star of the criminal department of a large capital journal, he gained the fame of an objective analyst seeking truth hidden in militia records. He always said, \"Every phenomenon has a logical explanation, and ignorance is just proof of gaps in science\". The breach of this barrier became for him a case of disappearances in the outskirts of Kampino Forest. There, alone at three in the morning, he captured a chilling EVP crackle on his field recorder, a voice uttering the name of a being that should never be in the woods. This violent collision with the unknown ruined not only him a conventional career, but above all a marriage - the wife left, unable to withstand nostrils extended from fear and his obsessive nightly search for further \"Signals\". Today, he feels safe only in a cable surrounded, dark television studio, in his famous black leather coat with a raised collar, behind dark glasses. Despite the mastery and skepticism of the exposer swindlers and esoteric magicians, Thomas struggles every day to prove to himself that what he heard years ago on the tape was not the result of early insanity.",
           "tacticalNotes": "Good at collecting information, making contacts and interviewing witnesses.",
           "traits": [
             "Composed",
@@ -4641,6 +4644,12 @@
     "defaultWeather": "Light fog, crisp air"
   },
   "MessageInput": {
+    "dossierSkillRollRetryDescription": "Your roll result is waiting to be sent. Do not roll again.",
+    "retryDossierSkillRoll": "Send the saved roll result again",
+    "dossierProtocolFailureTitle": "The response was not accepted",
+    "dossierProtocolFailureDescription": "The response could not be confirmed after one correction. The game history and state are unchanged. You can restore your declaration to the message input.",
+    "restoreDeclaration": "Restore declaration",
+    "restoreDeclarationOccupied": "The input contains new text. Keep it or clear the input to restore the previous declaration.",
     "sessionClosed": "The session has been safely closed. Your character and history are saved.",
     "turn": "Turn",
     "switchTo": "Switch to {name}",
@@ -4691,6 +4700,12 @@
     "awaitingClosureTitle": "The session is closing. Enter your final action in chat.",
     "endSession": "End Session",
     "endSessionTitle": "Send the end-of-session signal to Guardian of Secrets",
+    "pilotEndOrSave": "End or save",
+    "pilotSaveBeforeBreak": "Open the save dialog and save your game before taking a break.",
+    "pilotWithdraw": "Withdraw from the investigation",
+    "pilotWithdrawDescription": "Withdrawing ends this investigation with the mystery unresolved. Do you confirm this decision?",
+    "pilotConfirmWithdrawal": "Confirm withdrawal",
+    "pilotReturnToGame": "Return to the game",
     "createCharacter": "Create a new character",
     "saveLoad": "Save / Load",
     "saveGame": "Save game",
@@ -5367,6 +5382,11 @@
     "thanksMessage": "Thank you for the session! The character and development were saved to the investigator's records."
   },
   "RollTestResult": {
+    "fateKicker": "Let fate decide",
+    "testTitle": "Test: {skill}",
+    "fallbackPrompt": "Roll the dice to resolve the test.",
+    "passed": "PASSED",
+    "failed": "FAILED",
     "difficulty": "Difficulty",
     "difficultyRegular": "Regular",
     "difficultyHard": "Hard (½)",
@@ -5731,6 +5751,8 @@
     "multimodalNote": "Multimodality (image input) is automatically active for Gemini 1.5+ and requires no configuration."
   },
   "TTSSettings": {
+    "unavailableNotice": "Narration audio is unavailable. Further synthesis attempts have been paused.",
+    "localVoiceNotice": "Local narrator: {voice}",
     "eyebrow": "Keeper's Voice",
     "title": "Narration Voice-over",
     "stateEnabled": "Enabled",

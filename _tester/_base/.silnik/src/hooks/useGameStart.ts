@@ -1,3 +1,9 @@
+import { isAuthoredAdventureId } from '@/lib/adventure-dossier/authored-scenarios';
+import { createDossierOpeningCommit } from '@/lib/adventure-dossier/commit-opening';
+import { loadRuntimeDossierPayload } from '@/lib/adventure-dossier/client-activation';
+import type { SSECallbacks } from '@/lib/sse-parser';
+import { offloadCharacterImages } from '@/lib/character-image-store';
+import { loadNpcSnapshot } from '@/lib/adventure-dossier/actor-initialization';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Character,
@@ -37,10 +43,12 @@ import {
 import { initializeAdventureNpcVoices } from '@/lib/npc-voice-mapping';
 import {
   createCampaignMemoryScope,
+  loadCampaignMemoryScope,
   storeCampaignMemoryScope,
 } from '@/core/memory/campaign-scope';
 import { isDocumentModelUseBlocked } from '@/lib/document-model-policy';
 import { localizeAdventure } from '@/lib/immersion/strefa-11-localization';
+import { resolvePreparedAdventureVisual } from '@/lib/immersion/prepared-adventure-visuals';
 
 /**
  * Zadanie 6 (hardening demo-safe): chwilowy blip sieci ≠ crash startu gry.
@@ -218,6 +226,12 @@ interface UseGameStartProps {
   setActiveCharacter: React.Dispatch<React.SetStateAction<Character | null>>;
   setCharacters: React.Dispatch<React.SetStateAction<Character[]>>;
   pdfMemory: PdfMemory;
+  activateDossierForSession?: (sessionId: string, adventureId: string) => Promise<{
+    ok: boolean;
+    reason?: string;
+    adventureDossierFingerprint?: string;
+    adventureDossierStatus?: 'ready';
+  }>;
   adventureContext: AdventureContext | null;
   hotSeatConfig: { enabled: boolean; players: HotSeatPlayer[] };
   setMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
@@ -266,6 +280,7 @@ export function useGameStart({
   setActiveCharacter,
   setCharacters,
   pdfMemory,
+  activateDossierForSession,
   adventureContext,
   hotSeatConfig,
   setMessages,
@@ -275,6 +290,8 @@ export function useGameStart({
   requirePlayerConfirmation,
   locale = 'pl',
 }: UseGameStartProps) {
+  const currentAdventureId=useRef(adventureContext?.id);
+  currentAdventureId.current=adventureContext?.id;
   const [isStarting, setIsStarting] = useState(false);
   const [startProgress, setStartProgress] = useState(0);
   const [startStatus, setStartStatus] = useState('');
@@ -307,11 +324,11 @@ export function useGameStart({
     }
   }, []);
 
-  // Cichy pre-warmup tras API w tle podczas menu głównego (kompilacja JIT tras Next.js)
+  // Cichy pre-warmup endpointu zdrowia Gemini podczas menu głównego.
+  // /api/chat-test przyjmuje wyłącznie POST z testem klucza; GET zwraca 405.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const warmupTimer = setTimeout(() => {
-      fetch('/api/chat-test', { method: 'GET' }).catch(() => {});
       fetch('/api/health/gemini', { method: 'GET' }).catch(() => {});
     }, 1200);
     return () => clearTimeout(warmupTimer);
@@ -903,6 +920,69 @@ export function useGameStart({
     generateThumbnailsInBackground(thumbnailCharacter ?? undefined);
 
     try {
+      const activePdfMemory = pdfMemory.adventureId && pdfMemory.adventureId !== adventureContext.id
+        ? Object.fromEntries(Object.entries(pdfMemory).filter(([key]) => !key.startsWith('adventure'))) as PdfMemory
+        : pdfMemory;
+      if (activePdfMemory.adventureDossierStatus === 'unavailable') {
+        throw new Error(locale === 'en' ? 'This edition has no ready adventure dossier.' : 'To wydanie nie ma jeszcze gotowej teczki przygody.');
+      }
+      let startPdfMemory = activePdfMemory;
+      if (activePdfMemory.adventureDossierFingerprint || (isAuthoredAdventureId(adventureContext.id) && activateDossierForSession)) {
+        if (!memoryScope || !adventureContext?.id || !activateDossierForSession) {
+          throw new Error('DOSSIER_SESSION_ACTIVATION_UNAVAILABLE');
+        }
+        setStartProgress(65);
+        setStartStatus(
+          locale === 'en'
+            ? 'Unlocking the exact adventure dossier locally...'
+            : 'Lokalne odblokowanie teczki dokładnego wydania...'
+        );
+        const activation = await activateDossierForSession(
+          memoryScope.playthroughId,
+          adventureContext.id,
+        );
+        if (!activation.ok) {
+          throw new Error(activation.reason || 'DOSSIER_SESSION_ACTIVATION_FAILED');
+        }
+        if (activation.adventureDossierFingerprint) {
+          startPdfMemory = { ...activePdfMemory, adventureDossierFingerprint: activation.adventureDossierFingerprint, adventureDossierStatus: 'ready' };
+        }
+      }
+
+      const openingPayload = startPdfMemory.adventureDossierFingerprint && adventureContext?.id
+        ? await loadRuntimeDossierPayload(adventureContext.id,startPdfMemory.adventureDossierFingerprint) : undefined;
+      const prabutyOpeningAsset = resolvePreparedAdventureVisual(
+        'cien-nad-prabutami',
+        { prompt: '', type: 'location', locationName: adventureContext?.location },
+        'node-warszawa-redakcja',
+        true,
+      );
+      const prabutyOpeningSceneImage = locale === 'pl' && adventureContext?.id === 'cien-nad-prabutami'
+        ? prabutyOpeningAsset?.imageUrl
+        : undefined;
+      const englewoodOpeningAsset = resolvePreparedAdventureVisual(
+        'englewood-murder-castle-1893',
+        { prompt: '', type: 'location', locationName: adventureContext?.location },
+        'node-chicago-precinct',
+        true,
+      );
+      const openingSceneImage = prabutyOpeningSceneImage ?? (
+        locale === 'en' && adventureContext?.id === 'englewood-murder-castle-1893'
+          ? englewoodOpeningAsset?.imageUrl
+          : undefined
+      );
+      const dossierOpening = openingPayload && startPdfMemory.adventureDossierFingerprint && memoryScope && adventureContext?.id
+        ? createDossierOpeningCommit({
+            payload: openingPayload,
+            playthroughId:memoryScope.playthroughId,adventureId:adventureContext.id,
+            editionFingerprint:startPdfMemory.adventureDossierFingerprint,turnId:assistantMessageId,
+            location:adventureContext.activeLocationId || adventureContext.location || '',
+            now:new Date(),gameTime:timeManager.getTime(),era:adventureContext.yearRange || adventureContext.era || '1920s',
+            characters:characters.map(character=>character.id===thumbnailCharacter?.id?thumbnailCharacter:character),
+            activeCharacter:thumbnailCharacter ?? activeCharacter,skillTests:[],skillRolls:[],
+            isCurrent:()=>loadCampaignMemoryScope()?.playthroughId===memoryScope.playthroughId && currentAdventureId.current===adventureContext.id,
+          }, openingSceneImage) : undefined;
+
       const resolvedHotSeat = hotSeatConfig?.enabled
         ? {
             ...hotSeatConfig,
@@ -938,7 +1018,7 @@ export function useGameStart({
           body: JSON.stringify({
             message: introPrompt,
             messages: [],
-            pdfMemory: pdfMemory,
+            pdfMemory: startPdfMemory,
             // Sanityzuj postać (portret + miniatury ekwipunku = base64 ~MB) by nie
             // przekroczyć limitu payloadu /api/chat (regresja B2 28.06).
             character: sanitizeCharacterForApi(activeCharacter),
@@ -949,6 +1029,7 @@ export function useGameStart({
             assistantMessageId,
             eraContext: loadStoredWorldSetup()?.eraContext,
             locale,
+            npcs: loadNpcSnapshot(),
             isGameStart: true,
             aiSettings: aiSettings,
             gameTime: timeManager.getTime(),
@@ -992,6 +1073,9 @@ export function useGameStart({
           role: 'assistant',
           content: '',
           timestamp: new Date(),
+          ...(openingSceneImage && !dossierOpening
+            ? { generatedImages: [openingSceneImage], generatedImageTypes: ['scene' as const] }
+            : {}),
         },
       ]);
       let hasTransitionedToGame = false;
@@ -1031,8 +1115,20 @@ export function useGameStart({
       // połykany przez try/catch parsera, surfaced przez onParseError → Sentry
       // na każdym starcie gry). Ten sam fix co useChat.ts:293.
       let streamedFullText = '';
-      let introImageTriggered = false;
-      const fullText = await parseSSEStream(response, {
+      let introImageTriggered = Boolean(openingSceneImage);
+      const parseOpeningStream = dossierOpening ? async (stream:Response, callbacks:SSECallbacks) => {
+        const accepted=await dossierOpening(stream);
+        if(accepted.rosterChanged) {
+          setCharacters(accepted.characters);setActiveCharacter(accepted.activeCharacter);
+          void offloadCharacterImages(accepted.characters);
+        }
+        setMessages([accepted.message]);
+        if(accepted.memory) notifyMemoryCommit(accepted.memory,locale);
+        callbacks.onText?.(accepted.text);
+        callbacks.onMetadata?.(accepted.metadata);
+        return accepted.text;
+      } : parseSSEStream;
+      const fullText = await parseOpeningStream(response, {
         onText: (text) => {
           streamedFullText = text;
           setMessages((prev) =>
@@ -1055,7 +1151,7 @@ export function useGameStart({
           }
         },
         onMetadata: (metadata) => {
-          notifyMemoryCommit(metadata,locale);
+          if (!dossierOpening) notifyMemoryCommit(metadata,locale);
           // Generowanie obrazu intro na podstawie opisu pierwszej sceny lub wyemitowanego promptu
           if (!introImageTriggered && aiSettings?.imageGenerationEnabled !== false && !isPureTextMode()) {
             introImageTriggered = true;
@@ -1154,7 +1250,7 @@ export function useGameStart({
 
       // IND-201 / Issue #153: auto-dziennik dla openingu (opening idzie tym samym /api/chat
       // z gm-protocol, może nieść [DZIENNIK:] z prefiksem @Imię). Idempotentne (dedup po messageId).
-      if (activeCharacter) {
+      if (activeCharacter && !dossierOpening) {
         const j = appendJournalToParty(
           characters,
           activeCharacter,
@@ -1270,6 +1366,7 @@ export function useGameStart({
     setActiveCharacter,
     setCharacters,
     pdfMemory,
+    activateDossierForSession,
     adventureContext,
     hotSeatConfig,
     setMessages,

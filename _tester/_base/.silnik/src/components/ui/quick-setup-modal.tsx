@@ -20,6 +20,7 @@ import {
 } from '@/lib/immersion/strefa-11-localization';
 import { Character } from '@/lib/types';
 import { CharacterSheet } from './character-sheet';
+import { QUICK_SETUP_SHOWCASE_PROFILE } from './quick-setup-showcase-profile';
 
 interface QuickSetupModalProps {
   open: boolean;
@@ -40,12 +41,17 @@ export function QuickSetupModal({
 }: QuickSetupModalProps) {
   const t = useTranslations('QuickSetupModal');
   const locale = useLocale() as 'pl' | 'en';
+  const showcase = QUICK_SETUP_SHOWCASE_PROFILE.enabled
+    ? QUICK_SETUP_SHOWCASE_PROFILE.locales[locale]
+    : undefined;
   const rawAdventures = useMemo(
-    () => getQuickSetupAdventures(locale),
-    [locale]
+    () => getQuickSetupAdventures(locale).filter(
+      (adventure) => !showcase || adventure.id === showcase.adventureId
+    ),
+    [locale, showcase]
   );
   const [selectedAdventureId, setSelectedAdventureId] = useState<string>(
-    () => getQuickSetupAdventures(locale)[0]?.id || 'cien-nad-prabutami'
+    () => rawAdventures[0]?.id || 'cien-nad-prabutami'
   );
   
   const [playMode, setPlayMode] = useState<'solo' | 'hot-seat'>('solo');
@@ -66,14 +72,16 @@ export function QuickSetupModal({
 
   const availableCharacters = useMemo(() => {
     return getStrefa11CharactersForAdventure(selectedAdventureId)
+      .filter((character) => !showcase || character.id === showcase.characterId)
       .slice(0, 4)
       .map((character) => localizeStrefa11Character(character, locale));
-  }, [locale, selectedAdventureId]);
+  }, [locale, selectedAdventureId, showcase]);
 
   useEffect(() => {
-    setSelectedCharacter1('');
+    setSelectedCharacter1(showcase ? availableCharacters[0]?.id || '' : '');
     setSelectedCharacter2('');
-  }, [selectedAdventureId]);
+    if (showcase) setPlayMode('solo');
+  }, [selectedAdventureId, availableCharacters, showcase]);
 
   // Gdy gra zaczyna się uruchamiać, zamknij modal, aby odsłonić pełnoekranowy ekran ładowania TTSHardLoadingScreen
   useEffect(() => {
@@ -88,7 +96,11 @@ export function QuickSetupModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="quick-setup-modal" size="screen">
+      <DialogContent
+        data-testid="quick-setup-modal"
+        size="screen"
+        screenContentClassName="flex flex-col"
+      >
         <span className="pointer-events-none absolute left-2 top-2 h-4 w-4 border-l-2 border-t-2 border-brass/55" />
         <span className="pointer-events-none absolute right-2 top-2 h-4 w-4 border-r-2 border-t-2 border-brass/55" />
         <span className="pointer-events-none absolute bottom-2 left-2 h-4 w-4 border-b-2 border-l-2 border-brass/55" />
@@ -112,18 +124,19 @@ export function QuickSetupModal({
           <div className="h-px flex-1 bg-gradient-to-l from-transparent to-gold" />
         </div>
 
-        <div className="flex-1 overflow-y-auto journal-scroll space-y-6 pt-4 pr-2">
+        <div className="min-h-0 flex-1 overflow-y-auto journal-scroll space-y-6 pt-4 pr-2">
           {/* Wybór trybu */}
           <div>
-            <label className="block text-xs font-display uppercase tracking-[0.16em] text-brass mb-2 flex items-center gap-1.5">
+            <label className="block text-sm font-display uppercase tracking-[0.16em] text-brass mb-2 flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-primary" />
               {t('stepMode')}
             </label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
+                aria-pressed={playMode === 'solo'}
                 onClick={() => { setPlayMode('solo'); setSelectedCharacter2(''); }}
-                className={`p-3.5 border text-left transition-all relative flex items-center gap-3.5 ${
+                className={`min-h-11 p-3.5 border text-left transition-all relative flex items-center gap-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                   playMode === 'solo'
                     ? 'border-primary bg-[#0f1715] shadow-glow text-foreground'
                     : 'bg-[#14100c]/90 border-brass/30 hover:border-brass/70 hover:bg-[#1a1510] text-muted-foreground'
@@ -139,44 +152,47 @@ export function QuickSetupModal({
                   <User className="w-5 h-5 shrink-0" />
                 </div>
                 <div>
-                  <div className={`font-display text-xs uppercase tracking-[0.14em] font-semibold ${
+                  <div className={`font-display text-sm uppercase tracking-[0.14em] font-semibold ${
                     playMode === 'solo' ? 'text-primary' : 'text-foreground'
                   }`}>{t('solo')}</div>
-                  <div className="text-[10px] font-special-elite mt-0.5 opacity-80 tracking-wide">{t('soloDescription')}</div>
+                  <div className="text-sm font-special-elite mt-0.5 opacity-80 tracking-wide">{t('soloDescription')}</div>
                 </div>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setPlayMode('hot-seat')}
-                className={`p-3.5 border text-left transition-all relative flex items-center gap-3.5 ${
-                  playMode === 'hot-seat'
-                    ? 'border-primary bg-[#0f1715] shadow-glow text-foreground'
-                    : 'bg-[#14100c]/90 border-brass/30 hover:border-brass/70 hover:bg-[#1a1510] text-muted-foreground'
-                }`}
-              >
-                <span className={`pointer-events-none absolute top-1 left-1 w-2 h-2 border-t border-l ${playMode === 'hot-seat' ? 'border-primary' : 'border-brass/50'}`} />
-                <span className={`pointer-events-none absolute bottom-1 right-1 w-2 h-2 border-b border-r ${playMode === 'hot-seat' ? 'border-primary' : 'border-brass/50'}`} />
-                <div className={`p-2 border transition-colors ${
-                  playMode === 'hot-seat'
-                    ? 'border-primary/60 bg-primary/15 text-primary shadow-glow'
-                    : 'border-brass/30 bg-black/40 text-brass/70'
-                }`}>
-                  <Users className="w-5 h-5 shrink-0" />
-                </div>
-                <div>
-                  <div className={`font-display text-xs uppercase tracking-[0.14em] font-semibold ${
-                    playMode === 'hot-seat' ? 'text-primary' : 'text-foreground'
-                  }`}>{t('hotSeat')}</div>
-                  <div className="text-[10px] font-special-elite mt-0.5 opacity-80 tracking-wide">{t('hotSeatDescription')}</div>
-                </div>
-              </button>
+              {!showcase && (
+                <button
+                  type="button"
+                  aria-pressed={playMode === 'hot-seat'}
+                  onClick={() => setPlayMode('hot-seat')}
+                  className={`min-h-11 p-3.5 border text-left transition-all relative flex items-center gap-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                    playMode === 'hot-seat'
+                      ? 'border-primary bg-[#0f1715] shadow-glow text-foreground'
+                      : 'bg-[#14100c]/90 border-brass/30 hover:border-brass/70 hover:bg-[#1a1510] text-muted-foreground'
+                  }`}
+                >
+                  <span className={`pointer-events-none absolute top-1 left-1 w-2 h-2 border-t border-l ${playMode === 'hot-seat' ? 'border-primary' : 'border-brass/50'}`} />
+                  <span className={`pointer-events-none absolute bottom-1 right-1 w-2 h-2 border-b border-r ${playMode === 'hot-seat' ? 'border-primary' : 'border-brass/50'}`} />
+                  <div className={`p-2 border transition-colors ${
+                    playMode === 'hot-seat'
+                      ? 'border-primary/60 bg-primary/15 text-primary shadow-glow'
+                      : 'border-brass/30 bg-black/40 text-brass/70'
+                  }`}>
+                    <Users className="w-5 h-5 shrink-0" />
+                  </div>
+                  <div>
+                    <div className={`font-display text-sm uppercase tracking-[0.14em] font-semibold ${
+                      playMode === 'hot-seat' ? 'text-primary' : 'text-foreground'
+                    }`}>{t('hotSeat')}</div>
+                    <div className="text-sm font-special-elite mt-0.5 opacity-80 tracking-wide">{t('hotSeatDescription')}</div>
+                  </div>
+                </button>
+              )}
             </div>
           </div>
 
           {/* Wybór scenariusza */}
           <div>
-            <label className="block text-xs font-display uppercase tracking-[0.16em] text-brass mb-2 flex items-center gap-1.5">
+            <label className="block text-sm font-display uppercase tracking-[0.16em] text-brass mb-2 flex items-center gap-1.5">
               <BookOpen className="w-3.5 h-3.5 text-primary" />
               {t('stepAdventure')}
             </label>
@@ -184,10 +200,13 @@ export function QuickSetupModal({
               {adventures.map((adv) => {
                 const isSelected = selectedAdventureId === adv.id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={adv.id}
+                    aria-label={adv.title}
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedAdventureId(adv.id)}
-                    className={`p-3.5 border cursor-pointer transition-all relative flex flex-col justify-between min-h-[6rem] ${
+                    className={`p-3.5 border cursor-pointer transition-all relative flex flex-col justify-between min-h-[6rem] min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                       isSelected
                         ? 'border-primary bg-[#0f1715] shadow-glow text-foreground'
                         : 'bg-[#14100c]/90 border-brass/30 hover:border-brass/70 hover:bg-[#1a1510] text-muted-foreground'
@@ -196,19 +215,19 @@ export function QuickSetupModal({
                     <span className={`pointer-events-none absolute top-1 left-1 w-2 h-2 border-t border-l ${isSelected ? 'border-primary' : 'border-brass/50'}`} />
                     <span className={`pointer-events-none absolute bottom-1 right-1 w-2 h-2 border-b border-r ${isSelected ? 'border-primary' : 'border-brass/50'}`} />
                     <div>
-                      <div className={`font-display text-xs uppercase tracking-[0.12em] font-bold ${
+                      <div className={`font-display text-base whitespace-normal break-words uppercase tracking-[0.12em] font-bold ${
                         isSelected ? 'text-primary' : 'text-foreground'
                       }`}>
                         {adv.title}
                       </div>
-                      <div className="text-[15px] leading-relaxed font-serif mt-1.5 line-clamp-3 text-muted-foreground">
+                      <div className="text-base leading-relaxed font-serif mt-1.5 line-clamp-3 text-muted-foreground">
                         {adv.description}
                       </div>
                     </div>
-                    <div className="text-[10px] uppercase font-special-elite mt-3 self-start border border-brass/40 bg-black/60 text-brass px-2 py-0.5 tracking-wider">
+                    <div className="text-sm uppercase font-special-elite mt-3 self-start border border-brass/40 bg-black/60 text-brass px-2 py-0.5 tracking-wider">
                       {adv.eraLabel} · {adv.location}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -216,14 +235,14 @@ export function QuickSetupModal({
 
           {/* Wybór postaci */}
           <div>
-            <label className="block text-xs font-display uppercase tracking-[0.16em] text-brass mb-2 flex items-center gap-1.5">
+            <label className="block text-sm font-display uppercase tracking-[0.16em] text-brass mb-2 flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-primary" />
               {t('stepCharacters')}
             </label>
             
             {/* Gracz 1 */}
             <div className="mb-4">
-              <div className="text-xs font-special-elite uppercase tracking-[0.1em] text-brass/80 mb-2">
+              <div className="text-sm font-special-elite uppercase tracking-[0.1em] text-brass/80 mb-2">
                 {playMode === 'hot-seat' ? t('playerOne') : t('yourCharacter')}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
@@ -248,7 +267,8 @@ export function QuickSetupModal({
                           type="button"
                           disabled={isOtherChosen}
                           onClick={() => setSelectedCharacter1(c.id)}
-                          className="flex-1 text-left w-full relative"
+                          aria-pressed={isSelected}
+                          className="min-h-11 flex-1 text-left w-full relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                         >
                           <div className="aspect-[3/4] w-full overflow-hidden border-b border-brass/30 relative bg-black/50">
                             {c.portraitUrl ? (
@@ -273,10 +293,10 @@ export function QuickSetupModal({
                             )}
                           </div>
                           <div className="p-2.5">
-                            <div className={`font-display uppercase tracking-[0.08em] text-[12px] truncate ${isSelected ? 'text-primary font-bold' : 'text-foreground'}`}>
+                            <div className={`font-display uppercase tracking-[0.08em] text-base leading-relaxed whitespace-normal break-words ${isSelected ? 'text-primary font-bold' : 'text-foreground'}`}>
                               {c.name}
                             </div>
-                            <div className="text-[10px] font-special-elite text-brass/70 truncate mt-0.5 tracking-wider uppercase">
+                            <div className="text-sm font-special-elite text-brass/70 whitespace-normal break-words mt-0.5 tracking-wider uppercase">
                               {c.occupation}
                             </div>
                           </div>
@@ -287,7 +307,7 @@ export function QuickSetupModal({
                             e.stopPropagation();
                             setViewingCharacter(c as Character);
                           }}
-                          className="w-full py-1.5 border-t border-brass/30 bg-black/60 hover:bg-brass/15 text-brass hover:text-gold text-[10px] font-special-elite uppercase tracking-widest flex justify-center items-center gap-1.5 transition-colors mt-auto"
+                          className="w-full min-h-11 py-1.5 border-t border-brass/30 bg-black/60 hover:bg-brass/15 text-brass hover:text-gold text-sm font-special-elite uppercase tracking-widest flex justify-center items-center gap-1.5 transition-colors mt-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                         >
                           <Info className="w-3 h-3 text-gold/80" /> {t('biography')}
                         </button>
@@ -301,7 +321,7 @@ export function QuickSetupModal({
             {/* Gracz 2 */}
             {playMode === 'hot-seat' && (
               <div>
-                <div className="text-xs font-special-elite uppercase tracking-[0.1em] text-brass/80 mb-2">
+                <div className="text-sm font-special-elite uppercase tracking-[0.1em] text-brass/80 mb-2">
                   {t('playerTwo')}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
@@ -326,7 +346,8 @@ export function QuickSetupModal({
                             type="button"
                             disabled={isOtherChosen}
                             onClick={() => setSelectedCharacter2(c.id)}
-                            className="flex-1 text-left w-full relative"
+                            aria-pressed={isSelected}
+                            className="min-h-11 flex-1 text-left w-full relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                           >
                             <div className="aspect-[3/4] w-full overflow-hidden border-b border-brass/30 relative bg-black/50">
                               {c.portraitUrl ? (
@@ -351,10 +372,10 @@ export function QuickSetupModal({
                               )}
                             </div>
                             <div className="p-2.5">
-                              <div className={`font-display uppercase tracking-[0.08em] text-[12px] truncate ${isSelected ? 'text-primary font-bold' : 'text-foreground'}`}>
+                              <div className={`font-display uppercase tracking-[0.08em] text-base leading-relaxed whitespace-normal break-words ${isSelected ? 'text-primary font-bold' : 'text-foreground'}`}>
                                 {c.name}
                               </div>
-                              <div className="text-[10px] font-special-elite text-brass/70 truncate mt-0.5 tracking-wider uppercase">
+                              <div className="text-sm font-special-elite text-brass/70 whitespace-normal break-words mt-0.5 tracking-wider uppercase">
                                 {c.occupation}
                               </div>
                             </div>
@@ -365,7 +386,7 @@ export function QuickSetupModal({
                               e.stopPropagation();
                               setViewingCharacter(c as Character);
                             }}
-                            className="w-full py-1.5 border-t border-brass/30 bg-black/60 hover:bg-brass/15 text-brass hover:text-gold text-[10px] font-special-elite uppercase tracking-widest flex justify-center items-center gap-1.5 transition-colors mt-auto"
+                            className="w-full min-h-11 py-1.5 border-t border-brass/30 bg-black/60 hover:bg-brass/15 text-brass hover:text-gold text-sm font-special-elite uppercase tracking-widest flex justify-center items-center gap-1.5 transition-colors mt-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                           >
                             <Info className="w-3 h-3 text-gold/80" /> {t('biography')}
                           </button>
@@ -396,7 +417,7 @@ export function QuickSetupModal({
                     <div className="absolute inset-0 bg-white/20 animate-pulse" />
                   </div>
                 </div>
-                <div className="w-full flex items-center justify-between text-xs font-special-elite text-brass tracking-[0.08em] px-1">
+                <div className="w-full flex items-center justify-between text-sm font-special-elite text-brass tracking-[0.08em] px-1">
                   <span className="flex items-center gap-1.5 truncate">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary animate-ping shrink-0" />
                     <span className="truncate">{startStatus || t('statusSettingUp')}</span>
@@ -405,13 +426,13 @@ export function QuickSetupModal({
                 </div>
               </div>
             ) : (
-              <div className="hidden sm:block text-xs font-serif italic text-brass/80">
+              <div className="hidden sm:block text-sm font-serif italic text-brass/80">
                 {playMode === 'hot-seat' ? t('hotSeatDescription') : t('soloDescription')}
               </div>
             )}
 
             <Button
-              className={`font-display uppercase tracking-[0.16em] text-xs px-8 h-11 border transition-all ${
+              className={`font-display uppercase tracking-[0.16em] text-sm px-8 h-11 border transition-all ${
                 isStarting
                   ? 'bg-primary/40 border-primary text-primary-foreground cursor-wait'
                   : canStart

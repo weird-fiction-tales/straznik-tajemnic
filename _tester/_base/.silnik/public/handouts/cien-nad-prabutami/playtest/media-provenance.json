@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "humanApproval": "pending",
+  "assets": [
+    {
+      "file": "photo-1947.png",
+      "sha256": "bec27b3ceb2441cc1a9d7df2b529520e31d7fde923753920553b7902aaf89f85",
+      "kind": "generated-fictional-illustration"
+    },
+    {
+      "file": "newsroom-1973.png",
+      "sha256": "1d1cf5a1f06549b22ddad1095fbe77df1f95bd182f7a67feed77e2c1e3ed4818",
+      "kind": "generated-fictional-illustration"
+    },
+    {
+      "file": "klin-report-v2.png",
+      "sha256": "5d3b5b6995ec0dcb2f92cc057e362dd5c59d328f9a82a9d2c6c67b970c8c6762",
+      "kind": "generated-fictional-illustration-no-readable-copy"
+    },
+    {
+      "file": "recipe-152-v2.png",
+      "sha256": "735a4517c584ce769074caf1d5f9c4d7caa957b4dd6e62cd6dc7580d2874d6eb",
+      "kind": "generated-fictional-illustration-no-readable-copy"
+    },
+    {
+      "file": "tape-zk140-v2.png",
+      "sha256": "e74825bc30bfc4548b49c37285a224b60238478ca20b28a63bc349b2831513e5",
+      "kind": "generated-fictional-illustration-no-readable-copy"
+    }
+  ],
+  "audio": {
+    "path": "/audio/handouts/cien-nad-prabutami/tasma-sb-elblag.mp3",
+    "sha256": "c42d137c0b753472fbd93d07784f5421294e4526f6462afa20bfbbda9d6d7e57",
+    "transcript": "Meldunek operacyjny z podsłuchu obiektu KLIN w Elblągu... Dwanaście października, tysiąc dziewięćset siedemdziesiąty trzeci rok. Godzina dwudziesta trzecia zero zero. W celi klasztornej przez dwie godziny słychać było wyłącznie jednostajny szept modlitewny... A potem... nagły, gwałtowny pisk aparatury pomiarowej. Rejestrujemy natychmiastowy skok natężenia pola elektromagnetycznego. Wskaźniki w wozie transmisyjnym dosłownie powariowały... Szyby w oknach zaczynają drżeć. To nie jest rezonans akustyczny. On... on rozmawia z kimś, kogo tam fizycznie nie ma. Słyszę drugi głos, ale mikrofon dynamiczny nie rejestruje fali dźwiękowej... Sprawdzić to natychmiast.",
+    "sourceScript": "scripts/bake-handout-audio.mjs",
+    "newGeneration": false
+  }
+}

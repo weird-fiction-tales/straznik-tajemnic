@@ -343,3 +343,19 @@ describe('extractRefereeVetoEvents & stripRefereeVetoTags (CoC 7e RAW & Issue #3
 });
 
 
+
+
+describe('hazards never invent a fall height',()=>{
+ it('rejects the actual Prabuty travel tag with an explicit zero height',()=>{
+  expect(extractHazardEvents('[ZAGROŻENIE: @Tomasz Nowicki | typ=upadek | wys=0m | podloze=normalne | opis=Nocna podróż i chłód prowincji]')).toEqual([]);
+ });
+ it.each(['','0m','-3m','NaN','infinite','około bez pomiaru','3m lub 9m'])('rejects missing or invalid height %s',height=>{
+  expect(extractHazardEvents('[HAZARD: type=fall | '+(height?'height='+height+' | ':'')+'description=Travel]')).toEqual([]);
+ });
+ it('does not turn an unknown hazard into a fall',()=>{
+  expect(extractHazardEvents('[ZAGROŻENIE: typ=chłód | opis=Nocna podróż]')).toEqual([]);
+ });
+ it('preserves a real positive measured fall including its fractional height',()=>{
+  expect(extractHazardEvents('[HAZARD: type=fall | height=3.5m | description=Broken stair]')[0]).toMatchObject({type:'falling',fallHeightMeters:3.5});
+ });
+});

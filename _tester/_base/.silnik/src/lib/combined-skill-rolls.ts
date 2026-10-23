@@ -1,3 +1,4 @@
+import {getLocalizedSkillName} from '@/lib/data/character/skills';
 import type { CombinedSkillSubtest, SkillTestData } from './parsers/types';
 import {
   type RollOutcome,
@@ -137,8 +138,12 @@ export function generateCombinedResultTags(
  */
 export function formatCombinedRollForChat(
   resolution: CombinedRollResolution,
-  characterName?: string
+  characterName?: string,
+  locale: string = 'pl'
 ): string {
+  if(locale==='en')return '[🎲 Combined test: '+resolution.operator+']\nD100: '+resolution.rollValue+'\n'+
+    resolution.subtests.map(s=>'• '+getLocalizedSkillName(s.skillName,'en')+' ('+s.targetValue+'% → ≤'+s.threshold+'): '+(s.isSuccess?'SUCCESS':'FAILURE')).join('\n')+
+    '\nOverall result: '+(resolution.overallSuccess?'SUCCESS':'FAILURE');
   const opLabel = resolution.operator === 'OR' ? 'LUB (dowolny sukces)' : 'I (wymagane oba)';
   const bonusLabel =
     resolution.bonusDice !== 0

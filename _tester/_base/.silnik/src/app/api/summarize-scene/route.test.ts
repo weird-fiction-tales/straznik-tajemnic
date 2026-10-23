@@ -4,6 +4,7 @@ import { POST } from './route';
 const mockGenerateContent = jest.fn();
 
 jest.mock('@google/genai', () => ({
+  ThinkingLevel: { MINIMAL: 'MINIMAL' },
   GoogleGenAI: jest.fn().mockImplementation(() => ({
     models: { generateContent: mockGenerateContent },
   })),
@@ -53,6 +54,11 @@ describe('POST /api/summarize-scene', () => {
     const result = await response.json();
     const prompt = mockGenerateContent.mock.calls[0][0].contents[0].parts[0].text as string;
 
+    expect(mockGenerateContent.mock.calls[0][0].config).toMatchObject({
+      maxOutputTokens: 2048,
+      thinkingConfig: { thinkingLevel: 'MINIMAL' },
+      responseMimeType: 'application/json',
+    });
     expect(response.status).toBe(200);
     expect(prompt).toContain('Wiadomość sceny 12');
     expect(prompt).toContain('Stanisław twierdził, że list wysłano z doków.');

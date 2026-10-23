@@ -1,5 +1,7 @@
 'use client';
 
+import {useLocale,useTranslations} from 'next-intl';
+import {getLocalizedSkillName} from '@/lib/data/character/skills';
 import type { FC } from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -19,11 +21,12 @@ import {
   formatRollForAI,
   saveRollToHistory,
   mapDifficultyToRequired,
+  isSuccess,
 } from '@/lib/dice-utils';
 import { useLuckSpend } from './use-luck-spend';
 import { RollTestResult } from './roll-test-result';
 import type { ArtDecoDiceBreakdown } from './ArtDecoDice3D';
-import type { CombinedSkillSubtest } from '@/lib/parsers/types';
+import type { CombinedSkillSubtest, SkillRollResolution } from '@/lib/parsers/types';
 import {
   evaluateCombinedSkillCheck,
   formatCombinedRollForChat,
@@ -39,6 +42,8 @@ export interface RollTestData {
   testId: string;
   groupId?: string;
   characterId?: string;
+  targetNpcId?: string;
+  isCombat?: boolean;
   skill: string;
   value: number;
   difficulty: 'zwykly' | 'trudny' | 'ekstremalny';
@@ -59,7 +64,11 @@ interface RollTestModalProps {
   test: RollTestData | null;
   activeCharacter?: Character;
   /** Wysyła wynik rzutu do czatu (istniejąca ścieżka handleSendMessage). */
-  onRollSendToChat?: (message: string, systemContext: string) => void;
+  onRollSendToChat?: (
+    message: string,
+    systemContext: string,
+    mechanicsContext?: { skillRolls: SkillRollResolution[] },
+  ) => void;
   /** Zapisuje rzut do dziennika postaci (most appendRollToJournal w page.tsx). */
   onJournalRoll?: (
     roll: DiceRoll,
@@ -90,6 +99,8 @@ export const RollTestModal: FC<RollTestModalProps> = ({
   onJournalRoll,
   onSpendLuck,
 }) => {
+  const locale=useLocale();
+  const t=useTranslations('RollTestResult');
   // 'idle' = przed rzutem, 'rolling' = animacja, 'done' = wynik gotowy (oczekuje wysłania).
   const [phase, setPhase] = useState<'idle' | 'rolling' | 'done'>('idle');
   const [animValue, setAnimValue] = useState(0);
@@ -206,19 +217,37 @@ export const RollTestModal: FC<RollTestModalProps> = ({
   const handleSend = () => {
     if (!roll) return;
     if (onRollSendToChat) {
+      const mechanicsContext: { skillRolls: SkillRollResolution[] } | undefined = roll.outcome
+        ? {
+            skillRolls: [{
+              testId: test.testId,
+              resolutionId: roll.id,
+              characterId: test.characterId ?? activeCharacter?.id,
+              targetNpcId: test.targetNpcId,
+              requiredDifficulty: roll.requiredDifficulty ?? requiredDifficulty,
+              passedRequirement: roll.passedRequirement ?? isSuccess(roll.outcome),
+              outcome: roll.outcome,
+              luckSpent: roll.luckSpent ?? 0,
+              skillNames: combinedResolution
+                ? combinedResolution.subtests.map((subtest) => subtest.skillName)
+                : [test.skill],
+            }],
+          }
+        : undefined;
       if (combinedResolution) {
         const resultTags = generateCombinedResultTags(
           combinedResolution,
           activeCharacter?.name,
           (roll.luckSpent ?? 0) > 0
         ).join('\n');
-        const chatText = `${formatCombinedRollForChat(combinedResolution, activeCharacter?.name)}\n\n${resultTags}`;
+        const chatText = `${formatCombinedRollForChat(combinedResolution, activeCharacter?.name,locale)}\n\n${resultTags}`;
         const aiText = formatCombinedRollForAI(combinedResolution, activeCharacter?.name);
-        onRollSendToChat(chatText, aiText);
+        onRollSendToChat(chatText, aiText, mechanicsContext);
       } else {
         onRollSendToChat(
-          formatRollForChat(roll),
-          formatRollForAI(roll, activeCharacter?.name)
+          formatRollForChat(roll,locale),
+          formatRollForAI(roll, activeCharacter?.name),
+          mechanicsContext,
         );
       }
     }
@@ -232,14 +261,14 @@ export const RollTestModal: FC<RollTestModalProps> = ({
         <DialogHeader>
           <div className="text-center">
             <div className="font-special-elite text-[14px] uppercase tracking-[0.32em] text-primary">
-              Niech zadecyduje los
+              {t('fateKicker')}
             </div>
             <DialogTitle className="mt-1 justify-center font-display text-xl font-bold uppercase tracking-[0.1em] text-foreground">
-              Test: {test.skill}
+              {t('testTitle',{skill:test.combined?test.combined.skills.map(s=>getLocalizedSkillName(s.skillName,locale)).join(' '+test.combined.operator+' '):getLocalizedSkillName(test.skill,locale)})}
             </DialogTitle>
           </div>
           <DialogDescription className="text-center font-serif italic text-muted-foreground">
-            {test.justification || 'Rzuć kością, by rozstrzygnąć test.'}
+            {test.justification || t('fallbackPrompt')}
           </DialogDescription>
         </DialogHeader>
 

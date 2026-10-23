@@ -7,11 +7,13 @@ import {
   checkForDesktopUpdate,
   getCandidateWorkerPaths,
   getCurrentCommitSha,
+  getCurrentVersion,
   getUpdatePackageForPlatform,
   isNewerStableVersion,
   isSameCommit,
   readUpdateStatus,
   resolveAppTarget,
+  startDetachedUpdate,
   resolveUpdateWorkerPath,
   validateManifest,
 } from './update-service';
@@ -78,6 +80,28 @@ describe('desktop update service', () => {
 
     await expect(getCurrentCommitSha()).resolves.toBe(commitOld);
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('protects a frozen showcase even when stable updates are explicitly enabled', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'showcase-build-'));
+    const info = path.join(tmpDir, 'build-info.json');
+    fs.writeFileSync(info, JSON.stringify({ channel: 'showcase', version: '0.9.5-showcase.20261023', commitSha: commitOld }));
+    process.env.ZEW_BUILD_INFO_PATH = info;
+    process.env.ZEW_DESKTOP_SELF_UPDATE = '1';
+    process.env.ZEW_UPDATE_MANIFEST_URL = 'https://example.com/manifest.json';
+    const fetcher = jest.fn() as unknown as jest.MockedFunction<typeof fetch>;
+    try {
+      expect(canPerformSelfUpdate()).toBe(false);
+      await expect(getCurrentVersion()).resolves.toBe('0.9.5-showcase.20261023');
+      await expect(checkForDesktopUpdate(fetcher)).resolves.toMatchObject({
+        available: false, configured: false, canSelfUpdate: false,
+        currentVersion: '0.9.5-showcase.20261023',
+      });
+      expect(fetcher).not.toHaveBeenCalled();
+      await expect(startDetachedUpdate(manifest)).rejects.toThrow('Self-update is unavailable');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   it('reports an update but disables installation outside an app bundle', async () => {

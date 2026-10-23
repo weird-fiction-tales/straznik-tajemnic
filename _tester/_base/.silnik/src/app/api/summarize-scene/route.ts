@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { DEFAULT_GEMINI_MODEL } from '@/lib/ai-providers/constants';
 import type { JournalEntry, JournalEventType } from '@/lib/types';
 
@@ -153,7 +153,9 @@ Zwróć wyłącznie JSON z polami: title (krótki tytuł sceny), type (discovery
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         temperature: 0.2,
-        maxOutputTokens: 1024,
+        // Keep the small JSON recap from spending its response budget on reasoning.
+        maxOutputTokens: 2048,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         // IND-269: wymuś poprawny JSON - bez tego model bywa zwracał nie-JSON,
         // JSON.parse padał i wpis lądował jako fallback "Nieznana scena".
         responseMimeType: 'application/json',

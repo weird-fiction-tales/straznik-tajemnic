@@ -82,12 +82,12 @@ export const AMERICAN_COLD_CASES_ADVENTURES: AdventureContext[] = [
     doomClock: {
       deadline: {
         year: 1894,
-        month: 11,
+        month: 10,
         day: 20,
         hour: 2,
         minute: 0,
       },
-      totalHours: 8,
+      totalHours: 7.5,
       stages: [
         {
           phase: 0,
@@ -582,7 +582,7 @@ export const AMERICAN_COLD_CASES_ADVENTURES: AdventureContext[] = [
       {
         slug: 'blueprint-castle-2nd-floor',
         title: 'Composite Blueprint: 63rd & Wallace St. (Second Floor)',
-        image: '/handouts/englewood-murder-castle-1893/blueprint-castle-2nd-floor.webp',
+        image: '/handouts/englewood-murder-castle-1893/blueprint-castle-2nd-floor-v2.png',
         handoutType: 'map',
         nodeId: 'node-quinlan-quarters',
         textContent:
@@ -591,7 +591,7 @@ export const AMERICAN_COLD_CASES_ADVENTURES: AdventureContext[] = [
       {
         slug: 'letter-alice-pitezel-tin',
         title: 'Alice Pitezel’s Unmailed Letter (Found in Flue Tin)',
-        image: '/handouts/englewood-murder-castle-1893/letter-alice-pitezel-tin.webp',
+        image: '/handouts/englewood-murder-castle-1893/letter-alice-pitezel-tin-v2.png',
         handoutType: 'letter',
         nodeId: 'node-castle-basement-climax',
         textContent:
@@ -599,8 +599,8 @@ export const AMERICAN_COLD_CASES_ADVENTURES: AdventureContext[] = [
       },
       {
         slug: 'coroner-footprint-vault',
-        title: 'Forensic Sketch: Acid-Etched Footprint on Vault Door',
-        image: '/handouts/englewood-murder-castle-1893/coroner-footprint-vault.webp',
+        title: 'Forensic Exhibit: Acid-Etched Footprint on Vault Door',
+        image: '/handouts/englewood-murder-castle-1893/coroner-footprint-vault-v2.png',
         handoutType: 'report',
         nodeId: 'node-castle-second-floor',
         textContent:
@@ -609,7 +609,7 @@ export const AMERICAN_COLD_CASES_ADVENTURES: AdventureContext[] = [
       {
         slug: 'audio-edison-wax-cylinder',
         title: 'Edison Wax Cylinder: "Experiment IX - Room 14"',
-        image: '/handouts/englewood-murder-castle-1893/coroner-footprint-vault.webp',
+        image: '/handouts/englewood-murder-castle-1893/edison-wax-cylinder-1893-v2.png',
         audioUrl: '/audio/handouts/englewood-murder-castle-1893/edison-wax-cylinder-1893.mp3',
         handoutType: 'report',
         nodeId: 'node-castle-second-floor',

@@ -1,3 +1,4 @@
+import {isShowcaseServer} from '@/lib/adventure-dossier/authored-scenarios';
 /**
  * GET /api/health/gemini - self-check zdrowia klucza i modeli Gemini (IND-273 T2).
  *
@@ -15,6 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
+import { isSameOriginLocalDossierRequest } from '@/lib/adventure-dossier/local-request';
 import {
   DEFAULT_CHAT_MODEL,
   PRESET_MODELS,
@@ -43,6 +45,8 @@ export interface GeminiHealth {
   status: HealthStatus;
   /** true = klucz ważny, false = zły/wygasły, null = nieznany (sieć/brak klucza). */
   keyValid: boolean | null;
+  /** Explicit local playtest transport; never contains the server credential. */
+  serverConfigured?: boolean;
   /** Chat-capable ID z żywej listy (puste gdy klucz nie OK). */
   availableModels: string[];
   registry: {
@@ -256,6 +260,11 @@ export async function GET(request: NextRequest): Promise<Response> {
     return NextResponse.json<GeminiHealth>({
       status: 'ok',
       keyValid: true,
+      ...(isShowcaseServer() &&
+        !!process.env.GEMINI_API_KEY?.trim() &&
+        !request.headers.get('X-Gemini-Api-Key')?.trim() &&
+        isSameOriginLocalDossierRequest(request)
+        ? { serverConfigured: true } : {}),
       availableModels: Array.from(chatModels).sort(),
       registry: {
         chatModelsPresent,

@@ -1,3 +1,4 @@
+import type { DossierHandoutBinding } from '@/lib/adventure-dossier/local-handouts';
 /**
  * NarrativeFormatter formatNarrative - IND-144 micro 8/8 (extract z NarrativeFormatter.tsx)
  *
@@ -16,11 +17,13 @@ export function formatNarrative(
   playerColors?: Map<string, string>,
   onImageClick?: (imgUrl: string, allImages: string[]) => void,
   isDirectorMode?: boolean,
-  adventureContext?: AnyAdventureContext | null
+  adventureContext?: AnyAdventureContext | null,
+  allowedDossierHandoutRecordIds?: string[],
+  dossierHandoutBinding?: DossierHandoutBinding,
 ): ReactNode[] {
   let directorThoughts: string | null = null;
   if (isDirectorMode) {
-    const thoughtsRegex = new RegExp(`\\[MYŚLI_MG:\\s*(${NESTED_TAG_BODY})\\]`, 'i');
+    const thoughtsRegex = new RegExp(`\\[(?:MYŚLI_MG|THOUGHTS):\\s*(${NESTED_TAG_BODY})\\]`, 'i');
     const thoughtsMatch = content.match(thoughtsRegex);
     if (thoughtsMatch && thoughtsMatch[1].trim()) {
       directorThoughts = thoughtsMatch[1].trim();
@@ -38,6 +41,6 @@ export function formatNarrative(
   }
 
   return sections.map((section, index) =>
-    renderSection(section, index, playerColors, onImageClick, adventureContext)
+    renderSection(section, index, playerColors, onImageClick, adventureContext, allowedDossierHandoutRecordIds, dossierHandoutBinding)
   );
 }

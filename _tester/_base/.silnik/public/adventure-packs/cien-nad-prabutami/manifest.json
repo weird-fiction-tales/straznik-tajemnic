@@ -1,5 +1,6 @@
 {
   "caseId": "case-q01-cien-nad-prabutami",
+  "assetDirectory": "cien-nad-prabutami",
   "era": "1973-prl",
   "predefinedAdventureId": "cien-nad-prabutami",
   "visualDna": {
@@ -9,48 +10,504 @@
   },
   "assets": [
     {
+      "id": "opening-warszawa-redakcja",
+      "category": "node",
+      "file": "opening-warszawa-redakcja.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-warszawa-redakcja",
+      "tagsPl": [
+        "scena otwarcia",
+        "redakcja warszawa",
+        "redakcja sygnałów nieznanego",
+        "rtv warszawa",
+        "woronicza"
+      ],
+      "tagsEn": [
+        "opening scene",
+        "warsaw newsroom",
+        "1973 television office",
+        "tvp newsroom"
+      ]
+    },
+    {
       "id": "clue-01-teczka-sb",
       "category": "item-clue",
-      "file": "clue-01-teczka-sb.webp",
+      "file": "clue-sb-file-klin-v2.png",
       "aspectRatio": "16:9",
-      "clueId": "clue-01-teczka-sb",
-      "tagsPl": ["teczka sb", "tajne", "kryptonim klin", "elbląg", "1973", "prl"],
-      "tagsEn": ["sb file", "secret police", "codename klin", "elbląg", "1973", "communist poland"]
+      "clueId": "clue-sb-file-klin",
+      "tagsPl": [
+        "Tajna Teczka MSW 'Kryptonim KLIN'",
+        "clue-sb-file-klin",
+        "teczka sb",
+        "tajne",
+        "kryptonim klin",
+        "elbląg",
+        "1973",
+        "prl"
+      ],
+      "tagsEn": [
+        "Secret Ministry file, codename KLIN",
+        "clue-sb-file-klin",
+        "sb file",
+        "secret police",
+        "codename klin",
+        "elbląg",
+        "1973",
+        "communist poland"
+      ]
     },
     {
       "id": "clue-02-ruiny-kosciola",
       "category": "item-clue",
-      "file": "clue-02-ruiny-kosciola.webp",
+      "file": "clue-photo-prabuty-1947.png",
       "aspectRatio": "16:9",
-      "clueId": "clue-02-ruiny-kosciola",
-      "tagsPl": ["ruiny", "kościół św wojciecha", "prabuty", "gotyk", "cegła"],
-      "tagsEn": ["ruins", "st adalbert church", "prabuty", "gothic", "brick"]
+      "clueId": "clue-photo-prabuty",
+      "tagsPl": [
+        "Zdjęcie z klinowym pismem (1947)",
+        "clue-photo-prabuty",
+        "ruiny",
+        "kościół św wojciecha",
+        "prabuty",
+        "gotyk",
+        "cegła"
+      ],
+      "tagsEn": [
+        "Prabuty church ruins photograph",
+        "clue-photo-prabuty",
+        "ruins",
+        "st adalbert church",
+        "prabuty",
+        "gothic",
+        "brick"
+      ]
     },
     {
       "id": "npc-ojciec-klimuszko",
-      "category": "npc-portrait",
+      "category": "npc",
       "file": "npc-ojciec-klimuszko.webp",
       "aspectRatio": "3:4",
-      "npcId": "ojciec-klimuszko",
-      "tagsPl": ["ojciec klimuszko", "franciszkanin", "jasnowidz", "ziołolecznik", "portret"],
-      "tagsEn": ["father klimuszko", "franciscan", "clairvoyant", "herbalist", "portrait"]
+      "npcId": "npc-klimuszko",
+      "tagsPl": [
+        "ojciec andrzej czesław klimuszko",
+        "ojciec klimuszko",
+        "franciszkanin",
+        "jasnowidz",
+        "ziołolecznik",
+        "portret"
+      ],
+      "tagsEn": [
+        "father andrzej klimuszko",
+        "father klimuszko",
+        "franciscan",
+        "clairvoyant",
+        "herbalist",
+        "portrait"
+      ]
     },
     {
       "id": "npc-kapitan-sb",
-      "category": "npc-portrait",
+      "category": "npc",
       "file": "npc-kapitan-sb.webp",
       "aspectRatio": "3:4",
       "npcId": "kapitan-sb",
-      "tagsPl": ["kapitan sb", "oficer", "bezpieka", "prl", "portret"],
-      "tagsEn": ["sb captain", "secret police officer", "prl", "portrait"]
+      "tagsPl": [
+        "kapitan sb",
+        "oficer",
+        "bezpieka",
+        "prl",
+        "portret"
+      ],
+      "tagsEn": [
+        "sb captain",
+        "secret police officer",
+        "prl",
+        "portrait"
+      ]
     },
+    {
+      "id": "node-elblag-klasztor",
+      "category": "node",
+      "file": "node-elblag-klasztor.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-elblag-klasztor",
+      "tagsPl": [
+        "klasztor św. pawła elbląg",
+        "cela ojca klimuszki",
+        "klasztor elbląg"
+      ],
+      "tagsEn": [
+        "st paul monastery elblag",
+        "father klimuszko cell",
+        "elblag monastery"
+      ]
+    },
+    {
+      "id": "node-prabuty-wykopaliska",
+      "category": "node",
+      "file": "node-prabuty-wykopaliska.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-prabuty-wykopaliska",
+      "tagsPl": [
+        "stara plebania prabuty",
+        "cmentarz w prabutach",
+        "wykopaliska prabuty"
+      ],
+      "tagsEn": [
+        "old rectory prabuty",
+        "prabuty cemetery",
+        "prabuty excavation"
+      ]
+    },
+    {
+      "id": "node-msw-warszawa",
+      "category": "node",
+      "file": "node-msw-warszawa.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-msw-warszawa",
+      "tagsPl": [
+        "archiwum msw warszawa",
+        "gabinet generała majewskiego",
+        "departament iv"
+      ],
+      "tagsEn": [
+        "ministry of internal affairs archive warsaw",
+        "general majewski office",
+        "department iv archive"
+      ]
+    },
+    {
+      "id": "node-prabuty-krypta-climax",
+      "category": "node",
+      "file": "node-prabuty-krypta-climax.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-prabuty-krypta-climax",
+      "tagsPl": [
+        "krypta pod kościołem w prabutach",
+        "finał krypta prabuty",
+        "zawalona krypta prabuty"
+      ],
+      "tagsEn": [
+        "crypt beneath prabuty church",
+        "prabuty crypt climax",
+        "collapsed crypt prabuty"
+      ]
+    },
+    {
+      "id": "npc-helena-krawczyk",
+      "category": "npc",
+      "file": "npc-helena-krawczyk.png",
+      "aspectRatio": "3:4",
+      "npcId": "npc-helena-krawczyk",
+      "tagsPl": [
+        "helena krawczyk",
+        "redaktorka helena",
+        "redaktorka sygnałów nieznanego"
+      ],
+      "tagsEn": [
+        "helena krawczyk",
+        "editor helena",
+        "television editor"
+      ]
+    },
+    {
+      "id": "npc-jaroslaw-skrzynski",
+      "category": "npc",
+      "file": "npc-jaroslaw-skrzynski.png",
+      "aspectRatio": "3:4",
+      "npcId": "npc-jaroslaw-skrzynski",
+      "tagsPl": [
+        "dr jarosław skrzyński",
+        "jarosław skrzyński",
+        "konsultant bioelektroniki"
+      ],
+      "tagsEn": [
+        "dr jaroslaw skrzynski",
+        "jaroslaw skrzynski",
+        "scientific consultant"
+      ]
+    },
+    {
+      "id": "npc-tadeusz-polak",
+      "category": "npc",
+      "file": "npc-tadeusz-polak.png",
+      "aspectRatio": "3:4",
+      "npcId": "npc-tadeusz-polak",
+      "tagsPl": [
+        "tadeusz polak",
+        "kościelny tadeusz",
+        "kościelny prabuty"
+      ],
+      "tagsEn": [
+        "tadeusz polak",
+        "prabuty church caretaker",
+        "church caretaker"
+      ]
+    },
+    {
+      "id": "npc-edward-majewski",
+      "category": "npc",
+      "file": "npc-edward-majewski.png",
+      "aspectRatio": "3:4",
+      "npcId": "npc-edward-majewski",
+      "tagsPl": [
+        "generał edward majewski",
+        "generał majewski",
+        "majewski msw"
+      ],
+      "tagsEn": [
+        "general edward majewski",
+        "general majewski",
+        "majewski ministry"
+      ]
+    },
+    {
+      "id": "clue-prague-delegation-list",
+      "category": "item-clue",
+      "file": "clue-prague-delegation-list.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-prague-delegation-list",
+      "tagsPl": [
+        "Lista delegatów Kongresu w Pradze z pieczęcią MSW",
+        "clue-prague-delegation-list"
+      ],
+      "tagsEn": [
+        "Prague Congress delegation list stamped by the Ministry",
+        "clue-prague-delegation-list"
+      ]
+    },
+    {
+      "id": "clue-skrzynski-psychotronic-report",
+      "category": "item-clue",
+      "file": "clue-skrzynski-psychotronic-report.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-skrzynski-psychotronic-report",
+      "tagsPl": [
+        "Wstępny raport dr. Skrzyńskiego o anomalii w Prabutach",
+        "clue-skrzynski-psychotronic-report"
+      ],
+      "tagsEn": [
+        "Dr Skrzynski preliminary report on the Prabuty anomaly",
+        "clue-skrzynski-psychotronic-report"
+      ]
+    },
+    {
+      "id": "clue-herbal-recipe-152",
+      "category": "item-clue",
+      "file": "clue-herbal-recipe-152.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-herbal-recipe-152",
+      "tagsPl": [
+        "Rękopis Mieszanki Ziołowej Nr 152",
+        "clue-herbal-recipe-152"
+      ],
+      "tagsEn": [
+        "Herbal Mixture No. 152 manuscript",
+        "clue-herbal-recipe-152"
+      ]
+    },
+    {
+      "id": "clue-wiretap-bug-elblag",
+      "category": "item-clue",
+      "file": "clue-wiretap-bug-elblag.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-wiretap-bug-elblag",
+      "tagsPl": [
+        "Pluskwa podsłuchowa WUSW w celi klasztornej",
+        "clue-wiretap-bug-elblag"
+      ],
+      "tagsEn": [
+        "WUSW listening bug in the monastery cell",
+        "clue-wiretap-bug-elblag"
+      ]
+    },
+    {
+      "id": "clue-klimuszko-vision-crypt",
+      "category": "item-clue",
+      "file": "clue-klimuszko-vision-crypt.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-klimuszko-vision-crypt",
+      "tagsPl": [
+        "Prorocze widzenie o. Klimuszki o krypcie pod ołtarzem",
+        "clue-klimuszko-vision-crypt"
+      ],
+      "tagsEn": [
+        "Father Klimuszko vision of the crypt beneath the altar",
+        "clue-klimuszko-vision-crypt"
+      ]
+    },
+    {
+      "id": "clue-amber-ashes",
+      "category": "item-clue",
+      "file": "clue-amber-ashes.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-amber-ashes",
+      "tagsPl": [
+        "Luminescencyjny Popiół ze Skrzyni Skarbów (1945)",
+        "clue-amber-ashes"
+      ],
+      "tagsEn": [
+        "Luminescent ash from the treasure chest (1945)",
+        "clue-amber-ashes"
+      ]
+    },
+    {
+      "id": "clue-polak-testimony-monk",
+      "category": "item-clue",
+      "file": "clue-polak-testimony-monk.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-polak-testimony-monk",
+      "tagsPl": [
+        "Zeznanie kościelnego Tadeusza Polaka o ucieczce zakonnika",
+        "clue-polak-testimony-monk"
+      ],
+      "tagsEn": [
+        "Caretaker Tadeusz Polak testimony about the monk’s escape",
+        "clue-polak-testimony-monk"
+      ]
+    },
+    {
+      "id": "clue-military-tire-tracks",
+      "category": "item-clue",
+      "file": "clue-military-tire-tracks.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-military-tire-tracks",
+      "tagsPl": [
+        "Ślady opon wozu pelengacyjnego MSW i zgubiona przepustka",
+        "clue-military-tire-tracks"
+      ],
+      "tagsEn": [
+        "Ministry tracking truck tire tracks and lost pass",
+        "clue-military-tire-tracks"
+      ]
+    },
+    {
+      "id": "clue-sb-wiretap-elblag-log",
+      "category": "item-clue",
+      "file": "clue-sb-wiretap-elblag-log.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-sb-wiretap-elblag-log",
+      "tagsPl": [
+        "Taśma szpulowa ZK-140 z podsłuchu celi w Elblągu",
+        "clue-sb-wiretap-elblag-log"
+      ],
+      "tagsEn": [
+        "ZK-140 reel-to-reel tape of the Elblag cell wiretap",
+        "clue-sb-wiretap-elblag-log"
+      ]
+    },
+    {
+      "id": "clue-msw-excavation-order",
+      "category": "item-clue",
+      "file": "clue-msw-excavation-order.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-msw-excavation-order",
+      "tagsPl": [
+        "Rozkaz zabezpieczenia wykopalisk przy plebanii w Prabutach",
+        "clue-msw-excavation-order"
+      ],
+      "tagsEn": [
+        "Order to secure the excavation by the Prabuty rectory",
+        "clue-msw-excavation-order"
+      ]
+    }
+  ],
+  "handouts": [
+    {
+      "slug": "clue-photo-prabuty-1947",
+      "title": "Fotografia ruin kościoła w Prabutach (1947)",
+      "image": "/handouts/cien-nad-prabutami/playtest/photo-1947.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-warszawa-redakcja",
+      "clueId": "clue-photo-prabuty",
+      "tagsPl": [
+        "fotografia ruin",
+        "zdjęcie ruin kościoła",
+        "kościół w prabutach",
+        "fotografia prabuty 1947"
+      ],
+      "tagsEn": [
+        "prabuty church ruins photograph",
+        "st adalbert church ruins",
+        "prabuty 1947 photograph"
+      ]
+    },
+    {
+      "slug": "clue-sb-file-klin",
+      "title": "Teczka SB: Kryptonim KLIN",
+      "image": "/handouts/cien-nad-prabutami/playtest/klin-report-v2.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-msw-warszawa",
+      "clueId": "clue-sb-file-klin",
+      "tagsPl": [
+        "teczka sb",
+        "kryptonim klin",
+        "meldunek departamentu iv",
+        "raport klin"
+      ],
+      "tagsEn": [
+        "sb file klin",
+        "secret police file",
+        "department iv report",
+        "codename klin"
+      ]
+    },
+    {
+      "slug": "clue-herbal-recipe-152",
+      "title": "Rękopis receptury ziołowej nr 152",
+      "image": "/handouts/cien-nad-prabutami/playtest/recipe-152-v2.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-elblag-klasztor",
+      "clueId": "clue-herbal-recipe-152",
+      "tagsPl": [
+        "rękopis receptury ziołowej",
+        "receptura 152",
+        "zioła klasztor elbląg",
+        "notatka klimuszki"
+      ],
+      "tagsEn": [
+        "herbal recipe 152",
+        "monastery herbal manuscript",
+        "klimuszko recipe"
+      ]
+    },
+    {
+      "slug": "audio-sb-wiretap-elblag",
+      "title": "Taśma ZK-140: Meldunek z obserwacji celi w Elblągu",
+      "image": "/handouts/cien-nad-prabutami/playtest/tape-zk140-v2.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-msw-warszawa",
+      "clueId": "clue-sb-wiretap-elblag-log",
+      "tagsPl": [
+        "taśma szpulowa zk-140",
+        "podsłuch sb elbląg",
+        "nagranie z obserwacji celi",
+        "meldunek z taśmy"
+      ],
+      "tagsEn": [
+        "zk-140 wiretap tape",
+        "elblag surveillance recording",
+        "sb reel-to-reel tape"
+      ]
+    }
+  ],
+  "audioAssets": [
     {
       "id": "audio-tasma-sb-elblag",
       "category": "audio-handout",
       "file": "audio/tasma-sb-elblag.mp3",
       "audioId": "audio-tasma-sb-elblag",
-      "tagsPl": ["taśma sb", "podsłuch", "nagranie", "klimuszko"],
-      "tagsEn": ["wiretap tape", "surveillance", "recording", "klimuszko"]
+      "tagsPl": [
+        "taśma sb",
+        "podsłuch",
+        "nagranie",
+        "klimuszko"
+      ],
+      "tagsEn": [
+        "wiretap tape",
+        "surveillance",
+        "recording",
+        "klimuszko"
+      ]
     }
   ]
 }

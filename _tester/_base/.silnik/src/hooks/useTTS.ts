@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
+import { toast } from '@/components/ui/use-toast';
 import type { Message } from '@/lib/types';
 import { loadAISettings, saveAISettings } from '@/lib/ai-settings';
 import { settingsEmitter } from '@/lib/settings-event-emitter';
@@ -95,11 +97,9 @@ const TTS_MODEL_NPC = 'gemini-3.1-flash-tts-preview';
  * IND-191: parametry odporności kolejki TTS na rate-limit / błędy transient.
  * Kolejka jest już SEKWENCYJNA (worker `await fetch` jeden segment na raz) - to bazowy
  * throttle. Retry honorujący `Retry-After` rozkłada rate reaktywnie (po 429 czekamy
- * `retryDelay` nim ponowimy → RPM sam spada pod limit). Cap chroni UX przed zawieszeniem
- * na pełne ~35s free-tier retryDelay.
+ * `retryDelay` nim ponowimy → RPM sam spada pod limit). Po 429 kolejka kończy buforowanie bez dalszych żądań przed pełnym terminem.
  */
 const MAX_TTS_RETRIES = 2; // próby ponowienia segmentu (poza pierwszą)
-const MAX_RETRY_WAIT_MS = 8000; // cap czekania po 429 (free-tier podaje ~35s)
 const TRANSIENT_RETRY_WAIT_MS = 400; // backoff dla 500/503/network
 
 /**
@@ -125,7 +125,7 @@ const STREAMING_SEGMENT_TARGET_CHARS = 100;
  * IND-191: fetch TTS z ponowieniem. Zwraca `audioUrl` albo `null` (segment niemy -
  * świadoma degradacja zamiast bezpowrotnej utraty audio bez próby ratunku).
  *
- * - 429 → honoruj `Retry-After` (capped MAX_RETRY_WAIT_MS) → ponów segment.
+ * - 429 → honoruj `Retry-After` → zatrzymaj syntezę kolejki do pełnego terminu.
  * - !ok (500/503) → krótki backoff → ponów.
  * - network throw → backoff → ponów.
  * - sukces → `result.success && result.audioUrl`.
@@ -154,7 +154,7 @@ export function releaseAudioElement(audio: HTMLAudioElement | null): void {
  * IND-191: fetch TTS z ponowieniem. Zwraca `audioUrl` albo `null` (segment niemy -
  * świadoma degradacja zamiast bezpowrotnej utraty audio bez próby ratunku).
  *
- * - 429 → honoruj `Retry-After` (capped MAX_RETRY_WAIT_MS) → ponów segment.
+ * - 429 → honoruj `Retry-After` → zatrzymaj syntezę kolejki do pełnego terminu.
  * - !ok (500/503) → krótki backoff → ponów.
  * - network throw → backoff → ponów.
  * - sukces → `result.success && result.audioUrl`.
@@ -168,7 +168,7 @@ async function fetchTtsWithRetry(
     signal?: AbortSignal;
     onRateLimited?: (retryAfterSec: number) => void;
   }
-): Promise<string | null> {
+): Promise<{ audioUrl: string; provider: string; voice?: string } | null> {
   const { signal, onRateLimited } = options || {};
   for (let attempt = 0; attempt <= MAX_TTS_RETRIES; attempt++) {
     if (signal?.aborted) return null;
@@ -184,38 +184,13 @@ async function fetchTtsWithRetry(
 
       if (signal?.aborted) return null;
 
-      // Rate-limit: czekaj Retry-After (capped) i ponów. Po wyczerpaniu → segment niemy.
+      // A quota applies to the whole queue, not just this segment.
       if (response.status === 429) {
-        const retryAfterHeader = response.headers?.get?.('Retry-After') || '';
-        const retryAfter = parseInt(retryAfterHeader, 10);
-        if (Number.isFinite(retryAfter) && onRateLimited) {
-          onRateLimited(retryAfter);
-        }
-
-        if (attempt < MAX_TTS_RETRIES) {
-          const waitMs = Number.isFinite(retryAfter)
-            ? Math.min(retryAfter * 1000, MAX_RETRY_WAIT_MS)
-            : TRANSIENT_RETRY_WAIT_MS;
-          await new Promise((r) => {
-            let onAbort: (() => void) | undefined;
-            const timer = setTimeout(() => {
-              if (signal && onAbort) signal.removeEventListener('abort', onAbort);
-              r(null);
-            }, waitMs);
-            if (signal) {
-              onAbort = () => {
-                clearTimeout(timer);
-                r(null);
-              };
-              signal.addEventListener('abort', onAbort, { once: true });
-            }
-          });
-          if (signal?.aborted) return null;
-          continue;
-        }
-        console.warn(
-          `⚠️ TTS: wyczerpano ponowienia rate-limit (429). Pomiń segment.`
-        );
+        const header = response.headers?.get?.('Retry-After') || '';
+        const seconds = Number(header);
+        const retryAfter = header && Number.isFinite(seconds)
+          ? seconds : Math.max(0, (Date.parse(header) - Date.now()) / 1000);
+        onRateLimited?.(Number.isFinite(retryAfter) ? Math.max(1, retryAfter) : 30);
         return null;
       }
 
@@ -226,6 +201,10 @@ async function fetchTtsWithRetry(
         let isNoAudioErr = false;
         try {
           const errData = await response.clone().json();
+          if (errData?.retryable === false) {
+            onRateLimited?.(30);
+            return null;
+          }
           if (
             errData?.details?.includes('inlineData') ||
             errData?.details?.includes('text-instead-of-audio') ||
@@ -266,7 +245,11 @@ async function fetchTtsWithRetry(
       }
 
       const result = await response.json();
-      if (result.success && result.audioUrl) return result.audioUrl;
+      if (result.success && typeof result.audioUrl === 'string') return {
+        audioUrl: result.audioUrl,
+        provider: ['macos-zosia', 'macos-samantha'].includes(result.provider) ? result.provider : 'gemini',
+        voice: typeof result.voice === 'string' ? result.voice : undefined,
+      };
       return null;
     } catch (e: unknown) {
       if (signal?.aborted || (e instanceof Error && e.name === 'AbortError')) {
@@ -381,6 +364,11 @@ export function findDialogueClosingQuote(
 }
 
 export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
+  const t = useTranslations('TTSSettings');
+  const blockedUntilRef = useRef(0);
+  const providerRef = useRef<{ provider: string; voice?: string } | null>(null);
+  const localNoticeRef = useRef('');
+  const quotaNoticeRef = useRef(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [currentAudio, setCurrentAudioState] = useState<HTMLAudioElement | null>(
@@ -614,6 +602,11 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
     }
   }, []);
 
+  useEffect(() => {
+    providerRef.current = null;
+    stopCurrentAudio();
+  }, [locale, stopCurrentAudio]);
+
   // Worker przetwarzający kolejkę
   const runQueueWorker = useCallback(async () => {
     if (isProcessingQueueRef.current) return;
@@ -621,6 +614,44 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
     const currentSettings = loadAISettings();
 
     try {
+      // Resolve the provider before cache lookup, including after a locale change.
+      if (!providerRef.current && (isPureTextMode() || persistentMediaCache.isAvailable())) {
+        if (Date.now() < blockedUntilRef.current) {
+          pendingQueueRef.current = [];
+          finishInitialBufferingRef.current();
+          return;
+        }
+        const generation = generationIdRef.current;
+        if (!abortControllerRef.current || abortControllerRef.current.signal.aborted) abortControllerRef.current = new AbortController();
+        const controller = abortControllerRef.current;
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        try {
+          const response = await fetch(`/api/tts/gemini?languageCode=${locale === 'en' ? 'en-US' : 'pl-PL'}`, { method: 'GET', signal: controller.signal });
+          if (generation !== generationIdRef.current) return;
+          if (!response.ok) throw new Error('TTS_CAPABILITIES_UNAVAILABLE');
+          const profile = await response.json();
+          if (generation !== generationIdRef.current) return;
+          providerRef.current = {
+            provider: ['macos-zosia', 'macos-samantha'].includes(profile.provider) ? profile.provider : 'gemini',
+            voice: profile.voice,
+          };
+        } catch {
+          if (generation !== generationIdRef.current) return;
+          blockedUntilRef.current = Date.now() + 30000;
+          pendingQueueRef.current = [];
+          finishInitialBufferingRef.current();
+          if (!quotaNoticeRef.current) {
+            quotaNoticeRef.current = true;
+            toast({ title: t('unavailableNotice') });
+          }
+          return;
+        } finally { clearTimeout(timeout); }
+      }
+      if (isPureTextMode() && !providerRef.current?.provider.startsWith('macos-')) {
+        pendingQueueRef.current = [];
+        finishInitialBufferingRef.current();
+        return;
+      }
       while (pendingQueueRef.current.length > 0) {
         const currentGen = generationIdRef.current;
         // Przenieś z pending do głównej kolejki przetwarzania
@@ -646,10 +677,13 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
             ? TTS_MODEL_NPC
             : TTS_MODEL_NARRATOR;
           // Issue #78: Sprawdź pamięć podręczną IndexedDB przed wywołaniem API sieciowego
-          const ttsCacheKey = persistentMediaCache.generateTtsCacheKey(
+          let profile = providerRef.current || { provider: 'gemini', voice: effectiveVoice };
+          const cacheVoice = () => profile.provider === 'gemini' ? effectiveVoice : profile.voice || effectiveVoice;
+          const cacheKey = () => persistentMediaCache.generateTtsCacheKey(
             text,
-            `${effectiveVoice}_${locale}_${audioDirection || ''}`
+            `${profile.provider}_${profile.provider === 'gemini' ? geminiModel : ''}_${cacheVoice()}_${locale}_${profile.provider === 'gemini' ? audioDirection || '' : ''}`
           );
+          let ttsCacheKey = cacheKey();
 
           if (persistentMediaCache.isAvailable()) {
             try {
@@ -667,7 +701,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
             break;
           }
 
-          if (!audioUrl) {
+          if (!audioUrl && Date.now() >= blockedUntilRef.current) {
             if (!abortControllerRef.current || abortControllerRef.current.signal.aborted) {
               abortControllerRef.current = new AbortController();
             }
@@ -675,7 +709,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
 
             // IND-191: fetch z retry (429 honoruje Retry-After, transient backoff).
             // Issue #162 + #200: przekazujemy audioDirection jako instrukcję reżyserską dla Gemini TTS
-            audioUrl = await fetchTtsWithRetry(
+            const generated = await fetchTtsWithRetry(
               '/api/tts/gemini',
               {
                 text,
@@ -687,6 +721,11 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
               {
                 signal,
                 onRateLimited: (retryAfterSec) => {
+                  blockedUntilRef.current = Date.now() + retryAfterSec * 1000;
+                  if (!quotaNoticeRef.current) {
+                    quotaNoticeRef.current = true;
+                    toast({ title: t('unavailableNotice') });
+                  }
                   if (retryAfterSec > 10) {
                     console.warn(
                       `⚠️ [TTS] Wykryto rate-limit 429 z Retry-After=${retryAfterSec}s > 10s. Aktywacja bezpiecznika 15 RPM (agregacja akapitowa).`
@@ -699,6 +738,13 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
               }
             );
 
+            audioUrl = generated?.audioUrl || null;
+            if (generated) {
+              profile = { provider: generated.provider, voice: generated.voice || effectiveVoice };
+              providerRef.current = profile;
+              ttsCacheKey = cacheKey();
+            }
+
             if (generationIdRef.current !== currentGen || signal.aborted) {
               console.log(`🔊 TTS Worker: Segment ${index} odrzucony po fetch (stara generacja lub anulowano)`);
               break;
@@ -708,7 +754,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
               persistentMediaCache
                 .setTtsAudio(ttsCacheKey, audioUrl, {
                   text,
-                  voiceId: effectiveVoice,
+                  voiceId: cacheVoice(),
                   languageCode: locale === 'en' ? 'en-US' : 'pl-PL',
                 })
                 .catch(() => {});
@@ -720,6 +766,10 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
           }
 
           if (audioUrl) {
+            if (profile.provider.startsWith('macos-') && localNoticeRef.current !== profile.provider) {
+              localNoticeRef.current = profile.provider;
+              toast({ title: t('localVoiceNotice', { voice: profile.voice || (locale === 'en' ? 'Samantha' : 'Zosia') }) });
+            }
             const audio = new Audio(audioUrl);
             audio.volume = (currentSettings.voiceSettings?.volume || 75) / 100;
             const baseSpeed = currentSettings.voiceSettings?.speed || 0.92;
@@ -799,7 +849,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
         finishInitialBufferingRef.current();
       }
     }
-  }, [locale]);
+  }, [locale, t]);
 
   const playbackIndexRef = useRef(0);
 
@@ -939,7 +989,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
 
   const addToQueue = useCallback(
     (fullRawText: string, messageId?: string, flush: boolean = false) => {
-      if (!voiceEnabled || !isTTSEnabled || !fullRawText || isPureTextMode()) return;
+      if (!voiceEnabled || !isTTSEnabled || !fullRawText) return;
 
       // Jeśli to zupełnie nowa wiadomość (inny ID), zresetuj postęp i audio
       if (messageId && currentMessageIdRef.current !== messageId) {
@@ -1763,7 +1813,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
 
   const generateVoiceForMessage = useCallback(
     async (message: Message) => {
-      if (!voiceEnabled || !isTTSEnabled || message.role !== 'assistant' || isPureTextMode())
+      if (!voiceEnabled || !isTTSEnabled || message.role !== 'assistant')
         return;
       addToQueue(message.content, message.id, true);
     },

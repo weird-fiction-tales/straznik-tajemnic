@@ -157,3 +157,6 @@ graft/
 
 # Lokalny znacznik buildu paczki desktopowej
 build-info.json
+
+# Private local pilot runtime (rules, saves and generated speech).
+/.local-playtest/

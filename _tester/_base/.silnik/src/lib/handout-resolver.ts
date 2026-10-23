@@ -49,7 +49,6 @@ function stripPrefix(slug: string): string {
  * 2. Case-insensitive
  * 3. Znormalizowany slug (usuniecie znakow specjalnych, myslniki)
  * 4. Dopasowanie bez prefiksu (clue-, audio-, map-, handout-)
- * 5. Podciag (gdy slug jest czescia nazwy lub odwrotnie)
  */
 function findInList(
   handouts: AdventureHandout[] | undefined | null,
@@ -80,6 +79,16 @@ function findInList(
   );
   if (normalized) return normalized;
 
+  // Only explicit, full aliases are accepted; substrings are never identity.
+  const aliasMatch = handouts.find((handout) =>
+    handout.aliases?.some((alias) => normalizeSlug(alias) === normTarget),
+  );
+  if (aliasMatch) return aliasMatch;
+
+  // Dossier IDs are opaque and must match exactly inside the active adventure.
+  const dossierMatch = handouts.find((handout) => handout.dossierRecordId === rawTarget);
+  if (dossierMatch) return dossierMatch;
+
   // Poziom 4: Dopasowanie bez prefiksu
   const strippedTarget = stripPrefix(rawTarget);
   if (strippedTarget.length > 2) {
@@ -88,16 +97,6 @@ function findInList(
       return stripPrefix(h.slug) === strippedTarget;
     });
     if (strippedMatch) return strippedMatch;
-  }
-
-  // Poziom 5: Zawieranie podciagu (minimum 4 znaki)
-  if (normTarget.length >= 4) {
-    const partialMatch = handouts.find((h) => {
-      if (!h.slug) return false;
-      const hNorm = normalizeSlug(h.slug);
-      return hNorm.includes(normTarget) || normTarget.includes(hNorm);
-    });
-    if (partialMatch) return partialMatch;
   }
 
   return null;
@@ -177,10 +176,12 @@ const AUDIO_VARIANTS: Record<string, { language: 'pl' | 'en'; reelType: NonNulla
 
 export function resolveHandoutBySlug(
   slug: string,
-  adventureContext?: AnyAdventureContext | null
+  adventureContext?: AnyAdventureContext | null,
+  allowedDossierRecordIds: readonly string[] = [],
 ): AdventureHandout | null {
   const handout = findHandoutBySlug(slug, adventureContext);
   if (!handout) return null;
+  if (handout.dossierRecordId && !allowedDossierRecordIds.includes(handout.dossierRecordId)) return null;
   const baseUrl = handout.audioUrl;
   const audio = baseUrl && AUDIO_VARIANTS[baseUrl];
   if (!audio || !baseUrl) return handout;
@@ -191,4 +192,12 @@ export function resolveHandoutBySlug(
     audioUrlEn: handout.audioUrlEn || (audio.language === 'en' ? handout.audioUrl : translated),
     reelType: handout.reelType || audio.reelType,
   };
+}
+
+/** Identifies an explicit dossier mapping so the UI can hide a blocked locator card. */
+export function isDossierHandoutReference(
+  slug: string,
+  adventureContext?: AnyAdventureContext | null,
+): boolean {
+  return Boolean(findHandoutBySlug(slug, adventureContext)?.dossierRecordId);
 }

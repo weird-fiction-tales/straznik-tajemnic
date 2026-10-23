@@ -78,6 +78,35 @@ describe('useFullSave - status urwanej narracji', () => {
     expect(persistCharacters).toHaveBeenCalledWith([]);
   });
 
+  it('preserves the existing pending dossier check and typed media across a JSON save/load roundtrip', async () => {
+    const setMessages = jest.fn();
+    const check: import('@/lib/parsers/types').SkillTestData = {id:'repair',characterId:'pc',skillName:'Naprawa elektryczna',skillValue:40,difficulty:'trudny',modifiers:[],justification:'Generator',dossierConditionId:'prabuty-disable-active'};
+    const message: Message = {
+      id:'pending-check', role:'assistant', content:'[LOKACJA: Prabuty - cmentarz]', timestamp:new Date('2026-10-20T15:09:00Z'),
+      gameTime:{year:1973,month:9,day:19,hour:23,minute:55},
+      skillTests:[check],
+      generatedImages:['/handouts/cien-nad-prabutami/playtest/newsroom-1973.png'],generatedImageTypes:['scene'],generatedImageCacheIds:['cached-scene'],
+    };
+    const scope={schemaVersion:1 as const,campaignDefinitionId:'scenario:prabuty',kind:'scenario' as const,playthroughId:'roll-save',adventureId:'cien-nad-prabutami'};
+    const restoredRollScope={...scope,playthroughId:'roll-restored'};
+    jest.mocked(fetch).mockResolvedValue({ok:true,json:async()=>({scope:restoredRollScope})} as Response);
+    const rolled:Message={id:'rolled',role:'user',content:'Rzut 17.',timestamp:new Date(),mechanicsContext:{skillRollScope:{playthroughId:scope.playthroughId,adventureId:scope.adventureId},skillRolls:[{testId:check.id,resolutionId:'real-roll-17',characterId:'pc',skillNames:[check.skillName],requiredDifficulty:'hard',passedRequirement:true,outcome:'hard',luckSpent:0}]}};
+    const save=FullGameSaveManager.createFullSave({name:'Pending repair',userId:'local',campaignMemory:scope,messages:[message,rolled,{...rolled,id:'foreign-roll',mechanicsContext:{...rolled.mechanicsContext,skillRollScope:{playthroughId:'foreign',adventureId:scope.adventureId}}}],gameSettings:{aiSettings:defaultAISettings},characters:[],campaigns:[],npcs:[],locations:[]});
+    const {result}=renderHook(()=>useFullSave({setMessages,setCharacters:jest.fn(),setActiveCharacter:jest.fn(),setCampaigns:jest.fn(),setPdfMemory:jest.fn(),setActiveGameState:jest.fn(),setAiSettings:jest.fn(),stopCurrentAudio:jest.fn()}));
+    await act(async()=>{expect(await result.current.handleLoadFullSave(JSON.parse(JSON.stringify(save)))).toBe(true);});
+    const restored=setMessages.mock.calls[0][0][0] as Message;
+    expect(restored.skillTests).toEqual(message.skillTests);
+    expect(restored.generatedImageTypes).toEqual(message.generatedImageTypes);
+    expect(restored.generatedImageCacheIds).toEqual(message.generatedImageCacheIds);
+    expect(restored.gameTime).toEqual(message.gameTime);
+    expect(setMessages.mock.calls[0][0][1].mechanicsContext).toEqual({...rolled.mechanicsContext,skillRollScope:{playthroughId:restoredRollScope.playthroughId,adventureId:scope.adventureId}});
+    expect(setMessages.mock.calls[0][0][2].mechanicsContext.skillRollScope.playthroughId).toBe('foreign');
+    const {completedSkillTestsFromHistory}=await import('@/components/chat/chat-window/utils/completed-skill-tests');
+    const {loadCampaignMemoryScope}=await import('@/core/memory/campaign-scope');
+    expect(completedSkillTestsFromHistory(setMessages.mock.calls[0][0],loadCampaignMemoryScope()).has(check.id)).toBe(true);
+
+  });
+
   it('odtwarza worldSetup do kanonicznego magazynu klienta', async () => {
     const worldSetup: WorldSetupBundleV1 = {
       schemaVersion: 1,
@@ -220,6 +249,34 @@ describe('useFullSave - status urwanej narracji', () => {
     expect(localStorage.getItem('gm_npcs')).toBe('[]');
     expect(localStorage.getItem('gm_locations')).toBe('[]');
     expect(JSON.parse(localStorage.getItem('zew-campaign-memory-scope')!)).toEqual(restoredScope);
+  });
+
+  describe('saved session lifecycle', () => {
+    const savedCharacter:Character={id:'pc',name:'Test player',playerName:'Player',str:50,dex:50,con:50,app:50,pow:50,edu:50,siz:50,int:50,luck:50,hp:10,san:50,mp:10,skills:{},occupation:'Reporter',age:30,background:'',isActive:true,lastUsed:new Date(0),notes:'',equipment:[],experience:{totalXP:0,availableXP:0,earnedThisSession:0,maxEarnedThisSession:10},developmentHistory:[]};
+    const options = () => ({setMessages:jest.fn(),setHasStartedGame:jest.fn(),setCharacters:jest.fn(),setActiveCharacter:jest.fn(),setCampaigns:jest.fn(),setPdfMemory:jest.fn(),setActiveGameState:jest.fn(),setAiSettings:jest.fn(),stopCurrentAudio:jest.fn()});
+    it.each(['missing-active-character','empty-history'] as const)('keeps setup-only save at welcome: %s',async kind=>{
+      const opts=options();localStorage.setItem('has_started_game','true');
+      const save=FullGameSaveManager.createFullSave({name:'Setup',userId:'local',messages:kind==='empty-history'?[]:[{id:'msg',role:'assistant',content:'A scene',timestamp:new Date()}],characters:kind==='empty-history'?[savedCharacter]:[],activeCharacterId:'pc',campaigns:[],npcs:[],locations:[],gameSettings:{aiSettings:defaultAISettings}});
+      const {result}=renderHook(()=>useFullSave(opts));
+      await act(async()=>{expect(await result.current.handleLoadFullSave(save)).toBe(true);});
+      expect(opts.setHasStartedGame).toHaveBeenCalledWith(false);
+      expect(localStorage.getItem('has_started_game')).toBe('false');
+    });
+    it('does not mark a failed restore as started and leaves the existing lifecycle unchanged',async()=>{
+      const opts=options();localStorage.setItem('has_started_game','false');
+      const save=FullGameSaveManager.createFullSave({name:'Failed',userId:'local',messages:[],characters:[],campaigns:[],npcs:[],locations:[],gameSettings:{aiSettings:defaultAISettings}});
+      jest.mocked(fetch).mockResolvedValueOnce({ok:false,json:async()=>({error:'restore failed'})} as Response);
+      const {result}=renderHook(()=>useFullSave(opts));
+      await act(async()=>{expect(await result.current.handleLoadFullSave(save)).toBe(false);});
+      expect(opts.setHasStartedGame).not.toHaveBeenCalled();
+      expect(localStorage.getItem('has_started_game')).toBe('false');
+    });
+    it('new game returns to welcome and persists that state',()=>{
+      const opts=options();localStorage.setItem('has_started_game','true');window.confirm=jest.fn(()=>true);
+      const {result}=renderHook(()=>useFullSave(opts));act(()=>result.current.handleStartNewGame());
+      expect(opts.setHasStartedGame).toHaveBeenCalledWith(false);
+      expect(localStorage.getItem('has_started_game')).toBe('false');
+    });
   });
 
   describe('locale auto-synchronization (Issue #490 / TASK-I18N-02)', () => {
@@ -585,3 +642,45 @@ describe('useFullSave - status urwanej narracji', () => {
   });
 });
 
+
+
+describe('full save adventure identity is explicit and scoped', () => {
+  const adventureId='cien-nad-prabutami';
+  const fingerprint=`sha256:${'a'.repeat(64)}`;
+  const scope={schemaVersion:1 as const,campaignDefinitionId:`scenario:${adventureId}`,adventureId,playthroughId:'saved',kind:'scenario' as const};
+  function fixture(){return FullGameSaveManager.createFullSave({name:'Not a source identifier',userId:'local',campaignMemory:scope,
+    pdfMemory:{adventureId,adventureDossierFingerprint:fingerprint} as import('./usePdfMemory').PdfMemory,
+    messages:[],characters:[],campaigns:[],npcs:[],locations:[],gameSettings:{aiSettings:defaultAISettings}});}
+  function setup(){const setters={setMessages:jest.fn(),setAdventureContext:jest.fn(),setCharacters:jest.fn(),setActiveCharacter:jest.fn(),setCampaigns:jest.fn(),setPdfMemory:jest.fn(),setActiveGameState:jest.fn(),setAiSettings:jest.fn(),stopCurrentAudio:jest.fn()};return{...renderHook(()=>useFullSave(setters)),setters};}
+  beforeEach(()=>{jest.clearAllMocks();localStorage.clear();global.fetch=jest.fn().mockResolvedValue({ok:true,json:async()=>({scope:{...scope,playthroughId:'restored'}})});});
+  it('restores exact catalog context before PDF memory without changing its edition',async()=>{
+    const {result,setters}=setup();await act(async()=>{expect(await result.current.handleLoadFullSave(fixture())).toBe(true);});
+    const {getAdventureById}=await import('@/lib/adventures-data');
+    expect(setters.setAdventureContext).toHaveBeenCalledWith(getAdventureById(adventureId));
+    expect(setters.setAdventureContext.mock.invocationCallOrder[0]).toBeLessThan(setters.setPdfMemory.mock.invocationCallOrder[0]);
+    expect(JSON.parse(localStorage.getItem('adventure_context')!).id).toBe(adventureId);
+    expect(setters.setPdfMemory).toHaveBeenCalledWith(expect.objectContaining({adventureId,adventureDossierFingerprint:fingerprint}));
+    expect(fetch).toHaveBeenCalledTimes(1);expect(fetch).toHaveBeenCalledWith('/api/memory/restore',expect.anything());
+  });
+  it.each(['missing','unknown','conflicting','foreign-handout'] as const)('rejects %s dossier identity before HTTP or any setters',async(kind)=>{
+    const save=fixture();const pdf=save.pdfMemory as import('./usePdfMemory').PdfMemory;
+    if(kind==='missing'){delete pdf.adventureId;delete save.campaignMemory;}
+    if(kind==='unknown'){pdf.adventureId='unknown-source';save.campaignMemory={...scope,adventureId:'unknown-source'};}
+    if(kind==='conflicting')save.campaignMemory={...scope,adventureId:'foreign-source'};
+    if(kind==='foreign-handout')save.messages=[{id:'foreign',role:'assistant',content:'[HANDOUT: photo]',timestamp:new Date(),dossierHandoutBinding:{adventureId:'foreign-source',editionFingerprint:fingerprint}}];
+    const {result,setters}=setup();await act(async()=>{expect(await result.current.handleLoadFullSave(save)).toBe(false);});
+    expect(fetch).not.toHaveBeenCalled();for(const setter of Object.values(setters))expect(setter).not.toHaveBeenCalled();
+  });
+  it('rejects a foreign server restore scope before changing client state',async()=>{
+    jest.mocked(fetch).mockResolvedValue({ok:true,json:async()=>({scope:{...scope,adventureId:'foreign'}})} as Response);
+    const {result,setters}=setup();await act(async()=>{expect(await result.current.handleLoadFullSave(fixture())).toBe(false);});
+    for(const setter of Object.values(setters))expect(setter).not.toHaveBeenCalled();
+  });
+  it('does not infer a legacy adventure from its save name or retain the previous profile context',async()=>{
+    const save=fixture();save.pdfMemory={};delete save.campaignMemory;save.name='Cień nad Prabutami';
+    localStorage.setItem('adventure_context',JSON.stringify({id:adventureId,title:save.name}));
+    const {result,setters}=setup();await act(async()=>{expect(await result.current.handleLoadFullSave(save)).toBe(true);});
+    expect(setters.setAdventureContext).toHaveBeenCalledWith(null);
+    expect(JSON.parse(localStorage.getItem('adventure_context')!)).toBeNull();
+  });
+});

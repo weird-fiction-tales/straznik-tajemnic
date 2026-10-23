@@ -22,7 +22,11 @@ import {
   sanitizeNpcForApi,
 } from '@/lib/chat-history-sanitizer';
 import { loadStoredWorldSetup } from '@/lib/world-setup';
+import {readPendingSkillRoll} from '@/lib/adventure-dossier/pending-skill-roll';
 import { loadCampaignMemoryScope } from '@/core/memory/campaign-scope';
+import { readDossierInventoryForSave } from '@/lib/adventure-dossier/inventory-state';
+import { readDossierWorldStateForSave } from '@/lib/adventure-dossier/world-object-state';
+import { timeManager } from '@/lib/time-manager';
 
 export interface GameTimeLike {
   year?: number;
@@ -154,6 +158,18 @@ export async function performFullGameSave(
   }
 
   const userId = 'local';
+  const clockState = timeManager.getSnapshot();
+  const campaignMemory = loadCampaignMemoryScope() ?? undefined;
+  if(campaignMemory && data.pdfMemory?.adventureDossierFingerprint && typeof window!=='undefined') {
+    const message=currentLocale==='en'?'Send the saved roll result again before saving the game.':'Wyślij zapisany wynik rzutu ponownie przed zapisaniem gry.';
+    try {
+      const history:LibMessage[]=JSON.parse(localStorage.getItem('zew_chat_messages')??'[]');
+      const pending=readPendingSkillRoll(localStorage,{...campaignMemory,editionFingerprint:data.pdfMemory.adventureDossierFingerprint},history,data.characters.map(c=>c.id));
+      if(pending)throw new Error(message);
+    } catch {throw new Error(message);}
+  }
+  const dossierInventory = readDossierInventoryForSave(campaignMemory?.playthroughId);
+  const dossierWorldState = readDossierWorldStateForSave(campaignMemory?.playthroughId);
   const saveId = `save_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
   // 1. Zbierz base64 obrazy z historii
@@ -265,7 +281,10 @@ export async function performFullGameSave(
     investigatorBoard: data.investigatorBoard,
     campaigns: campaigns || [],
     activeCampaignId,
-    campaignMemory: loadCampaignMemoryScope() ?? undefined,
+    campaignMemory,
+    dossierInventory,
+    dossierWorldState,
+    clockState,
     npcs: (npcs || []).map((n) => sanitizeNpcForApi(n)),
     locations: locations || [],
     currentLocationId: data.currentLocationId,

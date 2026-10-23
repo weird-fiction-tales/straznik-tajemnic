@@ -1,5 +1,6 @@
 {
   "caseId": "case-q05-englewood-murder-castle-1893",
+  "assetDirectory": "englewood-murder-castle-1893",
   "era": "1894-chicago",
   "predefinedAdventureId": "englewood-murder-castle-1893",
   "visualDna": {
@@ -9,48 +10,530 @@
   },
   "assets": [
     {
+      "id": "opening-chicago-precinct",
+      "category": "node",
+      "file": "opening-chicago-precinct.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-chicago-precinct",
+      "tagsPl": [
+        "scena otwarcia",
+        "komisariat chicago",
+        "biuro detektywistyczne",
+        "1893"
+      ],
+      "tagsEn": [
+        "opening scene",
+        "chicago precinct",
+        "detective bureau",
+        "1893"
+      ]
+    },
+    {
       "id": "clue-01-castle-blueprint",
       "category": "item-clue",
-      "file": "clue-01-castle-blueprint.webp",
+      "file": "clue-blueprint-castle-2nd-floor-v2.png",
       "aspectRatio": "16:9",
-      "clueId": "clue-01-castle-blueprint",
-      "tagsPl": ["cyjanotypia", "plan hotelu", "zamek holmesa", "chicago", "1893"],
-      "tagsEn": ["cyanotype", "hotel blueprint", "holmes castle", "chicago", "1893"]
+      "clueId": "clue-blueprint-castle-2nd-floor",
+      "tagsPl": [
+        "Composite Blueprint of the Second-Floor Labyrinth",
+        "clue-blueprint-castle-2nd-floor",
+        "cyjanotypia",
+        "plan hotelu",
+        "zamek holmesa",
+        "chicago",
+        "1893"
+      ],
+      "tagsEn": [
+        "Composite blueprint of the second-floor labyrinth",
+        "clue-blueprint-castle-2nd-floor",
+        "cyanotype",
+        "hotel blueprint",
+        "holmes castle",
+        "chicago",
+        "1893"
+      ]
     },
     {
       "id": "clue-02-vault-footprint",
       "category": "item-clue",
-      "file": "clue-02-vault-footprint.webp",
+      "file": "clue-vault-footprint-etching-v2.png",
       "aspectRatio": "16:9",
-      "clueId": "clue-02-vault-footprint",
-      "tagsPl": ["skarbiec", "odcisk stopy", "emeline cigrand", "drzwi stalowe"],
-      "tagsEn": ["vault", "footprint", "emeline cigrand", "steel door"]
+      "clueId": "clue-vault-footprint-etching",
+      "tagsPl": [
+        "Acid-Etched Footprint on the Soundproof Vault Door",
+        "clue-vault-footprint-etching",
+        "skarbiec",
+        "odcisk stopy",
+        "emeline cigrand",
+        "drzwi stalowe"
+      ],
+      "tagsEn": [
+        "Acid-etched footprint on the soundproof vault door",
+        "clue-vault-footprint-etching",
+        "vault",
+        "footprint",
+        "emeline cigrand",
+        "steel door"
+      ]
     },
     {
       "id": "npc-hh-holmes",
-      "category": "npc-portrait",
+      "category": "npc",
       "file": "npc-hh-holmes.webp",
       "aspectRatio": "3:4",
       "npcId": "hh-holmes",
-      "tagsPl": ["hh holmes", "herman mudgett", "morderca", "chicago", "portret"],
-      "tagsEn": ["hh holmes", "herman mudgett", "serial killer", "chicago", "portrait"]
+      "tagsPl": [
+        "h h holmes",
+        "hh holmes",
+        "herman mudgett",
+        "morderca",
+        "chicago",
+        "portret"
+      ],
+      "tagsEn": [
+        "h h holmes",
+        "h.h. holmes",
+        "herman mudgett",
+        "serial killer",
+        "chicago",
+        "portrait"
+      ]
     },
     {
       "id": "npc-detective-geyer",
-      "category": "npc-portrait",
+      "category": "npc",
       "file": "npc-detective-geyer.webp",
       "aspectRatio": "3:4",
       "npcId": "detective-geyer",
-      "tagsPl": ["detektyw geyer", "pinkerton", "śledczy", "portret"],
-      "tagsEn": ["detective geyer", "pinkerton", "investigator", "portrait"]
+      "tagsPl": [
+        "detektyw geyer",
+        "pinkerton",
+        "śledczy",
+        "portret"
+      ],
+      "tagsEn": [
+        "detective geyer",
+        "pinkerton",
+        "investigator",
+        "portrait"
+      ]
     },
+    {
+      "id": "node-castle-pharmacy",
+      "category": "node",
+      "file": "node-castle-pharmacy.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-castle-pharmacy",
+      "tagsPl": [
+        "apteka zamku holmesa",
+        "apteka i sklep jubilerski 63rd wallace"
+      ],
+      "tagsEn": [
+        "ground floor pharmacy",
+        "63rd and wallace pharmacy",
+        "holmes pharmacy"
+      ]
+    },
+    {
+      "id": "node-castle-second-floor",
+      "category": "node",
+      "file": "node-castle-second-floor.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-castle-second-floor",
+      "tagsPl": [
+        "labirynt drugiego piętra",
+        "skarbiec holmesa",
+        "drugie piętro zamku"
+      ],
+      "tagsEn": [
+        "second floor labyrinth",
+        "soundproof vault",
+        "holmes second floor"
+      ]
+    },
+    {
+      "id": "node-quinlan-quarters",
+      "category": "node",
+      "file": "node-quinlan-quarters.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-quinlan-quarters",
+      "tagsPl": [
+        "kwatera pat quinlana",
+        "mieszkanie dozorcy",
+        "dziedziniec zamku"
+      ],
+      "tagsEn": [
+        "pat quinlan quarters",
+        "caretaker apartment",
+        "castle courtyard quarters"
+      ]
+    },
+    {
+      "id": "node-castle-basement-climax",
+      "category": "node",
+      "file": "node-castle-basement-climax.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-castle-basement-climax",
+      "tagsPl": [
+        "piwnica zamku finał",
+        "ceglany piec holmesa",
+        "piwnica z piecem"
+      ],
+      "tagsEn": [
+        "dissecting cellar",
+        "non euclidean kiln",
+        "castle basement climax"
+      ]
+    },
+    {
+      "id": "npc-inspector-shea",
+      "category": "npc",
+      "file": "npc-inspector-shea.png",
+      "aspectRatio": "3:4",
+      "npcId": "npc-inspector-shea",
+      "tagsPl": [
+        "inspektor john shea",
+        "inspektor shea",
+        "policjant chicago"
+      ],
+      "tagsEn": [
+        "inspector john shea",
+        "inspector shea",
+        "chicago police inspector"
+      ]
+    },
+    {
+      "id": "npc-horace-gary",
+      "category": "npc",
+      "file": "npc-horace-gary.png",
+      "aspectRatio": "3:4",
+      "npcId": "npc-horace-gary",
+      "tagsPl": [
+        "horace gary",
+        "prawnik fidelity mutual"
+      ],
+      "tagsEn": [
+        "horace gary",
+        "fidelity mutual counsel",
+        "insurance attorney"
+      ]
+    },
+    {
+      "id": "npc-charles-chappell",
+      "category": "npc",
+      "file": "npc-charles-chappell.png",
+      "aspectRatio": "3:4",
+      "npcId": "npc-charles-chappell",
+      "tagsPl": [
+        "charles chappell",
+        "technik anatomiczny"
+      ],
+      "tagsEn": [
+        "charles chappell",
+        "articulator and clerk",
+        "anatomical technician"
+      ]
+    },
+    {
+      "id": "npc-pat-quinlan",
+      "category": "npc",
+      "file": "npc-pat-quinlan.png",
+      "aspectRatio": "3:4",
+      "npcId": "npc-pat-quinlan",
+      "tagsPl": [
+        "pat quinlan",
+        "dozorca zamku holmesa"
+      ],
+      "tagsEn": [
+        "pat quinlan",
+        "castle caretaker",
+        "caretaker quinlan"
+      ]
+    },
+    {
+      "id": "npc-emeline-echo",
+      "category": "npc",
+      "file": "npc-emeline-echo.png",
+      "aspectRatio": "3:4",
+      "npcId": "npc-emeline-echo",
+      "tagsPl": [
+        "emeline cigrand",
+        "echo emeline",
+        "stenografistka emeline"
+      ],
+      "tagsEn": [
+        "emeline cigrand",
+        "dimensional echo",
+        "stenographer emeline"
+      ]
+    },
+    {
+      "id": "npc-threshold-manifestation",
+      "category": "npc",
+      "file": "npc-threshold-manifestation.png",
+      "aspectRatio": "16:9",
+      "npcId": "npc-threshold-manifestation",
+      "tagsPl": [
+        "geometria w piecu",
+        "manifestacja w piecu",
+        "istota z pieca"
+      ],
+      "tagsEn": [
+        "geometry in the kiln",
+        "threshold manifestation",
+        "aspect of yog-sothoth"
+      ]
+    },
+    {
+      "id": "clue-pitezel-insurance-dossier",
+      "category": "item-clue",
+      "file": "clue-pitezel-insurance-dossier.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-pitezel-insurance-dossier",
+      "tagsPl": [
+        "Fidelity Mutual Insurance Dossier on Benjamin Pitezel",
+        "clue-pitezel-insurance-dossier"
+      ],
+      "tagsEn": [
+        "Fidelity Mutual insurance dossier on Benjamin Pitezel",
+        "clue-pitezel-insurance-dossier"
+      ]
+    },
+    {
+      "id": "clue-dismissed-masons-affidavit",
+      "category": "item-clue",
+      "file": "clue-dismissed-masons-affidavit.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-dismissed-masons-affidavit",
+      "tagsPl": [
+        "Sworn Statements of Dismissed Bricklayers",
+        "clue-dismissed-masons-affidavit"
+      ],
+      "tagsEn": [
+        "Sworn statements of dismissed bricklayers",
+        "clue-dismissed-masons-affidavit"
+      ]
+    },
+    {
+      "id": "clue-missing-stenographers-list",
+      "category": "item-clue",
+      "file": "clue-missing-stenographers-list.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-missing-stenographers-list",
+      "tagsPl": [
+        "Registry of Missing World’s Fair Stenographers",
+        "clue-missing-stenographers-list"
+      ],
+      "tagsEn": [
+        "Registry of missing World’s Fair stenographers",
+        "clue-missing-stenographers-list"
+      ]
+    },
+    {
+      "id": "clue-apothecary-acid-ledger",
+      "category": "item-clue",
+      "file": "clue-apothecary-acid-ledger.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-apothecary-acid-ledger",
+      "tagsPl": [
+        "Apothecary Ledger of Sulfuric Acid & Lime",
+        "clue-apothecary-acid-ledger"
+      ],
+      "tagsEn": [
+        "Apothecary ledger of sulfuric acid and lime",
+        "clue-apothecary-acid-ledger"
+      ]
+    },
+    {
+      "id": "clue-hidden-stairwell-latch",
+      "category": "item-clue",
+      "file": "clue-hidden-stairwell-latch.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-hidden-stairwell-latch",
+      "tagsPl": [
+        "Concealed Spring-Latch Behind the Pharmacy Counter",
+        "clue-hidden-stairwell-latch"
+      ],
+      "tagsEn": [
+        "Concealed spring latch behind the pharmacy counter",
+        "clue-hidden-stairwell-latch"
+      ]
+    },
+    {
+      "id": "clue-quinlan-key-receipt",
+      "category": "item-clue",
+      "file": "clue-quinlan-key-receipt.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-quinlan-key-receipt",
+      "tagsPl": [
+        "Duplicate Gas-Main Work Order Signed by Pat Quinlan",
+        "clue-quinlan-key-receipt"
+      ],
+      "tagsEn": [
+        "Duplicate gas-main work order signed by Pat Quinlan",
+        "clue-quinlan-key-receipt"
+      ]
+    },
+    {
+      "id": "clue-edison-wax-cylinder",
+      "category": "item-clue",
+      "file": "clue-edison-wax-cylinder-1893-v2.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-edison-wax-cylinder",
+      "tagsPl": [
+        "Edison Phonograph Cylinder from Holmes’s Bedroom",
+        "clue-edison-wax-cylinder"
+      ],
+      "tagsEn": [
+        "Edison phonograph cylinder from Holmes’s bedroom",
+        "clue-edison-wax-cylinder"
+      ]
+    },
+    {
+      "id": "clue-hollow-wall-plumbline",
+      "category": "item-clue",
+      "file": "clue-hollow-wall-plumbline.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-hollow-wall-plumbline",
+      "tagsPl": [
+        "Surveyor’s Plumb-Line Anomaly in the Blind Corridor",
+        "clue-hollow-wall-plumbline"
+      ],
+      "tagsEn": [
+        "Surveyor’s plumb-line anomaly in the blind corridor",
+        "clue-hollow-wall-plumbline"
+      ]
+    },
+    {
+      "id": "clue-quinlan-confession-note",
+      "category": "item-clue",
+      "file": "clue-quinlan-confession-note.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-quinlan-confession-note",
+      "tagsPl": [
+        "Pat Quinlan’s Unfinished Confession (“I Cannot Sleep”)",
+        "clue-quinlan-confession-note"
+      ],
+      "tagsEn": [
+        "Pat Quinlan’s unfinished confession",
+        "clue-quinlan-confession-note"
+      ]
+    },
+    {
+      "id": "clue-toronto-stovepipe-telegram",
+      "category": "item-clue",
+      "file": "clue-toronto-stovepipe-telegram.png",
+      "aspectRatio": "16:9",
+      "clueId": "clue-toronto-stovepipe-telegram",
+      "tagsPl": [
+        "Western Union Telegram Regarding the Irvington Stove",
+        "clue-toronto-stovepipe-telegram"
+      ],
+      "tagsEn": [
+        "Western Union telegram regarding the Irvington stove",
+        "clue-toronto-stovepipe-telegram"
+      ]
+    }
+  ],
+  "handouts": [
+    {
+      "slug": "blueprint-castle-2nd-floor",
+      "title": "Composite Blueprint: 63rd & Wallace St. (Second Floor)",
+      "image": "/handouts/englewood-murder-castle-1893/blueprint-castle-2nd-floor-v2.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-quinlan-quarters",
+      "clueId": "clue-blueprint-castle-2nd-floor",
+      "tagsPl": [
+        "cyjanotypia plan drugiego piętra",
+        "plan hotelu holmesa",
+        "plan zamku holmesa",
+        "architektoniczny plan labiryntu"
+      ],
+      "tagsEn": [
+        "cyanotype blueprint",
+        "second-floor labyrinth blueprint",
+        "holmes castle floor plan",
+        "composite blueprint"
+      ]
+    },
+    {
+      "slug": "letter-alice-pitezel-tin",
+      "title": "Alice Pitezel’s Unmailed Letter (Found in Flue Tin)",
+      "image": "/handouts/englewood-murder-castle-1893/letter-alice-pitezel-tin-v2.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-castle-basement-climax",
+      "tagsPl": [
+        "list alice pitezel",
+        "nie wysłany list alice",
+        "list znaleziony w przewodzie",
+        "list pitezel"
+      ],
+      "tagsEn": [
+        "alice pitezel letter",
+        "unmailed letter",
+        "letter in flue tin",
+        "alice's letter"
+      ]
+    },
+    {
+      "slug": "coroner-footprint-vault",
+      "title": "Forensic Exhibit: Acid-Etched Footprint on Vault Door",
+      "image": "/handouts/englewood-murder-castle-1893/coroner-footprint-vault-v2.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-castle-second-floor",
+      "clueId": "clue-vault-footprint-etching",
+      "tagsPl": [
+        "odcisk stopy na drzwiach skarbca",
+        "wytrawiony kwasem ślad stopy",
+        "eksponat koronera",
+        "ślady na stalowych drzwiach"
+      ],
+      "tagsEn": [
+        "acid-etched footprint",
+        "vault door footprint",
+        "coroner's exhibit d",
+        "steel vault door impression"
+      ]
+    },
+    {
+      "slug": "audio-edison-wax-cylinder",
+      "title": "Edison Wax Cylinder: Experiment IX - Room 14",
+      "image": "/handouts/englewood-murder-castle-1893/edison-wax-cylinder-1893-v2.png",
+      "aspectRatio": "16:9",
+      "nodeId": "node-castle-second-floor",
+      "clueId": "clue-edison-wax-cylinder",
+      "tagsPl": [
+        "cylinder woskowy edisona",
+        "wałek fonograficzny",
+        "nagranie eksperyment ix",
+        "fonograf holmesa"
+      ],
+      "tagsEn": [
+        "edison wax cylinder",
+        "phonograph cylinder",
+        "experiment ix room 14",
+        "holmes phonograph recording"
+      ]
+    }
+  ],
+  "audioAssets": [
     {
       "id": "audio-edison-wax-cylinder-1893",
       "category": "audio-handout",
       "file": "audio/edison-wax-cylinder-1893.mp3",
       "audioId": "audio-edison-wax-cylinder-1893",
-      "tagsPl": ["cylinder edisona", "nagranie woskowe", "holmes", "fonograf"],
-      "tagsEn": ["edison wax cylinder", "audio recording", "holmes", "phonograph"]
+      "tagsPl": [
+        "cylinder edisona",
+        "nagranie woskowe",
+        "holmes",
+        "fonograf"
+      ],
+      "tagsEn": [
+        "edison wax cylinder",
+        "audio recording",
+        "holmes",
+        "phonograph"
+      ]
     }
   ]
 }

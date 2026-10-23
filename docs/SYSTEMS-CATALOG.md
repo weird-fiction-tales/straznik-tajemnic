@@ -51,3 +51,11 @@ Dokumentacja w root `docs/` jest źródłem prawdy. Kopie w runtime nie są źr�
 - Dokumentacja: root `docs/`.
 - Assety katalogowe: `public/equipment/catalog` i `equipment-catalog.ts`.
 
+
+## Odbiór autorski teczek
+
+`draft`: `scripts/gm-prep/prepare-quicksetup.mjs` zachowuje źródła presetów, a `review-scenes.mjs` tworzy prywatny podgląd grup scen. `scene-review.mjs` przypisuje rekordom właścicieli i wiąże decyzje z hashem treści oraz zależności. Oddzielne statusy dotyczą treści, mediów, integracji i próby gry. Szczegóły: [odbiór grupami](adventure-dossiers/GROUPED-REVIEW.md). Zgoda autora nie zastępuje aktywacji teczki w Quick Setup ani testów rozgrywki.
+
+`draft`: osobny [podgląd początku dla gracza](adventure-dossiers/PLAYER-OPENING.md) używa `player-opening-render.mjs`. Przygotowane wybory, media i dziennik działają lokalnie; renderer nie aktywuje teczki ani sesji AI i nie nadaje akceptacji autora.
+
+`draft`: [przestrzenna mapa teczki](adventure-dossiers/ADVENTURE-MAP.md) łączy kanon, rekordy i media przez `adventure-map-model.mjs`; lokalny HTML z `adventure-map-render.mjs` pokazuje powiązania XYZ i pełne karty autora. `build-adventure-map.mjs` kopiuje media do prywatnej paczki. Narzędzie nie aktywuje teczki w grze ani nie nadaje zgód.

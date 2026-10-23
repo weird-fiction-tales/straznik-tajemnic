@@ -6,7 +6,8 @@ import { expect, test, type Page } from '@playwright/test';
  * Cel:
  * Błyskawiczna weryfikacja stabilności runtime po czystym starcie (clean state):
  * 1. Otwarcie gry w języku angielskim (/en) i polskim (/pl).
- * 2. Przejście do Manual Setup i wybór gotowej postaci (predefined character).
+ * 2. Przejście do szybkiego startu i wybór gotowej postaci.
+ * Gotowe postacie należą do szybkiego startu; tryb ręczny korzysta z własnych kart.
  * 3. Nasłuch na błędy konsoli przeglądarki - wyłapanie awarii typu:
  *    - "equipment.map is not a function"
  *    - "TypeError"
@@ -26,9 +27,19 @@ async function setupPageLocale(page: Page, locale: 'pl' | 'en') {
     consoleErrors.push(err.message);
   });
 
+  await page.route('**/api/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, recordCount: 1 }),
+    })
+  );
+
   await page.addInitScript((selectedLocale) => {
     localStorage.clear();
     localStorage.setItem('onboarding_completed', 'true');
+    localStorage.setItem('rules_onboarding_completed', 'true');
+    localStorage.setItem('straznik_beta_welcome_dismissed', 'true');
     localStorage.setItem('language_selected', selectedLocale);
     localStorage.setItem(
       'zew-app-api-keys',
@@ -41,71 +52,28 @@ async function setupPageLocale(page: Page, locale: 'pl' | 'en') {
 }
 
 test.describe('Dual-Locale Smoke Test - Runtime & i18n Error Detection', () => {
-  test('EN: Manual Setup opens and selects predefined character without runtime errors', async ({ page }) => {
-    const { consoleErrors } = await setupPageLocale(page, 'en');
-
-    await page.goto('/en');
-    const manualSetupBtn = page.locator('[data-testid="btn-manual-setup"]');
-    await expect(manualSetupBtn).toBeVisible({ timeout: 15000 });
-    await manualSetupBtn.click();
-
-    const setupPanel = page.locator('[data-testid="manual-setup-panel"]');
-    await expect(setupPanel).toBeVisible({ timeout: 10000 });
-
-    // Przycisk "Select ready character" w panelu Manual Setup
-    const selectPremadeBtn = setupPanel.getByRole('button', { name: /Select ready|selectPremade/i }).first();
-    await expect(selectPremadeBtn).toBeVisible();
-    await selectPremadeBtn.click();
-
-    // Dialog wyboru gotowej postaci
-    const dialog = page.getByRole('dialog').last();
-    await expect(dialog).toBeVisible({ timeout: 5000 });
-
-    // Wybór pierwszej karty postaci w modalnym selektorze
-    const charOption = dialog.locator('button, [role="button"], .cursor-pointer').first();
-    await expect(charOption).toBeVisible();
-    await charOption.click();
-
-    // Weryfikacja: zero fatalnych wyjątków runtime w konsoli przeglądarki
-    const fatalErrors = consoleErrors.filter((err) =>
-      err.includes('.map is not a function') ||
-      err.includes('TypeError') ||
-      err.includes('Uncaught')
-    );
-    expect(fatalErrors).toEqual([]);
-  });
-
-  test('PL: Manual Setup otwiera się i wybiera postać bez błędów runtime', async ({ page }) => {
-    const { consoleErrors } = await setupPageLocale(page, 'pl');
-
-    await page.goto('/pl');
-    const manualSetupBtn = page.locator('[data-testid="btn-manual-setup"]');
-    await expect(manualSetupBtn).toBeVisible({ timeout: 15000 });
-    await manualSetupBtn.click();
-
-    const setupPanel = page.locator('[data-testid="manual-setup-panel"]');
-    await expect(setupPanel).toBeVisible({ timeout: 10000 });
-
-    // Przycisk "Wybierz gotową postać"
-    const selectPremadeBtn = setupPanel.getByRole('button', { name: /Wybierz gotową|Wybierz gotowa/i }).first();
-    await expect(selectPremadeBtn).toBeVisible();
-    await selectPremadeBtn.click();
-
-    // Dialog wyboru gotowej postaci
-    const dialog = page.getByRole('dialog').last();
-    await expect(dialog).toBeVisible({ timeout: 5000 });
-
-    // Wybór pierwszej karty postaci
-    const charOption = dialog.locator('button, [role="button"], .cursor-pointer').first();
-    await expect(charOption).toBeVisible();
-    await charOption.click();
-
-    // Weryfikacja: zero fatalnych wyjątków runtime w konsoli przeglądarki
-    const fatalErrors = consoleErrors.filter((err) =>
-      err.includes('.map is not a function') ||
-      err.includes('TypeError') ||
-      err.includes('Uncaught')
-    );
-    expect(fatalErrors).toEqual([]);
-  });
+  for (const locale of ['pl', 'en'] as const) {
+    test(`${locale}: quick setup selects the scenario investigator without runtime errors`, async ({ page }) => {
+      const { consoleErrors } = await setupPageLocale(page, locale);
+      await page.goto('/' + locale);
+      await page.getByTestId('btn-quick-setup').click();
+      const modal = page.getByTestId('quick-setup-modal');
+      await expect(modal).toBeVisible();
+      const startButton = modal.getByRole('button', {
+        name: locale === 'pl' ? /Rozpocznij przygodę/i : /Start adventure|Begin adventure/i,
+      });
+      await expect(startButton).toBeInViewport();
+      await expect(startButton).toBeEnabled();
+      const investigator = modal.getByRole('button', {
+        name: locale === 'pl' ? /Tomasz Nowicki/i : /Frank Geyer/i,
+      });
+      await investigator.click();
+      await expect(investigator).toHaveAttribute('aria-pressed', 'true');
+      await expect(startButton).toBeEnabled();
+      const fatalErrors = consoleErrors.filter((error) =>
+        /\.map is not a function|TypeError|Uncaught|MISSING_MESSAGE/.test(error));
+      expect(fatalErrors).toEqual([]);
+      await page.screenshot({ path: test.info().outputPath(locale + '-quick-setup.png') });
+    });
+  }
 });

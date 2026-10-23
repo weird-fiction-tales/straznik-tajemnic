@@ -2,13 +2,15 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { StartQualityPresets } from './start-quality-presets';
 import { loadAISettings } from '@/lib/ai-settings';
 import { renderHandout } from '../../narrative/render-handout';
+import { STREFA_11_ADVENTURES } from '@/lib/adventures-data';
+import { AMERICAN_COLD_CASES_ADVENTURES } from '@/lib/american-cold-cases-data';
 
 jest.mock('next-intl', () => ({
   useTranslations: () => (key: string) => key,
   useLocale: () => 'pl',
 }));
 jest.mock('@/components/ui/document-viewer', () => ({
-  DocumentViewer: () => <div>document</div>,
+  DocumentViewer: ({ imageUrl }: { imageUrl: string }) => <img src={imageUrl} alt="document image" />,
 }));
 jest.mock('@/components/ui/audio-reel-player', () => ({
   AudioReelPlayer: () => <div>audio</div>,
@@ -126,5 +128,33 @@ describe('start quality selection', () => {
     );
     expect(screen.queryByTestId('plain-text-handout')).not.toBeInTheDocument();
     expect(screen.getByText('Secret cipher found in desk.')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'document image' })).toHaveAttribute('src', '/letter.png');
+  });
+
+  it.each([
+    [
+      'Prabuty',
+      STREFA_11_ADVENTURES.find((adventure) => adventure.id === 'cien-nad-prabutami')!,
+      'clue-photo-prabuty-1947',
+      '/handouts/cien-nad-prabutami/playtest/photo-1947.png',
+    ],
+    [
+      'Englewood',
+      AMERICAN_COLD_CASES_ADVENTURES.find((adventure) => adventure.id === 'englewood-murder-castle-1893')!,
+      'blueprint-castle-2nd-floor',
+      '/handouts/englewood-murder-castle-1893/blueprint-castle-2nd-floor-v2.png',
+    ],
+  ])('MID shows the configured static %s handout image', (_name, adventure, slug, expectedImage) => {
+    localStorage.setItem('ai_settings', JSON.stringify({ qualityPreset: 'mid' }));
+    render(
+      <>
+        {renderHandout(
+          { type: 'handout', handoutSlug: slug as string, content: '' },
+          0,
+          adventure as (typeof STREFA_11_ADVENTURES)[number]
+        )}
+      </>
+    );
+    expect(screen.getByRole('img', { name: 'document image' })).toHaveAttribute('src', expectedImage);
   });
 });

@@ -394,7 +394,7 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     expect(payload.audioDirection).toContain('dynamic momentum');
   });
 
-  it('Issue #78: odzyskuje audio z persistentMediaCache z pominięciem zapytania sieciowego fetch (Cache Hit)', async () => {
+  it('Issue #78: potwierdza dostawcę i odzyskuje audio z cache bez POST syntezy (Cache Hit)', async () => {
     const { persistentMediaCache } = await import('@/lib/persistent-media-cache');
     const isAvailableSpy = jest.spyOn(persistentMediaCache, 'isAvailable').mockReturnValue(true);
     const getTtsAudioSpy = jest.spyOn(persistentMediaCache, 'getTtsAudio').mockResolvedValue('data:audio/wav;base64,mock-cached-audio');
@@ -411,7 +411,8 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(getTtsAudioSpy).toHaveBeenCalled();
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledWith('/api/tts/gemini?languageCode=pl-PL', expect.objectContaining({ method: 'GET' }));
+    expect((global.fetch as jest.Mock).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
 
     isAvailableSpy.mockRestore();
     getTtsAudioSpy.mockRestore();

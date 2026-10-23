@@ -84,10 +84,10 @@ export function parseIntoSections(content: string): Section[] {
         /^\[?(?:NOTATKA_BADACZA|STICKY_NOTE|INVESTIGATOR_NOTE)/i.test(handoutBuffer[0].trim());
 
       const isDialogueLine =
-        /^[\u201E\u201C\u201D\u0022].+?[\u201E\u201C\u201D\u0022](?:\s*[\u2014\u2013-]\s*.+)?$/.test(
+        /^[\u201E\u201C\u201D\u0022].+?[\u201E\u201C\u201D\u0022][.!?,;:…]*(?:\s*[\u2014\u2013-]\s*.+)?$/.test(
           trimmedLine
         ) ||
-        /^.+?:\s*[\u201E\u201C\u201D\u0022].+?[\u201E\u201C\u201D\u0022]$/.test(
+        /^.+?:\s*[\u201E\u201C\u201D\u0022].+?[\u201E\u201C\u201D\u0022][.!?,;:…]*$/.test(
           trimmedLine
         ) ||
         /^[\u201E\u201C\u201D\u0022]/.test(trimmedLine) ||
@@ -190,6 +190,9 @@ export function parseIntoSections(content: string): Section[] {
         /^.+?:\s*[\u201E\u201C\u201D\u0022].+?[\u201E\u201C\u201D\u0022]$/.test(
           trimmedLine
         ) ||
+        /^.+?:\s*[\u201E\u201C\u201D\u0022].+?[\u201E\u201C\u201D\u0022][.!?,;:…]+$/.test(
+          trimmedLine
+        ) ||
         /^[\u2014\u2013-]\s*.+$/.test(trimmedLine));
 
     if (isDialogue || /^[\u201E\u201C\u201D\u0022]/.test(trimmedLine)) {
@@ -200,19 +203,30 @@ export function parseIntoSections(content: string): Section[] {
       // Wyodrębnij mówcę jeśli możliwe
       let speaker = '';
       let dialogueText = trimmedLine;
+      let punctuationAfterQuote: string | undefined;
 
       const speakerMatch = trimmedLine.match(
-        /^(?:[*_]*)(.+?)(?:[*_]*):\s*[\u201E\u201C\u201D\u0022](.+)[\u201E\u201C\u201D\u0022]$/
+        /^(?:[*_]*)(.+?)(?:[*_]*):\s*[\u201E\u201C\u201D\u0022](.+)[\u201E\u201C\u201D\u0022]([.!?,;:…]*)$/
       );
       if (speakerMatch) {
         speaker = speakerMatch[1].replace(/[*_]/g, '').trim();
         dialogueText = speakerMatch[2];
+        punctuationAfterQuote = speakerMatch[3] || undefined;
+      } else {
+        const quotedLineMatch = trimmedLine.match(
+          /^[\u201E\u201C\u201D\u0022](.+)[\u201E\u201C\u201D\u0022]([.!?,;:…]*)$/
+        );
+        if (quotedLineMatch) {
+          dialogueText = quotedLineMatch[1];
+          punctuationAfterQuote = quotedLineMatch[2] || undefined;
+        }
       }
 
       sections.push({
         type: 'dialogue',
         content: dialogueText,
         speaker: speaker,
+        ...(punctuationAfterQuote ? { punctuationAfterQuote } : {}),
       });
       currentSection = null;
       continue;
@@ -379,12 +393,12 @@ function hasHandoutBodyContent(buffer: string[]): boolean {
 }
 
 function isHandoutStart(line: string): boolean {
-  // IND-224: tagi protokołu (DZIENNIK:typ:..., MYŚLI_MG:, NASTRÓJ:, CEL_NARRACYJNY:)
+  // IND-224: tagi protokołu (DZIENNIK:typ:..., (?:MYŚLI_MG|THOUGHTS):, NASTRÓJ:, CEL_NARRACYJNY:)
   // to NIE handouty. "DZIENNIK" jest aliasem gazety (H9), więc bare/niedomknięty tag
   // mylił parser → fałszywy "WYCINEK PRASOWY" + surowe tagi w środku. Protokół ma ':'
   // tuż po słowie-kluczu; tytuł gazety ("Dziennik Polski") ma spację, więc nietknięty.
   if (
-    /^\[?(?:DZIENNIK|JOURNAL|MYŚLI_MG|NASTRÓJ|CEL_NARRACYJNY|MASKA_NPC|RETRO_ZIARNO|KORELACJA|ECHO_AKCJI)\s*:/i.test(
+    /^\[?(?:DZIENNIK|JOURNAL|(?:MYŚLI_MG|THOUGHTS)|NASTRÓJ|CEL_NARRACYJNY|MASKA_NPC|RETRO_ZIARNO|KORELACJA|ECHO_AKCJI)\s*:/i.test(
       line
     )
   )

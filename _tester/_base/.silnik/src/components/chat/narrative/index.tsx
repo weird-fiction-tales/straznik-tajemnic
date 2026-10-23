@@ -1,4 +1,5 @@
 'use client';
+import type { DossierHandoutBinding } from '@/lib/adventure-dossier/local-handouts';
 
 import { useMemo } from 'react';
 import type { AnyAdventureContext } from '@/lib/handout-resolver';
@@ -11,6 +12,8 @@ interface NarrativeFormatterProps {
   onImageClick?: (imgUrl: string, allImages: string[]) => void;
   isDirectorMode?: boolean;
   adventureContext?: AnyAdventureContext | null;
+  allowedDossierHandoutRecordIds?: string[];
+  dossierHandoutBinding?: DossierHandoutBinding;
 }
 
 /**
@@ -31,11 +34,13 @@ export function NarrativeFormatter({
   onImageClick,
   isDirectorMode,
   adventureContext,
+  allowedDossierHandoutRecordIds,
+  dossierHandoutBinding,
 }: NarrativeFormatterProps) {
   // IND-145 B8: useMemo eliminuje per-render re-parse 50 wiadomości × 30+ regex
   const formattedContent = useMemo(
-    () => formatNarrative(content, playerColors, onImageClick, isDirectorMode, adventureContext),
-    [content, playerColors, onImageClick, isDirectorMode, adventureContext]
+    () => formatNarrative(content, playerColors, onImageClick, isDirectorMode, adventureContext, allowedDossierHandoutRecordIds, dossierHandoutBinding),
+    [content, playerColors, onImageClick, isDirectorMode, adventureContext, allowedDossierHandoutRecordIds, dossierHandoutBinding]
   );
 
   return (

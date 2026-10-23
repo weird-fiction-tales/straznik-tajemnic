@@ -1,9 +1,22 @@
 'use client';
+import { isAuthoredAdventureId } from '@/lib/adventure-dossier/authored-scenarios';
+import { activateAuthoredPrabutySession } from '@/lib/adventure-dossier/authored-client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useLocale } from 'next-intl';
+import { extractLocalDossierImages } from '@/lib/adventure-dossier/local-handouts';
+import { saveLocalDossier } from '@/lib/adventure-dossier/local-library';
 import type { Message } from '@/lib/types';
 import { getApiKeyHeaders } from '@/lib/api-keys-service';
 import { loadAISettings } from '@/lib/ai-settings';
+import {
+  activateLocalDossierPack,
+  findReleasedDossierPack,
+  openPreparedDossier,
+  restorePreparedDossier,
+  hasLocalDossierRuntime,
+  type PreparedDossierPack,
+} from '@/lib/adventure-dossier/client-activation';
 
 /**
  * Hook do zarządzania uploadem i pamięcią PDF
@@ -29,6 +42,8 @@ export interface PdfMemory {
   adventureIndexedLocally?: boolean;
   adventureIndexedChunks?: number;
   adventureId?: string;
+  adventureDossierFingerprint?: string;
+  adventureDossierStatus?: 'ready' | 'unavailable';
   lastUpdated?: string;
 }
 
@@ -93,6 +108,12 @@ export interface UsePdfMemoryReturn {
     type: 'rules' | 'adventure',
     customAdventureId?: string
   ) => Promise<void>;
+  activateDossierForSession: (sessionId: string, adventureId: string) => Promise<{
+    ok: boolean;
+    reason?: string;
+    adventureDossierFingerprint?: string;
+    adventureDossierStatus?: 'ready';
+  }>;
   handleFileChange: (
     e: React.ChangeEvent<HTMLInputElement>,
     type: 'rules' | 'adventure',
@@ -107,8 +128,22 @@ interface UsePdfMemoryOptions {
 
 export function usePdfMemory(options: UsePdfMemoryOptions): UsePdfMemoryReturn {
   const { setMessages, adventureId: defaultAdventureId } = options;
+  const locale = useLocale();
 
   const [pdfMemory, setPdfMemory] = useState<PdfMemory>({});
+  const preparedDossierRef = useRef<PreparedDossierPack | null>(null);
+  useEffect(() => {
+    if (!defaultAdventureId) return;
+    setPdfMemory(previous => {
+      if (!previous.adventureId || previous.adventureId === defaultAdventureId) return previous;
+      localStorage.setItem(`pdf_memory:adventure:${previous.adventureId}`, JSON.stringify(previous));
+      const next = Object.fromEntries(Object.entries(previous).filter(([key]) => !key.startsWith('adventure'))) as PdfMemory;
+      localStorage.setItem('pdf_memory', JSON.stringify(next));
+      preparedDossierRef.current = null;
+      return next;
+    });
+  }, [defaultAdventureId, pdfMemory.adventureId]);
+
   const [isUploading, setIsUploading] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -125,6 +160,65 @@ export function usePdfMemory(options: UsePdfMemoryOptions): UsePdfMemoryReturn {
       setUploadProgress(10); // Start
 
       try {
+        if (type === 'adventure') {
+          preparedDossierRef.current = null;
+          const unavailableMemory: PdfMemory = {
+            ...pdfMemory, adventureUrl: '', adventureTextUrl: '',
+            adventureGeminiFileUri: undefined, adventureTextGeminiFileUri: undefined,
+            adventureDossierFingerprint: undefined, adventureDossierStatus: 'unavailable',
+            adventureId: effectiveAdventureId, adventureFileName: file.name,
+            adventureIndexedLocally: false, adventureIndexedChunks: 0,
+          };
+          setPdfMemory(unavailableMemory);
+          localStorage.setItem('pdf_memory', JSON.stringify(unavailableMemory));
+          if (!hasLocalDossierRuntime()) throw new Error(locale === 'en'
+            ? 'Adventure dossiers require the application to run locally on this device.'
+            : 'Teczki wymagają uruchomienia aplikacji lokalnie na tym urządzeniu.');
+          const lookup = effectiveAdventureId
+            ? await findReleasedDossierPack(effectiveAdventureId, file)
+            : { ok: false as const, reason: 'pack_not_found' as const };
+          if (lookup.ok) {
+            const payload = await openPreparedDossier(lookup.prepared);
+            const images = await extractLocalDossierImages(file, payload);
+            await saveLocalDossier(lookup.prepared, images);
+            preparedDossierRef.current = lookup.prepared;
+            const newMemory: PdfMemory = {
+              ...pdfMemory,
+              adventureUrl: '',
+              adventureTextUrl: '',
+              adventureGeminiFileUri: undefined,
+              adventureTextGeminiFileUri: undefined,
+              adventureFileName: file.name,
+              adventureIndexedLocally: false,
+              adventureIndexedChunks: 0,
+              adventureId: effectiveAdventureId,
+              adventureDossierFingerprint: lookup.prepared.expectedFingerprint,
+              adventureDossierStatus: 'ready',
+              lastUpdated: new Date().toISOString(),
+            };
+            setPdfMemory(newMemory);
+            localStorage.setItem('pdf_memory', JSON.stringify(newMemory));
+            setMessages((prev) => [...prev, {
+              id: `dossier-ready-${Date.now()}`,
+              role: 'assistant',
+              content: locale === 'en'
+                ? 'The adventure edition has been recognized. It is ready to start; the PDF remains on this device.'
+                : 'Rozpoznano wydanie przygody. Możesz rozpocząć grę; PDF pozostaje na tym urządzeniu.',
+              timestamp: new Date(),
+            }]);
+            setUploadProgress(100);
+            return;
+          }
+          setMessages(prev => [...prev, {
+            id: `dossier-unavailable-${Date.now()}`, role: 'assistant',
+            content: locale === 'en'
+              ? 'This adventure edition is not available to play yet. The PDF has not been uploaded.'
+              : 'To wydanie przygody nie jest jeszcze dostępne do gry. PDF nie został wysłany.',
+            timestamp: new Date(),
+          }]);
+          return;
+        }
+
         console.log(
           `📤 Starting PDF upload for ${type}: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)}MB)`
         );
@@ -291,9 +385,16 @@ export function usePdfMemory(options: UsePdfMemoryOptions): UsePdfMemoryReturn {
       } catch (error) {
         console.error('❌ Błąd podczas uploadu PDF:', error);
 
-        const errorContent = `❌ Błąd podczas wczytywania pliku`;
-        const errorDetails =
-          error instanceof Error ? error.message : 'Nieznany błąd';
+        const errorContent = locale === 'en' ? 'Unable to import the file.' : 'Nie udało się wczytać pliku.';
+        const errorDetails = type === 'adventure'
+          ? !hasLocalDossierRuntime()
+            ? locale === 'en'
+              ? 'Run the application locally on this device to open an adventure.'
+              : 'Aby otworzyć przygodę, uruchom aplikację lokalnie na tym urządzeniu.'
+            : locale === 'en'
+              ? 'The adventure and its required materials could not be prepared. The PDF has not been uploaded.'
+              : 'Nie udało się przygotować przygody i jej wymaganych materiałów. PDF nie został wysłany.'
+          : error instanceof Error ? error.message : locale === 'en' ? 'Unknown error' : 'Nieznany błąd';
 
         const errorMessage: Message = {
           id: `error-${Date.now()}`,
@@ -308,7 +409,42 @@ export function usePdfMemory(options: UsePdfMemoryOptions): UsePdfMemoryReturn {
         setTimeout(() => setUploadProgress(0), 500);
       }
     },
-    [pdfMemory, setMessages, defaultAdventureId]
+    [pdfMemory, setMessages, defaultAdventureId, locale]
+  );
+
+  const activateDossierForSession = useCallback(
+    async (sessionId: string, adventureId: string) => {
+      const fingerprint = pdfMemory.adventureId && pdfMemory.adventureId !== adventureId ? undefined : pdfMemory.adventureDossierFingerprint;
+      if (isAuthoredAdventureId(adventureId) && !preparedDossierRef.current) {
+        try {
+          const authored = await activateAuthoredPrabutySession(sessionId, adventureId, fingerprint, { freshSession: true });
+          if (authored) {
+            const binding = { adventureDossierFingerprint: authored.editionFingerprint, adventureDossierStatus: 'ready' as const };
+            setPdfMemory(previous => {
+              const next = { ...previous, ...binding, adventureId };
+              localStorage.setItem('pdf_memory', JSON.stringify(next));
+              return next;
+            });
+            return { ok: true, ...binding };
+          }
+        } catch { return { ok: false, reason: 'LOCAL_PLAYTEST_ACTIVATION_FAILED' }; }
+      }
+      const cached = preparedDossierRef.current;
+      const prepared = cached?.adventureId === adventureId && cached.expectedFingerprint === fingerprint
+        ? cached : fingerprint ? await restorePreparedDossier(adventureId, fingerprint) : null;
+      if (!fingerprint && !prepared) return { ok: true };
+      if (!prepared || prepared.adventureId !== adventureId) {
+        return { ok: false, reason: 'DOSSIER_LOCAL_SOURCE_UNAVAILABLE' };
+      }
+      return activateLocalDossierPack({
+        sessionId,
+        adventureId,
+        expectedFingerprint: prepared.expectedFingerprint,
+        sourcePdf: prepared.sourcePdf,
+        encryptedPack: prepared.encryptedPack,
+      });
+    },
+    [pdfMemory.adventureDossierFingerprint, pdfMemory.adventureId],
   );
 
   const handleFileChange = useCallback(
@@ -333,6 +469,7 @@ export function usePdfMemory(options: UsePdfMemoryOptions): UsePdfMemoryReturn {
     uploadProgress,
     indexingProgress,
     handlePdfUpload,
+    activateDossierForSession,
     handleFileChange,
   };
 }

@@ -1,4 +1,7 @@
 import { InvestigatorBoardState } from '@/types/investigator-board';
+import type { DossierInventoryState } from './adventure-dossier/inventory-state';
+import type { DossierWorldState } from './adventure-dossier/world-object-state';
+import type { CampaignClockSnapshot } from './time-manager';
 import { AISettings } from './ai-settings';
 import {
   Character,
@@ -6,8 +9,10 @@ import {
   NPC,
   Location,
   MessageIllustration,
+  Message as RuntimeMessage,
   HotSeatConfig,
   EquipmentVisualEra,
+  GameTime,
 } from './types';
 import type { WorldSetupBundleV1 } from './world-setup';
 import { isWorldSetupBundle } from './world-setup';
@@ -23,13 +28,20 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  gameTime?: GameTime;
   illustrations?: MessageIllustration[];
   // URL-e/base64 wygenerowanych obrazów scen (pole `generatedImages` z @/lib/types).
   // Zapisywane do save'u, więc MUSZĄ tu być, by ścieżka load je odtworzyła.
   generatedImages?: string[];
+  generatedImageTypes?: RuntimeMessage['generatedImageTypes'];
+  generatedImageCacheIds?: string[];
+  skillTests?: RuntimeMessage['skillTests'];
   finishReason?: string;
   continuationRequested?: boolean;
-  mechanicsContext?: { chase?: ChaseState };
+  dossierHandoutRecordIds?: string[];
+  dossierInventoryWritesAllowed?: boolean;
+  dossierHandoutBinding?: { adventureId: string; editionFingerprint: string };
+  mechanicsContext?: RuntimeMessage['mechanicsContext'];
 }
 
 /**
@@ -94,6 +106,9 @@ export interface FullGameSave {
   /** Tożsamość trwałej pamięci kampanii. Brak w save'ach sprzed 2.1.0. */
   campaignMemory?: CampaignMemoryScope;
   memorySnapshot?: CampaignMemorySnapshot;
+  dossierInventory?: DossierInventoryState;
+  dossierWorldState?: DossierWorldState;
+  clockState?: CampaignClockSnapshot;
 
   // === NPC ===
   npcs: NPC[];
@@ -113,6 +128,9 @@ export interface FullGameSave {
 
   // === PDF Memory ===
   pdfMemory: {
+    adventureId?: string;
+    adventureDossierFingerprint?: string;
+    adventureDossierStatus?: 'ready' | 'unavailable';
     rulesUrl?: string;
     rulesGeminiFileUri?: string;
     rulesFileName?: string;
@@ -181,6 +199,9 @@ export class FullGameSaveManager {
     activeCampaignId?: string;
     campaignMemory?: CampaignMemoryScope;
     memorySnapshot?: CampaignMemorySnapshot;
+    dossierInventory?: DossierInventoryState;
+    dossierWorldState?: DossierWorldState;
+    clockState?: CampaignClockSnapshot;
     npcs: NPC[];
     locations: Location[];
     currentLocationId?: string;
@@ -235,6 +256,9 @@ export class FullGameSaveManager {
       activeCampaignId: data.activeCampaignId,
       campaignMemory: data.campaignMemory,
       memorySnapshot: data.memorySnapshot,
+      dossierInventory: data.dossierInventory,
+      dossierWorldState: data.dossierWorldState,
+      clockState: data.clockState,
 
       // NPC
       npcs: data.npcs,

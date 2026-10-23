@@ -1,0 +1,173 @@
+
+> straznik-tajemnic@0.9.5 prebuild
+> node scripts/gen-adventure-catalog.mjs && node scripts/prepare-mythos-dataset.mjs
+
+[gen-adventure-catalog] generated.ts -> ./adventures-catalog.public (publiczny/pusty)
+[mythos] 4483/4484 canonical records; rejected 1
+
+> straznik-tajemnic@0.9.5 build
+> next build --webpack
+
+▲ Next.js 16.3.4 (webpack)
+⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of <repo>/package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * <repo>/_tester/_base/.silnik/package-lock.json
+
+✓ Running next.config.ts took 904ms
+- Experiments (use with caution):
+  · proxyClientMaxBodySize: "500mb"
+  · serverActions
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+⚠ Compiled with warnings in 26.6s
+
+./src/lib/custom-adventures-storage.ts
+Module not found: Can't resolve 'stream/web' in '<repo>/_tester/_base/.silnik/src/lib'
+
+Import trace for requested module:
+./src/lib/custom-adventures-storage.ts
+./src/hooks/useCustomAdventures.ts
+./src/app/[locale]/page.tsx
+
+../../../../../_tester/_base/.silnik/node_modules/unpdf/dist/index.mjs
+Critical dependency: Accessing import.meta directly is unsupported (only property access or destructuring is supported)
+
+Import trace for requested module:
+../../../../../_tester/_base/.silnik/node_modules/unpdf/dist/index.mjs
+./src/lib/pdf-parser-service.ts
+./src/app/api/pdf/parse/route.ts
+
+../../../../../_tester/_base/.silnik/node_modules/next/dist/esm/server/app-render/dynamic-rendering.js
+A Node.js API is used (process.cwd at line: 1044) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../../../../_tester/_base/.silnik/node_modules/next/dist/esm/server/app-render/dynamic-rendering.js
+../../../../../_tester/_base/.silnik/node_modules/next/dist/esm/server/request/connection.js
+../../../../../_tester/_base/.silnik/node_modules/next/dist/esm/server/web/exports/index.js
+../../../../../_tester/_base/.silnik/node_modules/next/dist/esm/api/server.js
+
+../../../../../_tester/_base/.silnik/node_modules/next/dist/esm/server/app-render/dynamic-rendering.js
+A Node.js API is used (process.cwd at line: 1044) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../../../../_tester/_base/.silnik/node_modules/next/dist/esm/server/app-render/dynamic-rendering.js
+../../../../../_tester/_base/.silnik/node_modules/next/dist/esm/server/request/connection.js
+../../../../../_tester/_base/.silnik/node_modules/next/dist/esm/server/web/exports/index.js
+../../../../../_tester/_base/.silnik/node_modules/next/dist/esm/api/server.js
+
+  Running TypeScript ...
+  Finished TypeScript in 20.7s ...
+  Collecting page data using 13 workers ...
+  Generating static pages using 13 workers (0/71) ...
+  Generating static pages using 13 workers (17/71) 
+  Generating static pages using 13 workers (35/71) 
+  Generating static pages using 13 workers (53/71) 
+✓ Generating static pages using 13 workers (71/71) in 800ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /[locale]
+├ ƒ /[locale]/[...rest]
+├ ƒ /[locale]/campaigns
+├ ƒ /[locale]/campaigns/new
+├ ƒ /[locale]/characters
+├ ƒ /[locale]/characters/new
+├ ƒ /[locale]/dice
+├ ƒ /[locale]/prototypes
+├ ƒ /[locale]/prototypes/cutscene
+├ ƒ /[locale]/settings
+├ ƒ /api/adventure-creator
+├ ƒ /api/adventure-dossier/activate
+├ ƒ /api/adventure-dossier/playtest
+├ ƒ /api/adventure/analyze
+├ ƒ /api/adventure/generate
+├ ƒ /api/adventure/setup
+├ ƒ /api/ai/gemini
+├ ƒ /api/ai/google-tts
+├ ƒ /api/ai/utility
+├ ƒ /api/analyze-image
+├ ƒ /api/chat
+├ ƒ /api/chat-test
+├ ƒ /api/context/chunk
+├ ƒ /api/context/summarize
+├ ƒ /api/desktop/cold-start
+├ ƒ /api/desktop/telemetry
+├ ƒ /api/desktop/update/check
+├ ƒ /api/desktop/update/start
+├ ƒ /api/desktop/update/status
+├ ƒ /api/diagnostics/crash-dump
+├ ƒ /api/equipment/enrich
+├ ƒ /api/equipment/generate-starting
+├ ƒ /api/equipment/read-item
+├ ƒ /api/feedback
+├ ƒ /api/flux-kontext
+├ ƒ /api/game-save
+├ ƒ /api/game-save/image
+├ ƒ /api/game-save/upload-images
+├ ƒ /api/gcs/configure-cors
+├ ƒ /api/gm-tools/sync
+├ ƒ /api/health/gemini
+├ ƒ /api/imagen
+├ ƒ /api/immersion/books
+├ ƒ /api/immersion/daylight
+├ ƒ /api/immersion/historical-news
+├ ƒ /api/immersion/npc-identity
+├ ƒ /api/immersion/prices
+├ ƒ /api/memory/restore
+├ ƒ /api/memory/turn
+├ ƒ /api/mythos/[id]
+├ ƒ /api/mythos/ask
+├ ƒ /api/mythos/index
+├ ƒ /api/npc/generate-rich
+├ ƒ /api/npc/list
+├ ƒ /api/pdf-memory
+├ ƒ /api/pdf/extract-text
+├ ƒ /api/pdf/ingest-local
+├ ƒ /api/pdf/parse
+├ ƒ /api/pdf/parse-local
+├ ƒ /api/placeholder-image
+├ ƒ /api/pricing/refresh
+├ ƒ /api/random-event
+├ ƒ /api/replicate-image
+├ ƒ /api/session
+├ ƒ /api/session/cliffhanger
+├ ƒ /api/session/cloud
+├ ƒ /api/summarize-scene
+├ ƒ /api/tts
+├ ƒ /api/tts/elevenlabs
+├ ƒ /api/tts/gemini
+├ ƒ /api/tts/google
+├ ƒ /api/upload
+├ ƒ /api/upload-gm-instructions
+├ ƒ /api/upload-pdf
+├ ƒ /api/user/usage
+├ ƒ /api/vertex-imagen
+├ ƒ /campaigns
+├ ƒ /campaigns/new
+├ ƒ /characters
+├ ƒ /characters/new
+├ ƒ /dice
+├ ƒ /prototypes
+├ ƒ /prototypes/cutscene
+├ ƒ /settings
+└ ƒ /welcome
+
+
+ƒ Proxy (Middleware)
+
+ƒ  (Dynamic)  server-rendered on demand
+

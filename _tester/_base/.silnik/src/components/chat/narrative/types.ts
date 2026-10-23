@@ -35,6 +35,8 @@ export interface Section {
   content: string;
   title?: string;
   speaker?: string;
+  /** Znak interpunkcyjny zapisany po zamykającym cudzysłowie kwestii. */
+  punctuationAfterQuote?: string;
   handoutType?: HandoutType;
   handoutSlug?: string;
   stickyNote?: StickyNote;

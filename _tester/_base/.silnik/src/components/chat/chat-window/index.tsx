@@ -19,7 +19,7 @@ import { ImageLightbox } from '../../ui/image-lightbox';
 import { RollTestModal, type RollTestData } from '../../dialogs/RollTestModal';
 import { WelcomeScreen } from '../WelcomeScreen';
 import type { ChatWindowProps } from './types';
-import type { SkillTestData } from '@/lib/parsers/types';
+import type { SkillTestData, SkillRollResolution } from '@/lib/parsers/types';
 import { usePlayerColors } from './hooks/use-player-colors';
 import { useResolvedPortrait } from '@/hooks/useResolvedPortrait';
 import {
@@ -35,12 +35,17 @@ import { TTSHardLoadingScreen } from './components/tts-hard-loading-screen';
 import { CombatDexRibbon } from '@/components/combat/CombatDexRibbon';
 import { getSkillValue } from '@/lib/types';
 import { resolveTestValue } from '@/lib/skill-test-resolver';
+import { loadCampaignMemoryScope } from '@/core/memory/campaign-scope';
+import { completedSkillTestsFromHistory } from './utils/completed-skill-tests';
 
 export const ChatWindow: FC<ChatWindowProps> = ({
   messages,
   newMessage,
   setNewMessage,
   handleSendMessage,
+  dossierProtocolFailure,
+  pendingDossierSkillRollRetry,
+  retryDossierSkillRoll,
   pendingCombatAttack,
   pendingCombatDefensesUsed = 0,
   combatDefenseWeapons = [],
@@ -121,6 +126,18 @@ export const ChatWindow: FC<ChatWindowProps> = ({
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const skillRollRetryInFlightRef = useRef(false);
+  const [isRetryingSkillRoll, setIsRetryingSkillRoll] = useState(false);
+  const retrySavedSkillRoll = async () => {
+    if (!pendingDossierSkillRollRetry || !retryDossierSkillRoll || isLoading || skillRollRetryInFlightRef.current) return;
+    skillRollRetryInFlightRef.current = true;
+    setIsRetryingSkillRoll(true);
+    try { await retryDossierSkillRoll(); }
+    finally {
+      skillRollRetryInFlightRef.current = false;
+      setIsRetryingSkillRoll(false);
+    }
+  };
 
   // Tryb reżyserski (Kulisy MG / BOP) - domyślnie wyłączony z zapamiętywaniem w localStorage
   const [isDirectorMode, setIsDirectorMode] = useState<boolean>(() => {
@@ -202,15 +219,31 @@ export const ChatWindow: FC<ChatWindowProps> = ({
   const [activeSkillTest, setActiveSkillTest] = useState<SkillTestData | null>(
     null
   );
-  const [completedTestIds, setCompletedTestIds] = useState<Set<string>>(
-    () => new Set()
+  const rollScope = loadCampaignMemoryScope();
+  const rollScopeKey = JSON.stringify([rollScope?.playthroughId ?? null, rollScope?.adventureId ?? adventureContext?.id ?? null]);
+  const [localCompletedTests, setLocalCompletedTests] = useState<{scopeKey:string;tests:Map<string,SkillTestData>}>(
+    () => ({scopeKey:rollScopeKey,tests:new Map()})
   );
+  const completedTestIds = completedSkillTestsFromHistory(messages, rollScope);
+  if (localCompletedTests.scopeKey === rollScopeKey) {
+    for (const [id, sourceTest] of localCompletedTests.tests) {
+      if (messages.some(message => message.skillTests?.includes(sourceTest))) completedTestIds.add(id);
+    }
+  }
+  for (const id of pendingDossierSkillRollRetry?.testIds ?? []) completedTestIds.add(id);
+  const activeRollScopeRef = useRef(rollScopeKey);
+
   const combatRoundAttacks = pendingCombatAttack
     ? messages.flatMap((message) => message.pendingMeleeAttacks ?? []).filter(
         (attack) => attack.roundId === pendingCombatAttack.roundId
       )
     : [];
   const groupResultsRef = useRef(new Map<string, CollectedTestResult[]>());
+  useEffect(() => {
+    setActiveSkillTest(null);
+    groupResultsRef.current.clear();
+  }, [rollScopeKey]);
+
   const resolvedHazardIds = useMemo(() => {
     const ids = new Set<string>();
     const pattern = /\[WYNIK_ZAGROŻENIA:\s*id=([^|\]]+)/gi;
@@ -263,6 +296,8 @@ export const ChatWindow: FC<ChatWindowProps> = ({
             testId: activeSkillTest.id,
             groupId: activeSkillTest.groupId,
             characterId: activeSkillTest.characterId,
+            targetNpcId: activeSkillTest.targetNpcId,
+            isCombat: activeSkillTest.isCombat,
             skill: activeSkillTest.skillName,
             value: activeSkillTest.skillValue,
             difficulty: activeSkillTest.difficulty,
@@ -279,20 +314,30 @@ export const ChatWindow: FC<ChatWindowProps> = ({
   );
 
   const handleRollTest = (test: SkillTestData) => {
+    if (pendingDossierSkillRollRetry || completedTestIds.has(test.id)) return;
+    activeRollScopeRef.current = rollScopeKey;
     setActiveSkillTest(test);
   };
 
-  const handleRollResult = (chatMessage: string, systemContext: string) => {
-    if (!activeSkillTest) return;
+  const handleRollResult = (
+    chatMessage: string,
+    systemContext: string,
+    mechanicsContext?: { skillRolls: SkillRollResolution[] },
+  ) => {
+    if (!activeSkillTest || activeRollScopeRef.current !== rollScopeKey || completedTestIds.has(activeSkillTest.id)) return;
     const result: CollectedTestResult = {
       testId: activeSkillTest.id,
       chatMessage,
       systemContext,
+      skillRolls: mechanicsContext?.skillRolls,
     };
-    setCompletedTestIds((current) => new Set([...current, activeSkillTest.id]));
+    const sourceTest = messages.flatMap(message => message.role === 'assistant' ? message.skillTests ?? [] : [])
+      .find(test => test.id === activeSkillTest.id);
+    if (sourceTest) setLocalCompletedTests(current => ({scopeKey:rollScopeKey,
+      tests:new Map([...(current.scopeKey === rollScopeKey ? current.tests : []),[activeSkillTest.id,sourceTest]])}));
 
     if (!activeSkillTest.groupId) {
-      handleSendMessage(chatMessage);
+      handleSendMessage(chatMessage, mechanicsContext);
       return;
     }
 
@@ -312,7 +357,11 @@ export const ChatWindow: FC<ChatWindowProps> = ({
     // requestem - dopiero komplet trafia do MG jako jedna wiadomość.
     if (progress.complete && progress.combinedMessage) {
       groupResultsRef.current.delete(activeSkillTest.groupId);
-      handleSendMessage(progress.combinedMessage);
+      const skillRolls = progress.results.flatMap((item) => item.skillRolls ?? []);
+      handleSendMessage(
+        progress.combinedMessage,
+        skillRolls.length > 0 ? { skillRolls } : undefined,
+      );
     }
   };
 
@@ -350,6 +399,8 @@ export const ChatWindow: FC<ChatWindowProps> = ({
     new Set(duetCharacterSlots.map((slot) => slot.character?.id)).size === 2;
 
   const tChatHeader = useTranslations('ChatHeader');
+  const tMessageInput = useTranslations('MessageInput');
+  const recoveryWouldOverwrite = Boolean(newMessage.trim() && newMessage !== dossierProtocolFailure?.declaration);
 
   // Auto-scroll do dołu czatu: tylko gdy użytkownik nie przewinął w górę
   useEffect(() => {
@@ -515,6 +566,32 @@ export const ChatWindow: FC<ChatWindowProps> = ({
             )}
           </div>
           {/* Pasek wpisywania tylko w grze - ekran powitalny ma być czysty ("tylko ekran powitalny") */}
+          {dossierProtocolFailure?.code === 'DOSSIER_PROTOCOL_REJECTED' && (
+            <div role="alert" className="mx-4 my-2 border border-brass/50 bg-card px-4 py-3 text-foreground">
+              <p className="font-special-elite font-semibold text-brass">{tMessageInput('dossierProtocolFailureTitle')}</p>
+              <p className="mt-1 text-sm">{tMessageInput('dossierProtocolFailureDescription')}</p>
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm">{dossierProtocolFailure.declaration}</p>
+              <button type="button"
+                disabled={isLoading || Boolean(pendingDossierSkillRollRetry) || recoveryWouldOverwrite}
+                onClick={() => setNewMessage(dossierProtocolFailure.declaration)}
+                className="mt-3 min-h-[44px] border border-brass/50 px-4 text-sm text-brass hover:bg-brass/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50">
+                {tMessageInput('restoreDeclaration')}
+              </button>
+              {recoveryWouldOverwrite && <p className="mt-1 text-sm text-muted-foreground">{tMessageInput('restoreDeclarationOccupied')}</p>}
+            </div>
+          )}
+          {pendingDossierSkillRollRetry && (
+            <div role="alert" className="mx-4 my-2 border border-brass/50 bg-card px-4 py-3 text-foreground">
+              <p className="text-sm font-special-elite text-brass">{tMessageInput('dossierSkillRollRetryDescription')}</p>
+              <button type="button"
+                disabled={isLoading || isRetryingSkillRoll || !retryDossierSkillRoll}
+                onClick={() => { void retrySavedSkillRoll(); }}
+                className="mt-3 min-h-[44px] border border-brass/50 px-4 text-sm text-brass hover:bg-brass/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50">
+                {tMessageInput('retryDossierSkillRoll')}
+              </button>
+            </div>
+          )}
+          <fieldset disabled={Boolean(pendingDossierSkillRollRetry)} className="m-0 min-w-0 border-0 p-0">
           <MessageInput
             newMessage={newMessage}
             setNewMessage={setNewMessage}
@@ -541,6 +618,7 @@ export const ChatWindow: FC<ChatWindowProps> = ({
             sessionEndStatus={sessionEndStatus}
             eraContext={eraContext}
           />
+          </fieldset>
         </>
       )}
       {/* Image Lightbox */}

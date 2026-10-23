@@ -157,6 +157,27 @@ describe('parseIntoSections (Handouty, obrazy i nagrania audio)', () => {
     expect(dialogue?.content).toContain('Nie podoba mi się to, doktorze.');
   });
 
+  it('zamyka handout przed dialogiem z interpunkcją po zamykającym cudzysłowie', () => {
+    const text = [
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      '📜 DOKUMENT ŚLEDCZY: LIST',
+      'Treść dokumentu.',
+      'Helena Krawczyk: „To już wszystko”.',
+    ].join('\n');
+
+    const sections = parseIntoSections(text);
+    expect(sections).toHaveLength(2);
+    expect(sections[0].type).toBe('handout');
+    expect(sections[0].content).toContain('Treść dokumentu.');
+    expect(sections[0].content).not.toContain('Helena Krawczyk:');
+    expect(sections[1]).toMatchObject({
+      type: 'dialogue',
+      speaker: 'Helena Krawczyk',
+      content: 'To już wszystko',
+      punctuationAfterQuote: '.',
+    });
+  });
+
   it('poprawnie parsuje przesyłkę pocztową PRZESYŁKA EKSPRESOWA – POCZTA POLSKA z oddzieleniem narracji po separatorze', () => {
     const text = [
       '[NOTATKA_BADACZA: Kto: Urząd Pocztowy Warszawa 1 | Dotyczy: Zapieczętowana przesyłka ekspresowa | Trop: Koperta zabezpieczona lakiem / zawartość nieznana do momentu otwarcia]',
@@ -331,6 +352,55 @@ describe('parseIntoSections (Handouty, obrazy i nagrania audio)', () => {
     const handoutEn = sectionsEn.find((s) => s.type === 'handout');
     expect(handoutEn).toBeDefined();
     expect(handoutEn?.handoutSlug).toBe('clue-02-boston-globe-1918');
+  });
+
+  it('parsuje dialog z kropką po cudzysłowie i zachowuje rozmówcę oraz interpunkcję', () => {
+    const sections = parseIntoSections('Helena Krawczyk: „Góra dała zielone światło na odcinek”.');
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0]).toMatchObject({
+      type: 'dialogue',
+      speaker: 'Helena Krawczyk',
+      content: 'Góra dała zielone światło na odcinek',
+      punctuationAfterQuote: '.',
+    });
+  });
+
+  it('łączy rozmówcę z kwestią w nowej linii także przy interpunkcji za cudzysłowem', () => {
+    const sections = parseIntoSections('Helena Krawczyk:\n„Góra dała zielone światło na odcinek”.');
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0]).toMatchObject({
+      type: 'dialogue',
+      speaker: 'Helena Krawczyk',
+      content: 'Góra dała zielone światło na odcinek',
+      punctuationAfterQuote: '.',
+    });
+  });
+
+  it.each(['.', '!', '?', ',', ';', ':', '…'])(
+    'zachowuje znak %s po zamykającym cudzysłowie dialogu',
+    (punctuation) => {
+      const sections = parseIntoSections(`Helena: „Wiadomość”${punctuation}`);
+
+      expect(sections[0]).toMatchObject({
+        type: 'dialogue',
+        speaker: 'Helena',
+        content: 'Wiadomość',
+        punctuationAfterQuote: punctuation,
+      });
+    }
+  );
+
+  it('parsuje dialog bez podpisu z kropką po zamykającym cudzysłowie', () => {
+    const sections = parseIntoSections('„Wiadomość bez podpisu”.');
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0]).toMatchObject({
+      type: 'dialogue',
+      content: 'Wiadomość bez podpisu',
+      punctuationAfterQuote: '.',
+    });
   });
 });
 

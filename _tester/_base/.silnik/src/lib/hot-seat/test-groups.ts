@@ -4,6 +4,7 @@ export interface CollectedTestResult {
   testId: string;
   chatMessage: string;
   systemContext: string;
+  skillRolls?: import('@/lib/parsers/types').SkillRollResolution[];
 }
 
 export interface TestGroupProgress {

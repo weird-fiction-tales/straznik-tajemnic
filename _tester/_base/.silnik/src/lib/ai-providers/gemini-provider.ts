@@ -91,6 +91,7 @@ export function isModernGeminiModel(modelId: string): boolean {
   return (
     modelId.includes('gemini-3') ||
     modelId.includes('flash-latest') ||
+    modelId.includes('flash-lite-latest') ||
     modelId.includes('pro-latest')
   );
 }
@@ -112,8 +113,13 @@ export function resolveRetryThinkingConfig(modelId: string): Record<string, unkn
  * - 429 Too Many Requests / RESOURCE_EXHAUSTED / Quota exceeded
  * - 502 Bad Gateway / 503 Service Unavailable / 504 Gateway Timeout / UNAVAILABLE / high demand
  */
+function isDailyQuotaError(err:unknown):boolean {
+  const message=err instanceof Error?err.message:String(err);
+  return /429|RESOURCE_EXHAUSTED/i.test(message)&&/RequestsPerDay|per[_ -]?day|daily quota/i.test(message);
+}
+
 export function isRetryableGeminiError(err: unknown): boolean {
-  if (!err) return false;
+  if (!err || isDailyQuotaError(err)) return false;
   const errMsg = err instanceof Error ? err.message : String(err);
   return (
     errMsg.includes('429') ||
@@ -173,7 +179,7 @@ export class GeminiChatProvider implements IChatProvider {
     this.modelId = modelId || DEFAULT_GEMINI_MODEL;
   }
 
-  private buildRequestPayload(request: ChatCompletionRequest): {
+  private buildRequestPayload(request: ChatCompletionRequest, modelId = this.modelId): {
     config: Record<string, unknown>;
     contents: Content[];
   } {
@@ -185,7 +191,7 @@ export class GeminiChatProvider implements IChatProvider {
     const additionalContext =
       opts?.additionalContext ?? request.additionalContext;
 
-    const isModern = isModernGeminiModel(this.modelId);
+    const isModern = isModernGeminiModel(modelId);
 
     // === config - wszystkie pola generacji bezpośrednio (IND-19: nie ma sub-obiektu generationConfig) ===
     const config: Record<string, unknown> = {
@@ -231,7 +237,7 @@ export class GeminiChatProvider implements IChatProvider {
       }
     } else {
       // gemini-2.5-* (flash/pro): myślenie domyślnie wyłączone (budget 0), chyba że jawnie podano inny budżet.
-      if (this.modelId.includes('gemini-2.5')) {
+      if (modelId.includes('gemini-2.5')) {
         config.thinkingConfig = {
           thinkingBudget: explicitBudget !== undefined ? explicitBudget : THINKING_BUDGET_GEMINI_25,
         };
@@ -295,7 +301,7 @@ export class GeminiChatProvider implements IChatProvider {
     // resolvedCachedContent jest obiektem CachedContent z getOrCreateGeminiCache() w route.ts.
     // Gdy ustawiony: cachedContent w config = cache.name (systemPrompt jest już w cache).
     const resolvedCache: CachedContent | undefined =
-      opts?.resolvedCachedContent;
+      modelId === this.modelId ? opts?.resolvedCachedContent : undefined;
     const hasCachedContent = !!resolvedCache;
 
     if (hasCachedContent) {
@@ -344,13 +350,14 @@ export class GeminiChatProvider implements IChatProvider {
   async streamChat(
     request: ChatCompletionRequest
   ): Promise<StreamingChatResult> {
-    const { config, contents } = this.buildRequestPayload(request);
+    const { contents } = this.buildRequestPayload(request);
 
     // === Wywołanie SDK (IND-19: ai.models.generateContentStream zamiast model.generateContentStream) ===
     // Capture `ai`/`model` do zmiennych - generator (async function*) nie ma dostępu do `this`.
     const ai = this.ai;
     let activeModel = this.modelId;
-    const streamOnce = (modelToUse: string, cfg: Record<string, unknown>) =>
+    const configForModel = (model: string) => this.buildRequestPayload(request, model).config;
+    const streamOnce = (modelToUse: string, cfg = configForModel(modelToUse)) =>
       ai.models.generateContentStream({ model: modelToUse, contents, config: cfg });
 
     // Capture usage + finishReason z ostatniego chunku (dostępne po zakończeniu streamu)
@@ -419,7 +426,7 @@ export class GeminiChatProvider implements IChatProvider {
         }
         activeModel = candidate;
         firstResponse = await executeWithRetry(
-          () => streamOnce(activeModel, config),
+          () => streamOnce(activeModel),
           activeModel
         );
         break;
@@ -445,7 +452,9 @@ export class GeminiChatProvider implements IChatProvider {
           throw err;
         }
 
-        if (isRateLimit) {
+        if (isDailyQuotaError(err)) {
+          console.warn(`Daily quota exhausted for ${candidate}; trying the next configured fallback without retry.`);
+        } else if (isRateLimit) {
           console.warn(
             `⚠️ Model "${candidate}" wyczerpał ponowienia rate-limit 429 (${errMsg}). Oczekiwanie 1500ms i próba alternatywnego modelu w kaskadzie...`
           );
@@ -495,7 +504,7 @@ export class GeminiChatProvider implements IChatProvider {
           data: { model: activeModel, finishReason: lastFinishReason ?? 'unknown' },
         });
         const retryConfig = {
-          ...config,
+          ...configForModel(activeModel),
           thinkingConfig: resolveRetryThinkingConfig(activeModel),
         };
         try {
@@ -547,7 +556,7 @@ export class GeminiChatProvider implements IChatProvider {
   }
 
   async chat(request: ChatCompletionRequest): Promise<ChatResult> {
-    const { config, contents } = this.buildRequestPayload(request);
+    const { contents } = this.buildRequestPayload(request);
     const ai = this.ai;
     let activeModel = this.modelId;
 
@@ -576,7 +585,7 @@ export class GeminiChatProvider implements IChatProvider {
             ai.models.generateContent({
               model: activeModel,
               contents,
-              config,
+              config: this.buildRequestPayload(request, activeModel).config,
             }),
           activeModel
         );
@@ -603,7 +612,9 @@ export class GeminiChatProvider implements IChatProvider {
           throw err;
         }
 
-        if (isRateLimit) {
+        if (isDailyQuotaError(err)) {
+          console.warn(`Daily quota exhausted for ${candidate}; trying the next configured fallback without retry.`);
+        } else if (isRateLimit) {
           console.warn(
             `⚠️ Model "${candidate}" wyczerpał ponowienia rate-limit 429 (${errMsg}). Oczekiwanie 1500ms i próba alternatywnego modelu w kaskadzie...`
           );
