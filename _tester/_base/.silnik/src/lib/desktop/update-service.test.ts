@@ -7,11 +7,13 @@ import {
   checkForDesktopUpdate,
   getCandidateWorkerPaths,
   getCurrentCommitSha,
+  getCurrentVersion,
   getUpdatePackageForPlatform,
   isNewerStableVersion,
   isSameCommit,
   readUpdateStatus,
   resolveAppTarget,
+  startDetachedUpdate,
   resolveUpdateWorkerPath,
   validateManifest,
 } from './update-service';
@@ -19,9 +21,12 @@ import {
 const sha = 'a'.repeat(64);
 const commitOld = '1111111111111111111111111111111111111111';
 const commitNew = '2222222222222222222222222222222222222222';
+const currentVersion: string = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')).version;
+const parts = currentVersion.split('.').map(Number);
+const nextVersion = `${parts[0]}.${parts[1]}.${parts[2] + 1}`;
 const manifest = {
   schemaVersion: 1,
-  version: '0.9.6',
+  version: nextVersion,
   channel: 'stable',
   bundleId: 'com.aios.straznik-tajemnic-ai',
   minimumMacOSVersion: '11.0',
@@ -45,7 +50,7 @@ describe('desktop update service', () => {
   });
 
   it('accepts only stable V1 manifests with HTTPS and the expected bundle ID', () => {
-    expect(validateManifest(manifest)?.version).toBe('0.9.6');
+    expect(validateManifest(manifest)?.version).toBe(nextVersion);
     expect(validateManifest({ ...manifest, commitSha: commitNew, shortCommit: '2222222', publishedAt: '2026-10-04T12:00:00.000Z' })?.commitSha).toBe(commitNew);
     expect(validateManifest({ ...manifest, commitSha: 'not-a-hex-sha!' })).toBeNull();
     expect(validateManifest({ ...manifest, publishedAt: 'invalid-date' })).toBeNull();
@@ -80,6 +85,28 @@ describe('desktop update service', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  it('protects a frozen showcase even when stable updates are explicitly enabled', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'showcase-build-'));
+    const info = path.join(tmpDir, 'build-info.json');
+    fs.writeFileSync(info, JSON.stringify({ channel: 'showcase', version: '0.9.5-showcase.20261023', commitSha: commitOld }));
+    process.env.ZEW_BUILD_INFO_PATH = info;
+    process.env.ZEW_DESKTOP_SELF_UPDATE = '1';
+    process.env.ZEW_UPDATE_MANIFEST_URL = 'https://example.com/manifest.json';
+    const fetcher = jest.fn() as unknown as jest.MockedFunction<typeof fetch>;
+    try {
+      expect(canPerformSelfUpdate()).toBe(false);
+      await expect(getCurrentVersion()).resolves.toBe('0.9.5-showcase.20261023');
+      await expect(checkForDesktopUpdate(fetcher)).resolves.toMatchObject({
+        available: false, configured: false, canSelfUpdate: false,
+        currentVersion: '0.9.5-showcase.20261023',
+      });
+      expect(fetcher).not.toHaveBeenCalled();
+      await expect(startDetachedUpdate(manifest)).rejects.toThrow('Self-update is unavailable');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it('reports an update but disables installation outside an app bundle', async () => {
     process.env.ZEW_UPDATE_MANIFEST_URL = 'https://example.com/manifest.json';
     process.env.ZEW_DESKTOP_SELF_UPDATE = '0';
@@ -89,7 +116,7 @@ describe('desktop update service', () => {
       json: async () => manifest,
     })) as unknown as typeof fetch;
     const result = await checkForDesktopUpdate(fetcher);
-    expect(result).toMatchObject({ available: true, currentVersion: '0.9.5', canSelfUpdate: false });
+    expect(result).toMatchObject({ available: true, currentVersion: currentVersion, canSelfUpdate: false });
   });
 
   it('detects commit-based updates on the same version and reports commitsBehind', async () => {
@@ -99,7 +126,7 @@ describe('desktop update service', () => {
 
     const sameVersionManifest = {
       ...manifest,
-      version: '0.9.5',
+      version: currentVersion,
       commitSha: commitNew,
     };
 
@@ -122,7 +149,7 @@ describe('desktop update service', () => {
     const result = await checkForDesktopUpdate(fetcher);
     expect(result).toMatchObject({
       available: true,
-      currentVersion: '0.9.5',
+      currentVersion: currentVersion,
       currentCommitSha: commitOld,
       currentShortCommit: '1111111',
       commitsBehind: 4,
@@ -137,7 +164,7 @@ describe('desktop update service', () => {
 
     const sameCommitManifest = {
       ...manifest,
-      version: '0.9.5',
+      version: currentVersion,
       commitSha: commitNew,
     };
 
@@ -157,7 +184,7 @@ describe('desktop update service', () => {
 
     const olderCommitManifest = {
       ...manifest,
-      version: '0.9.5',
+      version: currentVersion,
       commitSha: commitOld,
     };
 
@@ -187,7 +214,7 @@ describe('desktop update service', () => {
 
     const diffCommitManifest = {
       ...manifest,
-      version: '0.9.5',
+      version: currentVersion,
       commitSha: commitOld,
     };
 
@@ -217,7 +244,7 @@ describe('desktop update service', () => {
 
     const commitManifest = {
       ...manifest,
-      version: '0.9.5',
+      version: currentVersion,
       commitSha: commitNew,
     };
 

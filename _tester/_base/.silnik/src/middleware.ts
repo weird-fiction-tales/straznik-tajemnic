@@ -24,6 +24,7 @@ export function middleware(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith('/api/')) return withTraceId(request);
   if (request.nextUrl.pathname.startsWith('/fonts/')) return NextResponse.next();
   if (request.nextUrl.pathname === '/welcome') return NextResponse.next();
+  if (request.nextUrl.pathname === '/default-gm-prompt.md' || request.nextUrl.pathname === '/default-gm-prompt-en.md') return NextResponse.next();
   return intlMiddleware(request);
 }
 

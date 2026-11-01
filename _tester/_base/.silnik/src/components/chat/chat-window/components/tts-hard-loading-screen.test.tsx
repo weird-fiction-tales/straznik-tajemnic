@@ -1,10 +1,11 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TTSHardLoadingScreen } from './tts-hard-loading-screen';
 
 // Mock next-intl useTranslations i useLocale
+let mockLocale = 'pl';
 jest.mock('next-intl', () => ({
-  useLocale: () => 'pl',
+  useLocale: () => mockLocale,
   useTranslations: () => (key: string, params?: Record<string, unknown>) => {
     const messages: Record<string, string> = {
       preparingSession: 'Strażnik Tajemnic przygotowuje sesję...',
@@ -21,6 +22,9 @@ jest.mock('next-intl', () => ({
       playBriefing: 'Odsłuchaj zapowiedź sprawy',
       pauseBriefing: 'Pauza',
       playingBriefing: 'Odtwarzanie zapowiedzi sprawy...',
+      startingBriefing: 'Uruchamianie zapowiedzi...',
+      cancelBriefing: 'Anuluj uruchamianie',
+      briefingPlaybackError: 'Nie udało się odtworzyć zapowiedzi. Spróbuj ponownie.',
       briefingAudioTitle: 'Zapowiedź lektorska (audiobook)',
       defaultChronicleIntro: 'W cieniu zapomnianych ulic i zakurzonych archiwów kryją się sekrety...',
       defaultChronicleHook: 'Zbieg tajemniczych okoliczności rzuca badaczy w samo serce śledztwa...',
@@ -42,7 +46,114 @@ jest.mock('next-intl', () => ({
   },
 }));
 
+let audioInstances: HTMLAudioElement[];
+let resolvePlayback: () => void;
+
+beforeEach(() => {
+  mockLocale = 'pl';
+  audioInstances = [];
+  jest.spyOn(globalThis, 'Audio').mockImplementation((src?: string) => {
+    const audio = document.createElement('audio');
+    if (src) audio.src = src;
+    audio.load = jest.fn();
+    audio.pause = jest.fn();
+    audio.play = jest.fn(() => new Promise<void>((resolve) => { resolvePlayback = resolve; }));
+    audioInstances.push(audio);
+    return audio;
+  });
+});
+
+afterEach(() => jest.restoreAllMocks());
+
+describe('zapowiedź audio (Issue #826)', () => {
+  const props = { isStarting: true, adventureTitle: 'Cień nad Prabutami' };
+
+  it('przygotowuje plik przed kliknięciem bez automatycznego odtwarzania', () => {
+    render(<TTSHardLoadingScreen {...props} />);
+    expect(audioInstances).toHaveLength(1);
+    expect(audioInstances[0].preload).toBe('auto');
+    expect(audioInstances[0].load).toHaveBeenCalledTimes(1);
+    expect(audioInstances[0].play).not.toHaveBeenCalled();
+  });
+
+  it('od razu pokazuje oczekiwanie i pozwala je anulować bez późnego startu', async () => {
+    render(<TTSHardLoadingScreen {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /Odsłuchaj zapowiedź/i }));
+    const cancel = screen.getByRole('button', { name: /Anuluj uruchamianie/i });
+    expect(cancel).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByText('Uruchamianie zapowiedzi...')).toBeInTheDocument();
+    fireEvent.click(cancel);
+    expect(audioInstances[0].pause).toHaveBeenCalled();
+    await act(async () => resolvePlayback());
+    expect(screen.getByRole('button', { name: /Odsłuchaj zapowiedź/i })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('obsługuje odtwarzanie, buforowanie i koniec nagrania', async () => {
+    render(<TTSHardLoadingScreen {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /Odsłuchaj zapowiedź/i }));
+    await act(async () => resolvePlayback());
+    expect(screen.getByRole('button', { name: /Pauza/i })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent(audioInstances[0], new Event('waiting'));
+    expect(screen.getByText('Uruchamianie zapowiedzi...')).toBeInTheDocument();
+    fireEvent(audioInstances[0], new Event('playing'));
+    expect(screen.getByRole('button', { name: /Pauza/i })).toBeInTheDocument();
+    fireEvent(audioInstances[0], new Event('ended'));
+    expect(screen.getByRole('button', { name: /Odsłuchaj zapowiedź/i })).toBeInTheDocument();
+  });
+
+  it('pokazuje błąd pliku i pozwala ponowić odtwarzanie', () => {
+    render(<TTSHardLoadingScreen {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /Odsłuchaj zapowiedź/i }));
+    fireEvent(audioInstances[0], new Event('error'));
+    expect(screen.getByText('Nie udało się odtworzyć zapowiedzi. Spróbuj ponownie.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Odsłuchaj zapowiedź/i }));
+    expect(audioInstances[0].load).toHaveBeenCalledTimes(2);
+    expect(audioInstances[0].play).toHaveBeenCalledTimes(2);
+  });
+
+  it('zatrzymuje nagranie i ignoruje opóźnione play po ukryciu ekranu', async () => {
+    const { rerender } = render(<TTSHardLoadingScreen {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /Odsłuchaj zapowiedź/i }));
+    rerender(<TTSHardLoadingScreen {...props} isStarting={false} />);
+    expect(audioInstances[0].pause).toHaveBeenCalled();
+    expect(audioInstances[0].getAttribute('src')).toBeNull();
+    await act(async () => resolvePlayback());
+    expect(screen.queryByRole('button', { name: /Pauza/i })).not.toBeInTheDocument();
+  });
+
+  it('zmiana sprawy zwalnia poprzedni plik i przygotowuje nowy', () => {
+    const { rerender } = render(<TTSHardLoadingScreen {...props} />);
+    rerender(<TTSHardLoadingScreen {...props} adventureTitle="Tajemnica Dzieci z Traszyna" />);
+    expect(audioInstances).toHaveLength(2);
+    expect(audioInstances[0].pause).toHaveBeenCalled();
+    expect(audioInstances[0].getAttribute('src')).toBeNull();
+    expect(audioInstances[1].src).toContain('/tajemnica-dzieci-z-traszyna/');
+    expect(audioInstances[1].play).not.toHaveBeenCalled();
+  });
+
+  it('zmiana języka zatrzymuje oczekujący odsłuch również przy wspólnym pliku fallback', async () => {
+    const { rerender } = render(<TTSHardLoadingScreen {...props} />);
+    const originalUrl = audioInstances[0].src;
+    fireEvent.click(screen.getByRole('button', { name: /Odsłuchaj zapowiedź/i }));
+    mockLocale = 'en';
+    rerender(<TTSHardLoadingScreen {...props} />);
+    expect(audioInstances).toHaveLength(2);
+    expect(audioInstances[0].pause).toHaveBeenCalled();
+    expect(audioInstances[0].getAttribute('src')).toBeNull();
+    expect(audioInstances[1].src).toBe(originalUrl);
+    expect(audioInstances[1].play).not.toHaveBeenCalled();
+    await act(async () => resolvePlayback());
+    expect(screen.getByTestId('briefing-audio-toggle')).toHaveAttribute('data-state', 'idle');
+  });
+});
+
 describe('TTSHardLoadingScreen (Issue #177, #364 & #482)', () => {
+  it('allows cancelling while the narrator is still pending, without waiting for an error',()=>{
+    const onCancel=jest.fn();
+    render(<TTSHardLoadingScreen isStarting startProgress={75} onCancel={onCancel} />);
+    fireEvent.click(screen.getByTestId('loading-screen-cancel-btn'));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
   it('nie renderuje niczego, gdy wszystkie flagi są false', () => {
     const { container } = render(
       <TTSHardLoadingScreen isBuffering={false} isStarting={false} isReadyToEnter={false} />

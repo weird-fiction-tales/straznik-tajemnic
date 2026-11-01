@@ -1,3 +1,4 @@
+import {isShowcaseServer} from '@/lib/adventure-dossier/authored-scenarios';
 /**
  * Gemini TTS endpoint (IND-49)
  *
@@ -17,12 +18,21 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isSameOriginLocalDossierRequest } from '@/lib/adventure-dossier/local-request';
+import { synthesizeMacOsSpeech } from '@/lib/audio/macos-tts';
+
+export const runtime = 'nodejs';
+const localMode = () => process.env.ZEW_LOCAL_TTS === 'macos';
+function localGuard(request?: NextRequest) {
+  return isShowcaseServer() && request && isSameOriginLocalDossierRequest(request);
+}
 import { Modality } from '@google/genai';
 import * as Sentry from '@sentry/nextjs';
 import { getGeminiClient } from '@/lib/gemini-client-pool';
 import { resolveUserId } from '@/lib/auth-user';
 import { recordUserUsage, ttsCostPerChar } from '@/lib/user-usage';
 import { pcmToWav } from '@/lib/audio/pcm-to-wav';
+import { buildGeminiTtsPrompt } from '@/lib/audio/gemini-tts-prompt';
 import {
   GEMINI_VOICES,
   DEFAULT_GEMINI_VOICE,
@@ -70,6 +80,7 @@ function classifyTtsError(error: unknown): {
   httpStatus: number;
   retryAfterSec: number | null;
   isRateLimit: boolean;
+  isDailyQuota?: boolean;
   isTransient: boolean;
   isRetryableTextResponse: boolean;
 } {
@@ -85,6 +96,7 @@ function classifyTtsError(error: unknown): {
       httpStatus: 429,
       retryAfterSec,
       isRateLimit: true,
+      isDailyQuota: /per.?day|daily/i.test(err.message || '') || retryAfterSec >= 3600,
       isTransient: false,
       isRetryableTextResponse: false,
     };
@@ -196,6 +208,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (localMode()) {
+      if (!localGuard(request)) return NextResponse.json({ code: 'LOCAL_TTS_FORBIDDEN', retryable: false }, { status: 403 });
+      if (languageCode !== 'pl-PL' && languageCode !== 'en-US') return NextResponse.json({ code: 'LOCAL_TTS_LANGUAGE', retryable: false }, { status: 400 });
+      if (text.length > 6000) return NextResponse.json({ code: 'LOCAL_TTS_TEXT_LIMIT', retryable: false }, { status: 400 });
+      try {
+        const audio = await synthesizeMacOsSpeech(text.replace(/\[[^\]]*\]/g, '').trim(), languageCode);
+        return NextResponse.json({ success: true, ...audio }, { headers: { 'Cache-Control': 'no-store' } });
+      } catch (error) {
+        const busy = error instanceof Error && error.message === 'LOCAL_TTS_BUSY';
+        return NextResponse.json({ code: busy ? 'LOCAL_TTS_BUSY' : 'LOCAL_TTS_UNAVAILABLE', retryable: busy }, { status: busy ? 429 : 503, headers: busy ? { 'Retry-After': '1' } : {} });
+      }
+    }
+
     const voiceId = voice || DEFAULT_GEMINI_VOICE;
     if (!isValidGeminiVoice(voiceId)) {
       return NextResponse.json(
@@ -210,9 +235,10 @@ export async function POST(request: NextRequest) {
     // X-Gemini-Api-Key (localStorage, jeśli gracz wpisał własny), fallbackiem jest
     // serwerowy GEMINI_API_KEY z .env.local. Offline jeden klucz zasila wszystko
     // (czat/obrazy/lektor) - bez ręcznego wpisywania w modal. Brak obu = 401.
-    const apiKey =
-      request.headers.get('X-Gemini-Api-Key')?.trim() ||
-      process.env.GEMINI_API_KEY?.trim();
+    const clientApiKey = request.headers.get('X-Gemini-Api-Key')?.trim();
+    const apiKey = clientApiKey || process.env.GEMINI_API_KEY?.trim();
+    const localServerTransport = !clientApiKey && Boolean(process.env.GEMINI_API_KEY?.trim()) &&
+      isShowcaseServer() && isSameOriginLocalDossierRequest(request);
     if (!apiKey) {
       return NextResponse.json(
         {
@@ -224,7 +250,7 @@ export async function POST(request: NextRequest) {
     }
 
     const tier = request.headers.get('X-Gemini-Tier')?.trim();
-    if (tier === 'free') {
+    if (tier === 'free' && !localServerTransport) {
       return NextResponse.json({
         success: false,
         code: 'PURE_TEXT_MODE_ACTIVE',
@@ -251,11 +277,9 @@ export async function POST(request: NextRequest) {
       ? enhanceAudioDirectionWithPhonetics(audioDirection || '', 'pl')
       : audioDirection;
 
-    // Issue #693: Do syntezy audio przekazujemy wyłącznie właściwy tekst literacki (normalizedText).
-    // Wcześniejsze doklejanie angielskiej dyrektywy reżyserskiej (`${effectiveAudioDirection}\n\n${normalizedText}`)
-    // powodowało, że model wielojęzyczny Gemini TTS przy languageCode='pl-PL' czytał angielskie instrukcje
-    // na głos z polską fonetyką („gwara / mowa Cthulhu / węgierski”), których w ogóle nie było w tekście opowieści.
-    const promptText = normalizedText;
+    // Issue #835: Gemini 3.1 needs explicit silent performance sections and a
+    // separate TRANSCRIPT, not the naive direction prefix that regressed #693.
+    const promptText = buildGeminiTtsPrompt(normalizedText, effectiveAudioDirection, effectiveLang);
 
     // IND-191 + IND-236: retry server-side. Walidacja audio jest WEWNĄTRZ operacji -
     // brak inlineData rzuca sentinel (text-instead-of-audio) → ponowienie zamiast 500.
@@ -308,13 +332,14 @@ export async function POST(request: NextRequest) {
       success: true,
       audioUrl,
       voice: voiceId,
+      provider: 'gemini',
       model: model || DEFAULT_MODEL,
       languageCode: languageCode || DEFAULT_LANGUAGE_CODE,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error('Gemini TTS Route Error:', error);
-    const { httpStatus, retryAfterSec, isRateLimit } = classifyTtsError(error);
+    const { httpStatus, retryAfterSec, isRateLimit, isDailyQuota } = classifyTtsError(error);
 
     // IND-191: 429 (rate-limit) = oczekiwane przy free-tier - zwróć 429 + Retry-After,
     // klient (useTTS) ponowi segment. NIE zaśmiecaj Sentry (tylko breadcrumb).
@@ -327,7 +352,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Limit zapytań TTS przekroczony - spróbuj za chwilę',
-          retryable: true,
+          retryable: !isDailyQuota,
+          code: isDailyQuota ? 'TTS_DAILY_QUOTA_EXCEEDED' : 'TTS_RATE_LIMITED',
         },
         {
           status: 429,
@@ -380,8 +406,19 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/tts/gemini - list dostępnych prebuiltów
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  let provider = 'gemini';
+  let voice: string | undefined;
+  if (localMode()) {
+    if (!localGuard(request)) return NextResponse.json({ code: 'LOCAL_TTS_FORBIDDEN' }, { status: 403 });
+    const languageCode = request?.nextUrl.searchParams.get('languageCode') || 'pl-PL';
+    if (languageCode !== 'pl-PL' && languageCode !== 'en-US') return NextResponse.json({ code: 'LOCAL_TTS_LANGUAGE' }, { status: 400 });
+    voice = languageCode === 'pl-PL' ? 'Zosia' : 'Samantha';
+    provider = languageCode === 'pl-PL' ? 'macos-zosia' : 'macos-samantha';
+  }
   return NextResponse.json({
+    provider,
+    voice,
     success: true,
     voices: GEMINI_VOICES.map((v) => ({
       voiceId: v.voiceId,

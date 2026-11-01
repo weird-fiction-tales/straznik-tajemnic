@@ -249,6 +249,22 @@ describe('MessageCard - zagrożenia', () => {
     }],
   };
 
+  it('does not expose damage from stale saved metadata when the original tag explicitly has zero fall height',()=>{
+    const onCharacterUpdate=jest.fn(),onSendHazardResult=jest.fn();
+    render(<MessageCard {...baseProps} message={{...hazardMessage,content:'Przyjazd do Prabut. [ZAGROŻENIE: @Tomasz Nowicki | typ=upadek | wys=0m | podloze=normalne | opis=Nocna podróż i chłód prowincji]'}} activeCharacter={alice} characters={[alice,bob]} onCharacterUpdate={onCharacterUpdate} onSendHazardResult={onSendHazardResult}/>);
+    expect(screen.queryByRole('button',{name:'Bez amortyzacji (pełny upadek)'})).not.toBeInTheDocument();
+    expect(screen.queryByText('Upadek z wysokości')).not.toBeInTheDocument();
+    expect(onCharacterUpdate).not.toHaveBeenCalled();expect(onSendHazardResult).not.toHaveBeenCalled();
+  });
+
+  it('does not borrow another investigator fall height and preserves the real completed event id',()=>{
+    const oldAlice={...hazardMessage.hazardEvents![0],id:'old-alice',characterName:'Alice',description:'Podróż'};
+    render(<MessageCard {...baseProps} message={{...hazardMessage,content:'[HAZARD:@Alice: type=fall | height=0m | description=Podróż] [HAZARD:@Bob: type=fall | height=3m | description=Krucha podłoga]',hazardEvents:[oldAlice,hazardMessage.hazardEvents![0]]}} activeCharacter={alice} characters={[alice,bob]} resolvedHazardIds={new Set(['hazard-bob'])} onCharacterUpdate={jest.fn()} onSendHazardResult={jest.fn()}/>);
+    expect(screen.getAllByText('Upadek z wysokości')).toHaveLength(1);
+    expect(screen.getByText('Rozstrzygnięto')).toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'Bez amortyzacji (pełny upadek)'})).not.toBeInTheDocument();
+  });
+
   it('stosuje obrażenia do wskazanego badacza i wysyła stabilny identyfikator', () => {
     const onCharacterUpdate = jest.fn();
     const onSendHazardResult = jest.fn();

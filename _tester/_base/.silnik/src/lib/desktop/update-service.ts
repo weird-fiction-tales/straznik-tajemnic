@@ -9,6 +9,7 @@ export const UPDATE_STATUS_FILE = 'status.json';
 export const DEFAULT_GITHUB_REPO = 'InduPhantom-hash/straznik-tajemnic';
 
 export interface BuildInfo {
+  channel?: 'stable' | 'showcase';
   version?: string;
   commitSha?: string;
   shortCommit?: string;
@@ -219,7 +220,18 @@ export function validateManifest(value: unknown): DesktopUpdateManifest | null {
   return manifest as DesktopUpdateManifest;
 }
 
+function getShowcaseBuildInfo(): BuildInfo | null {
+  try {
+    const filename = process.env.ZEW_BUILD_INFO_PATH ?? path.join(process.cwd(), 'build-info.json');
+    const info = JSON.parse(fs.readFileSync(filename, 'utf8')) as BuildInfo;
+    return info.channel === 'showcase' ? info : null;
+  } catch {
+    return null;
+  }
+}
+
 export function canPerformSelfUpdate(): boolean {
+  if (process.env.ZEW_DESKTOP_SHOWCASE === '1' || getShowcaseBuildInfo()) return false;
   if (process.env.ZEW_DESKTOP_SELF_UPDATE === '0') return false;
   if (process.env.ZEW_DESKTOP_SELF_UPDATE === '1') return true;
 
@@ -252,6 +264,8 @@ export function canPerformSelfUpdate(): boolean {
 }
 
 export async function getCurrentVersion(): Promise<string> {
+  const showcase = getShowcaseBuildInfo();
+  if (showcase?.version) return showcase.version;
   const pkg = JSON.parse(await readFile(path.join(process.cwd(), 'package.json'), 'utf8')) as { version?: string };
   return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
 }
@@ -342,6 +356,12 @@ export async function checkForDesktopUpdate(
   const currentVersion = await getCurrentVersion();
   const currentCommitSha = await getCurrentCommitSha();
   const currentShortCommit = toShortCommit(currentCommitSha);
+  if (process.env.ZEW_DESKTOP_SHOWCASE === '1' || getShowcaseBuildInfo()) {
+    return {
+      available: false, configured: false, canSelfUpdate: false, currentVersion,
+      ...(currentCommitSha ? { currentCommitSha, currentShortCommit } : {}),
+    };
+  }
   const manifestUrl = process.env.ZEW_UPDATE_MANIFEST_URL?.trim();
   if (!manifestUrl) {
     return {

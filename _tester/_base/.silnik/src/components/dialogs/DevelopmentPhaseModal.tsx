@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { getLocalizedSkillName } from '@/lib/data/character';
 import {
   Dialog,
   DialogContent,
@@ -71,6 +72,7 @@ export function DevelopmentPhaseModal({
   onActiveCharacterChange,
 }: DevelopmentPhaseModalProps) {
   const t = useTranslations('DevelopmentPhaseModal');
+  const locale = useLocale();
   const [skillResults, setSkillResults] = useState<DevelopmentRollResult[]>([]);
   const [luckResult, setLuckResult] = useState<EDURollResult | null>(null);
   const [selfHelpAspect, setSelfHelpAspect] = useState('');
@@ -452,7 +454,7 @@ export function DevelopmentPhaseModal({
                     >
                       <span className="font-serif text-lg text-foreground flex items-center gap-2.5">
                         <Check className="w-4 h-4 text-primary" />
-                        {skill.name}
+                        {getLocalizedSkillName(skill.name, locale)}
                       </span>
                       <span className="font-special-elite text-sm text-muted-foreground">
                         {skill.value}%
@@ -526,7 +528,7 @@ export function DevelopmentPhaseModal({
                     ) : (
                       <X className="w-4 h-4 text-muted-foreground" />
                     )}
-                    {result.skillName}
+                    {getLocalizedSkillName(result.skillName, locale)}
                   </span>
                   <span className="font-special-elite text-sm">
                     <span

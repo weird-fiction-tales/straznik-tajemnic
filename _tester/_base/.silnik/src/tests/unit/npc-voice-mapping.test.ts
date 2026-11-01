@@ -125,6 +125,18 @@ describe('NPC Voice Mapping & Tone of Voice (Issue #170)', () => {
   });
 
   describe('resolveDynamicNpcVoice', () => {
+    it('keeps the same voice while recalculating the current emotion after a cached scene', () => {
+      const voices = new Map<string, string>();
+      const cache = new Map<string, { voiceId: string; audioDirection: string }>();
+      const calm = resolveDynamicNpcVoice('Helena Krawczyk', voices, cache, { occupation: 'redaktorka', mood: 'spokój' });
+      const afraid = resolveDynamicNpcVoice('Helena Krawczyk', voices, cache, { occupation: 'redaktorka', mood: 'panika i strach' });
+      const recovered = resolveDynamicNpcVoice('Helena Krawczyk', voices, cache, { occupation: 'redaktorka', mood: 'spokój' });
+      expect(afraid.voiceId).toBe(calm.voiceId);
+      expect(recovered.voiceId).toBe(calm.voiceId);
+      expect(afraid.audioDirection).toContain('terrified');
+      expect(calm.audioDirection).not.toContain('terrified');
+      expect(recovered.audioDirection).not.toContain('terrified');
+    });
     it('przypisuje żeński głos Aoede i poprawną reżyserię dla nowo napotkanej kobiety', () => {
       const voiceMap = new Map<string, string>();
       const cache = new Map<string, { voiceId: string; audioDirection: string }>();

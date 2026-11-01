@@ -104,3 +104,11 @@ describe('resolveSkillTestValues - duet', () => {
     });
   });
 });
+
+
+test('preserves the planned actor ID and value when the other investigator is selected',()=>{
+ const tomasz=makeCharacter('tomasz','Tomasz Nowicki',70);
+ const barbara=makeCharacter('barbara','Dr Barbara Zawadzka',55);
+ const planned={id:'photo',characterId:barbara.id,skillName:'Spostrzegawczość',skillValue:0,difficulty:'zwykly',modifiers:[],justification:'Fotografia'} as SkillTestData;
+ expect(resolveSkillTestValues([planned],tomasz,[tomasz,barbara])[0]).toMatchObject({characterId:barbara.id,characterName:barbara.name,skillValue:55});
+});

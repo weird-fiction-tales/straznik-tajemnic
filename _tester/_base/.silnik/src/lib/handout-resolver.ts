@@ -16,6 +16,7 @@ import {
   AMERICAN_COLD_CASES_ADVENTURES,
   BUILT_IN_ADVENTURES,
 } from '@/lib/adventures-data';
+import { getHauntingHandouts } from './adventures/starter-dossier';
 import { STARTER_HAUNTING_ADVENTURE } from '@/lib/starter-haunting-data';
 
 export type AnyAdventureContext = CoreAdventureContext | DataAdventureContext;
@@ -39,7 +40,7 @@ function normalizeSlug(str: string): string {
 function stripPrefix(slug: string): string {
   const norm = normalizeSlug(slug);
   return norm
-    .replace(/^(clue|handout|audio|map|dok|item|rek|akt)-+/, '')
+    .replace(/^(clue|handout|audio|map|dok|item|rek|akt)-+(?:\d+-+)?/, '')
     .replace(/^-+/, '');
 }
 
@@ -49,7 +50,6 @@ function stripPrefix(slug: string): string {
  * 2. Case-insensitive
  * 3. Znormalizowany slug (usuniecie znakow specjalnych, myslniki)
  * 4. Dopasowanie bez prefiksu (clue-, audio-, map-, handout-)
- * 5. Podciag (gdy slug jest czescia nazwy lub odwrotnie)
  */
 function findInList(
   handouts: AdventureHandout[] | undefined | null,
@@ -80,6 +80,18 @@ function findInList(
   );
   if (normalized) return normalized;
 
+  // Only explicit, full aliases are accepted; substrings are never identity.
+  const aliasMatch = handouts.find((handout) =>
+    handout.aliases?.some((alias) => normalizeSlug(alias) === normTarget)
+  );
+  if (aliasMatch) return aliasMatch;
+
+  // Dossier IDs are opaque and must match exactly inside the active adventure.
+  const dossierMatch = handouts.find(
+    (handout) => handout.dossierRecordId === rawTarget
+  );
+  if (dossierMatch) return dossierMatch;
+
   // Poziom 4: Dopasowanie bez prefiksu
   const strippedTarget = stripPrefix(rawTarget);
   if (strippedTarget.length > 2) {
@@ -88,16 +100,6 @@ function findInList(
       return stripPrefix(h.slug) === strippedTarget;
     });
     if (strippedMatch) return strippedMatch;
-  }
-
-  // Poziom 5: Zawieranie podciagu (minimum 4 znaki)
-  if (normTarget.length >= 4) {
-    const partialMatch = handouts.find((h) => {
-      if (!h.slug) return false;
-      const hNorm = normalizeSlug(h.slug);
-      return hNorm.includes(normTarget) || normTarget.includes(hNorm);
-    });
-    if (partialMatch) return partialMatch;
   }
 
   return null;
@@ -131,9 +133,10 @@ function findHandoutBySlug(
 
   // 2. Sprawdz przygode dopasowana po ID z kontekstu
   if (adventureContext?.id) {
-    const adventure = adventureContext.id === STARTER_HAUNTING_ADVENTURE.id
-      ? STARTER_HAUNTING_ADVENTURE
-      : getAdventureById(adventureContext.id);
+    const adventure =
+      adventureContext.id === STARTER_HAUNTING_ADVENTURE.id
+        ? STARTER_HAUNTING_ADVENTURE
+        : getAdventureById(adventureContext.id);
     if (adventure?.handouts && adventure.handouts.length > 0) {
       const match = findInList(adventure.handouts, cleanSlug);
       if (match) return match;
@@ -144,7 +147,11 @@ function findHandoutBySlug(
   if (adventureContext) return null;
 
   // 3. Przeszukaj wszystkie przygody STREFA_11_ADVENTURES, AMERICAN_COLD_CASES_ADVENTURES oraz Starter
-  for (const adv of [...STREFA_11_ADVENTURES, ...AMERICAN_COLD_CASES_ADVENTURES, STARTER_HAUNTING_ADVENTURE]) {
+  for (const adv of [
+    ...STREFA_11_ADVENTURES,
+    ...AMERICAN_COLD_CASES_ADVENTURES,
+    STARTER_HAUNTING_ADVENTURE,
+  ]) {
     if (adv.handouts && adv.handouts.length > 0) {
       const match = findInList(adv.handouts, cleanSlug);
       if (match) return match;
@@ -162,33 +169,97 @@ function findHandoutBySlug(
   return null;
 }
 
-
 /** Only recordings verified on disk have a language/carrier override. */
-const AUDIO_VARIANTS: Record<string, { language: 'pl' | 'en'; reelType: NonNullable<AdventureHandout['reelType']> }> = {
-  '/audio/handouts/cien-nad-prabutami/tasma-sb-elblag.mp3': { language: 'pl', reelType: 'reel_to_reel' },
-  '/audio/handouts/tajemnica-pendnika-lagiewki/proba-zderzeniowa-kowary.mp3': { language: 'pl', reelType: 'cassette' },
-  '/audio/handouts/tajemnica-dzieci-z-traszyna/wywiad-dziecko-1983.mp3': { language: 'pl', reelType: 'cassette' },
-  '/audio/handouts/przybysz-z-matriksa-glogow/sygnal-vhs-glogow.mp3': { language: 'pl', reelType: 'radio' },
-  '/audio/handouts/englewood-murder-castle-1893/edison-wax-cylinder-1893.mp3': { language: 'en', reelType: 'gramophone' },
-  '/audio/handouts/almer-coe-spectacles-1924/crowe-interrogation-1924.mp3': { language: 'en', reelType: 'gramophone' },
-  '/audio/handouts/circleville-letters-1983/gillespie-wiretap-1977.mp3': { language: 'en', reelType: 'cassette' },
-  '/audio/handouts/ovidhall-lake-anomaly-2005/voicemail-in-a-field-2005.mp3': { language: 'en', reelType: 'radio' },
+const AUDIO_VARIANTS: Record<
+  string,
+  { language: 'pl' | 'en'; reelType: NonNullable<AdventureHandout['reelType']> }
+> = {
+  '/audio/handouts/cien-nad-prabutami/tasma-sb-elblag.mp3': {
+    language: 'pl',
+    reelType: 'reel_to_reel',
+  },
+  '/audio/handouts/tajemnica-pendnika-lagiewki/proba-zderzeniowa-kowary.mp3': {
+    language: 'pl',
+    reelType: 'cassette',
+  },
+  '/audio/handouts/tajemnica-dzieci-z-traszyna/wywiad-dziecko-1983.mp3': {
+    language: 'pl',
+    reelType: 'cassette',
+  },
+  '/audio/handouts/przybysz-z-matriksa-glogow/sygnal-vhs-glogow.mp3': {
+    language: 'pl',
+    reelType: 'radio',
+  },
+  '/audio/handouts/englewood-murder-castle-1893/edison-wax-cylinder-1893.mp3': {
+    language: 'en',
+    reelType: 'gramophone',
+  },
+  '/audio/handouts/almer-coe-spectacles-1924/crowe-interrogation-1924.mp3': {
+    language: 'en',
+    reelType: 'gramophone',
+  },
+  '/audio/handouts/circleville-letters-1983/gillespie-wiretap-1977.mp3': {
+    language: 'en',
+    reelType: 'cassette',
+  },
+  '/audio/handouts/ovidhall-lake-anomaly-2005/voicemail-in-a-field-2005.mp3': {
+    language: 'en',
+    reelType: 'radio',
+  },
 };
 
 export function resolveHandoutBySlug(
   slug: string,
-  adventureContext?: AnyAdventureContext | null
+  adventureContext?: AnyAdventureContext | null,
+  allowedRecordIdsOrLocale: readonly string[] | string = [],
+  locale?: string
 ): AdventureHandout | null {
+  const allowedDossierRecordIds = typeof allowedRecordIdsOrLocale === 'string' ? [] : allowedRecordIdsOrLocale;
+  locale = typeof allowedRecordIdsOrLocale === 'string' ? allowedRecordIdsOrLocale : locale;
   const handout = findHandoutBySlug(slug, adventureContext);
-  if (!handout) return null;
+  if (!handout || handout.keeperOnly || handout.isPlayerFacing === false) return null;
+  if (
+    handout.dossierRecordId &&
+    !allowedDossierRecordIds.includes(handout.dossierRecordId)
+  )
+    return null;
+  const context = adventureContext as
+    | (AnyAdventureContext & { sourceBookId?: string })
+    | null
+    | undefined;
+  if (
+    locale &&
+    (context?.id === STARTER_HAUNTING_ADVENTURE.id ||
+      context?.sourceBookId === 'starter-d100')
+  ) {
+    const translated = getHauntingHandouts(locale === 'en' ? 'en' : 'pl').find(
+      (h) => h.slug === handout.slug
+    );
+    if (translated) return translated;
+  }
   const baseUrl = handout.audioUrl;
   const audio = baseUrl && AUDIO_VARIANTS[baseUrl];
   if (!audio || !baseUrl) return handout;
-  const translated = baseUrl.replace(/\.mp3$/, audio.language === 'pl' ? '-en.mp3' : '-pl.mp3');
+  const translated = baseUrl.replace(
+    /\.mp3$/,
+    audio.language === 'pl' ? '-en.mp3' : '-pl.mp3'
+  );
   return {
     ...handout,
-    audioUrlPl: handout.audioUrlPl || (audio.language === 'pl' ? handout.audioUrl : translated),
-    audioUrlEn: handout.audioUrlEn || (audio.language === 'en' ? handout.audioUrl : translated),
+    audioUrlPl:
+      handout.audioUrlPl ||
+      (audio.language === 'pl' ? handout.audioUrl : translated),
+    audioUrlEn:
+      handout.audioUrlEn ||
+      (audio.language === 'en' ? handout.audioUrl : translated),
     reelType: handout.reelType || audio.reelType,
   };
+}
+
+/** Identifies an explicit dossier mapping so the UI can hide a blocked locator card. */
+export function isDossierHandoutReference(
+  slug: string,
+  adventureContext?: AnyAdventureContext | null
+): boolean {
+  return Boolean(findHandoutBySlug(slug, adventureContext)?.dossierRecordId);
 }

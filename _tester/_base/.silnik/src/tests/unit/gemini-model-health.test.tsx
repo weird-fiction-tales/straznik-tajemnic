@@ -492,3 +492,45 @@ describe('Issue #521 - Wskaźnik stanu i dostępności wybranego modelu Gemini',
     });
   });
 });
+
+
+describe('local playtest server transport handshake', () => {
+  const savedKey = process.env.GEMINI_API_KEY;
+  const savedMode = process.env.ZEW_LOCAL_PLAYTEST;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.GEMINI_API_KEY = 'server-test-key';
+    process.env.ZEW_LOCAL_PLAYTEST = 'prabuty-tomasz';
+    mockModelsList.mockResolvedValue(createAsyncIterable([]));
+  });
+  afterAll(() => {
+    if (savedKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = savedKey;
+    if (savedMode === undefined) delete process.env.ZEW_LOCAL_PLAYTEST;
+    else process.env.ZEW_LOCAL_PLAYTEST = savedMode;
+  });
+  it('exposes only the verified boolean for explicit same-origin loopback with the env key', async () => {
+    const body = await (await GET(makeNextRequest('http://localhost:3818/api/health/gemini', {
+      host: '127.0.0.1:3818', origin: 'http://127.0.0.1:3818',
+    }))).json();
+    expect(body.serverConfigured).toBe(true);
+    expect(JSON.stringify(body)).not.toContain('server-test-key');
+    expect(mockGenerateContent).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['remote', 'https://example.com/api/health/gemini', {}],
+    ['foreign origin', 'http://localhost:3818/api/health/gemini', { origin: 'https://evil.example' }],
+    ['remote Host', 'http://localhost:3818/api/health/gemini', { host: 'example.com' }],
+    ['client key', 'http://localhost:3818/api/health/gemini', { 'X-Gemini-Api-Key': 'client-test-key' }],
+  ])('does not advertise transport for %s', async (_name, url, headers) => {
+    const body = await (await GET(makeNextRequest(url as string, headers as Record<string,string>))).json();
+    expect(body.serverConfigured).not.toBe(true);
+  });
+  it('does not advertise transport without the explicit mode or with an invalid key', async () => {
+    delete process.env.ZEW_LOCAL_PLAYTEST;
+    expect((await (await GET(makeNextRequest('http://localhost/api/health/gemini'))).json()).serverConfigured).not.toBe(true);
+    process.env.ZEW_LOCAL_PLAYTEST = 'prabuty-tomasz';
+    mockModelsList.mockRejectedValue({ status: 403 });
+    expect((await (await GET(makeNextRequest('http://localhost/api/health/gemini'))).json()).serverConfigured).not.toBe(true);
+  });
+});

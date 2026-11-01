@@ -58,6 +58,8 @@ type StatKey =
 
 /** Synonimy charakterystyk → klucz pola w Character. */
 const STAT_SYNONYMS: Record<string, StatKey> = {
+  strength: 'str', dexterity: 'dex', constitution: 'con', appearance: 'app',
+  power: 'pow', education: 'edu', size: 'siz', intelligence: 'int',
   sila: 'str',
   str: 'str',
   zrecznosc: 'dex',

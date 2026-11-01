@@ -100,6 +100,7 @@ export function closeChronicleSession(character: Character, endMessageId: string
       inGameDate: active.inGameDate, timestamp: new Date().toISOString(),
       people: [...active.people], findings: [...active.findings], keyTakeaways: [...active.notes],
       startMessageId, chronicleBoundaryKnown: Boolean(startMessageId), endMessageId, isSealed: true, chronicleChapter: chapter,
+      dossierBinding: active.dossierBinding,
     };
     if (!sceneCards.some((card) => card.id === scene.id)) {
       sceneCards.push(scene);

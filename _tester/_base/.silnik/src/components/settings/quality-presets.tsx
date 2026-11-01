@@ -29,7 +29,10 @@ export function QualityPresets({ settings, setSettings }: QualityPresetsProps) {
     !equal(settings, applyPreset(settings.qualityPreset, settings));
 
   return (
-    <div className="relative border border-brass/30 bg-gradient-to-br from-[#1a1610] to-[#100d09] p-5 mb-6 shadow-[0_0_22px_rgba(13,148,136,0.08)]">
+    <div
+      data-testid="settings-quality-presets"
+      className="relative border border-brass/30 bg-gradient-to-br from-[#1a1610] to-[#100d09] p-5 mb-6 shadow-[0_0_22px_rgba(13,148,136,0.08)]"
+    >
       <span className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-brass/60" />
       <span className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-brass/60" />
 
@@ -54,6 +57,8 @@ export function QualityPresets({ settings, setSettings }: QualityPresetsProps) {
           .map(([key, preset]) => (
             <button
               key={key}
+              data-testid={`settings-preset-${key}`}
+              aria-pressed={settings.qualityPreset === key}
               onClick={() => setSettings((prev) => applyPreset(key, prev))}
               className={`relative p-4 border text-left transition-all duration-300 ${
                 settings.qualityPreset === key

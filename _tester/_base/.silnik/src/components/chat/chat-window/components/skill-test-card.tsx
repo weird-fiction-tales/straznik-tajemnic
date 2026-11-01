@@ -17,7 +17,8 @@
 
 import React, { useState } from 'react';
 import type { SkillTestData, SkillTestModifier } from '@/lib/parsers/types';
-import { useTranslations } from 'next-intl';
+import {getLocalizedSkillName} from '@/lib/data/character/skills';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '../../../ui/button';
 import { Badge } from '../../../ui/badge';
 import { Check, Dices, Swords } from 'lucide-react';
@@ -117,6 +118,9 @@ export function SkillTestCard({
   stake,
   characterName,
   characterId,
+  targetNpcId,
+  dossierConditionId,
+  isCombat,
   groupId,
   combined,
   onRoll,
@@ -125,6 +129,8 @@ export function SkillTestCard({
   onSendChat,
 }: SkillTestCardProps) {
   const t = useTranslations('SkillTestCard');
+  const locale=useLocale();
+  const displaySkillName=combined?combined.skills.map(s=>getLocalizedSkillName(s.skillName,locale)).join(' '+combined.operator+' '):getLocalizedSkillName(skillName,locale);
   const [isOpposedModalOpen, setIsOpposedModalOpen] = useState(false);
 
   const threshold = calculateThreshold(skillValue, difficulty);
@@ -151,6 +157,9 @@ export function SkillTestCard({
         stake,
         characterName,
         characterId,
+        targetNpcId,
+        dossierConditionId,
+        isCombat,
         groupId,
         combined,
       });
@@ -184,7 +193,7 @@ export function SkillTestCard({
               isOpposed ? 'text-brass font-display' : 'text-foreground font-display'
             }`}
           >
-            {skillName}
+            {displaySkillName}
           </span>
           {characterName && (
             <span className="text-xs text-muted-foreground font-special-elite">@{characterName}</span>
@@ -220,7 +229,7 @@ export function SkillTestCard({
                   key={idx}
                   className="flex items-center justify-between text-sm border-t border-border/30 pt-1 first:border-none first:pt-0"
                 >
-                  <span className="text-foreground font-medium">{sub.skillName}</span>
+                  <span className="text-foreground font-medium">{getLocalizedSkillName(sub.skillName,locale)}</span>
                   <span className="font-mono">
                     <span className="text-foreground font-bold">{sub.skillValue}%</span>
                     <span className="text-muted-foreground mx-2">→</span>
@@ -312,7 +321,7 @@ export function SkillTestCard({
 
       {/* Stawka testu (Issue #737) */}
       {stake && (
-        <div className="px-4 py-2.5 border-b border-border/60 bg-amber-950/20 border-l-2 border-l-brass">
+        <div className="px-4 py-2.5 border-b border-border/60 bg-card border-l-2 border-l-brass">
           <div className="flex items-start gap-2.5 text-sm">
             <span className="text-brass mt-0.5 text-base">⚖️</span>
             <div>
@@ -401,6 +410,9 @@ export function SkillTestCard({
                 justification,
                 characterName,
                 characterId,
+                targetNpcId,
+                dossierConditionId,
+                isCombat,
                 groupId,
               });
             }

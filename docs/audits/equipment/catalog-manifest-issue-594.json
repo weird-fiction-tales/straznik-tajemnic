@@ -2,11 +2,56 @@
   {
     "source": "predefined_character",
     "characterName": "Arthur Pendleton",
-    "itemName": "Aparat fotograficzny",
+    "itemName": "Skórzany notatnik i pióro",
+    "era": "gaslight",
+    "category": "document",
+    "templateId": "document.notebook",
+    "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Beatrice Vance",
+    "itemName": "Zestaw wytrychów w etui",
     "era": "gaslight",
     "category": "tool",
-    "templateId": "tool.camera",
+    "templateId": "tool.lockpicks",
     "currentImageUrl": "/equipment/predefined/tool.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Prof. Archibald Blackwood",
+    "itemName": "Dziennik wykopalisk",
+    "era": "gaslight",
+    "category": "document",
+    "templateId": "document.diary",
+    "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Cordelia Ashford",
+    "itemName": "Monografia o demonologii",
+    "era": "gaslight",
+    "category": "document",
+    "templateId": "document.ancient-translations-book",
+    "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Lady Alexandra Croft",
+    "itemName": "Notatnik podróżnika",
+    "era": "gaslight",
+    "category": "document",
+    "templateId": "document.notebook",
+    "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Dr Alistair Sterling",
+    "itemName": "Dziennik sekcji zwłok",
+    "era": "gaslight",
+    "category": "document",
+    "templateId": "document.diary",
+    "currentImageUrl": "/equipment/predefined/document.svg"
   },
   {
     "source": "predefined_character",
@@ -19,11 +64,191 @@
   },
   {
     "source": "predefined_character",
+    "characterName": "Dr Elena Rostova",
+    "itemName": "Rzadkie słowniki lingwistyczne",
+    "era": "modern",
+    "category": "document",
+    "templateId": "document.ancient-translations-book",
+    "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Dr Maya Patel",
+    "itemName": "Dziennik analiz snów pacjentów",
+    "era": "modern",
+    "category": "document",
+    "templateId": "document.diary",
+    "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Seraphina Marsh",
+    "itemName": "Szkicownik węglowy",
+    "era": "modern",
+    "category": "document",
+    "templateId": "document.sketchbook-shared",
+    "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Dr Barbara Zawadzka",
+    "itemName": "Kamera z trybem NightVision",
+    "era": "prl-1970s",
+    "category": "tool",
+    "templateId": "tool.nightvision-camera-modern",
+    "currentImageUrl": "/equipment/predefined/tool.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Ryszard \"Klucznik\" Kaczmarek",
+    "itemName": "Zestaw wytrychów i łom",
+    "era": "prl-1970s",
+    "category": "tool",
+    "templateId": "tool.lockpicks",
+    "currentImageUrl": "/equipment/predefined/tool.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Inż. Marek Kamiński",
+    "itemName": "Zestaw narzędzi w walizce",
+    "era": "1990s",
+    "category": "tool",
+    "templateId": "tool.electronics-case-prl",
+    "currentImageUrl": "/equipment/predefined/tool.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Tomasz \"Ryzykant\" Wójcik",
+    "itemName": "Kask ochronny",
+    "era": "1990s",
+    "category": "armor",
+    "templateId": "armor.safety-helmet-industrial",
+    "currentImageUrl": "/equipment/predefined/armor.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Tomasz \"Ryzykant\" Wójcik",
+    "itemName": "Rękawice ognioodporne",
+    "era": "1990s",
+    "category": "armor",
+    "templateId": "armor.fireproof-gloves-shared",
+    "currentImageUrl": "/equipment/predefined/armor.svg"
+  },
+  {
+    "source": "predefined_character",
     "characterName": "Anna Dąbrowska",
     "itemName": "Aparat fotograficzny z lampą błyskową",
     "era": "1990s",
     "category": "tool",
     "templateId": "tool.camera",
+    "currentImageUrl": "/equipment/predefined/tool.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Dr Ewa Wiśniewska",
+    "itemName": "Kalkulator naukowy",
+    "era": "1990s",
+    "category": "tool",
+    "templateId": "tool.scientific-calc-prl",
+    "currentImageUrl": "/equipment/predefined/tool.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Dr Ewa Wiśniewska",
+    "itemName": "Zeszyt pełen wzorów",
+    "era": "1990s",
+    "category": "document",
+    "templateId": "document.notebook",
+    "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Ksiądz Jan Kaczmarek",
+    "itemName": "Srebrny krucyfiks",
+    "era": "1990s",
+    "category": "personal",
+    "templateId": "personal.silver-cross-shared",
+    "currentImageUrl": "/equipment/predefined/personal.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Ksiądz Jan Kaczmarek",
+    "itemName": "Woda święcona",
+    "era": "1990s",
+    "category": "occult",
+    "templateId": "occult.holy-water-phial",
+    "currentImageUrl": "/equipment/predefined/occult.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Andrzej \"Aura\" Zalewski",
+    "itemName": "Wahadełko z kryształem",
+    "era": "1990s",
+    "category": "occult",
+    "templateId": "occult.crystal-pendulum-shared",
+    "currentImageUrl": "/equipment/predefined/occult.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Andrzej \"Aura\" Zalewski",
+    "itemName": "Kadzidła szałwiowe",
+    "era": "1990s",
+    "category": "occult",
+    "templateId": "occult.sage-incense-bundle",
+    "currentImageUrl": "/equipment/predefined/occult.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Marta Kamińska",
+    "itemName": "Zeszyt do notatek psychologicznych",
+    "era": "1990s",
+    "category": "document",
+    "templateId": "document.notebook",
+    "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Zofia \"Zosia\" Sadowska",
+    "itemName": "Zeszyt z legendami i baśniami",
+    "era": "1990s",
+    "category": "document",
+    "templateId": "document.notebook",
+    "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Artur \"Stary\" Majchrzak",
+    "itemName": "Rewolwer kieszonkowy (bez zezwolenia)",
+    "era": "2000s",
+    "category": "weapon",
+    "templateId": "weapon.revolver-pocket-unlicensed",
+    "currentImageUrl": "/equipment/predefined/weapon.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Artur \"Stary\" Majchrzak",
+    "itemName": "Srebrna piersiówka",
+    "era": "2000s",
+    "category": "personal",
+    "templateId": "personal.flask",
+    "currentImageUrl": "/equipment/predefined/personal.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Dr Krystyna Zawada",
+    "itemName": "Zestaw pierwszej pomocy z środkami uspokajającymi",
+    "era": "2000s",
+    "category": "medical",
+    "templateId": "medical.first-aid",
+    "currentImageUrl": "/equipment/predefined/medical.svg"
+  },
+  {
+    "source": "predefined_character",
+    "characterName": "Karolina \"Luna\" Maj",
+    "itemName": "Zestaw do zdjęć nocnych",
+    "era": "2000s",
+    "category": "tool",
+    "templateId": "tool.night-photo-kit-shared",
     "currentImageUrl": "/equipment/predefined/tool.svg"
   },
   {
@@ -43,6 +268,15 @@
     "category": "document",
     "templateId": "document.library-card",
     "currentImageUrl": "/equipment/predefined/document.svg"
+  },
+  {
+    "source": "occupation_equipment",
+    "occupation": "Private Investigator",
+    "itemName": "Wytrychy",
+    "era": "1920s",
+    "category": "tool",
+    "templateId": "tool.lockpicks",
+    "currentImageUrl": "/equipment/predefined/tool.svg"
   },
   {
     "source": "occupation_equipment",

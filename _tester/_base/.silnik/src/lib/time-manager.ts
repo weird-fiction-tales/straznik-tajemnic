@@ -8,6 +8,32 @@
 
 import { GameTime, MoonPhase } from './types';
 
+/** Snapshot of the existing clock, not a second event scheduler. */
+export interface CampaignClockSnapshot {
+  time: GameTime;
+  weather: string;
+  deadline: GameTime | null;
+  deadlineTotalHours: number;
+}
+
+export function isGameTime(value: unknown): value is GameTime {
+  if (!value || typeof value !== 'object') return false;
+  const t = value as GameTime;
+  return [t.year, t.month, t.day, t.hour, t.minute].every(Number.isInteger) &&
+    t.year >= 1 && t.year <= 9999 && t.month >= 0 && t.month <= 11 &&
+    t.day >= 1 && t.day <= daysInMonth(t.year, t.month) &&
+    t.hour >= 0 && t.hour <= 23 && t.minute >= 0 && t.minute <= 59;
+}
+
+export function isCampaignClockSnapshot(value: unknown): value is CampaignClockSnapshot {
+  if (!value || typeof value !== 'object') return false;
+  const s = value as CampaignClockSnapshot;
+  return isGameTime(s.time) && (s.deadline === null || isGameTime(s.deadline)) &&
+    typeof s.weather === 'string' && s.weather.length <= 4000 &&
+    Number.isFinite(s.deadlineTotalHours) && s.deadlineTotalHours > 0;
+}
+
+
 // ============================================================================
 // DOOM CLOCK TYPES & CONSTANTS (Issue #648 Faza 1 R1)
 // ============================================================================
@@ -541,7 +567,17 @@ class TimeManager {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        return JSON.parse(saved) as GameTime;
+        const parsed = JSON.parse(saved);
+        if (!isGameTime(parsed)) return null;
+        const stored = parsed as GameTime & { deadline?: unknown; deadlineTotalHours?: unknown };
+        if (stored.deadline === null || isGameTime(stored.deadline)) {
+          this.deadline = stored.deadline ? { ...stored.deadline } : null;
+        }
+        if (typeof stored.deadlineTotalHours === 'number' && Number.isFinite(stored.deadlineTotalHours) && stored.deadlineTotalHours > 0) {
+          this.deadlineTotalHours = stored.deadlineTotalHours;
+        }
+        const { year, month, day, hour, minute } = parsed;
+        return { year, month, day, hour, minute };
       }
     } catch (error) {
       console.error('❌ Error loading GameTime:', error);
@@ -552,7 +588,8 @@ class TimeManager {
   private saveToStorage(): void {
     if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.currentTime));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...this.currentTime,
+        deadline: this.deadline, deadlineTotalHours: this.deadlineTotalHours }));
       this.notifyListeners();
     } catch (error) {
       console.error('❌ Error saving GameTime:', error);
@@ -565,7 +602,7 @@ class TimeManager {
    * Przesuwa czas o podaną liczbę minut.
    * Obsługuje przekroczenie godzin, dni, miesięcy i lat.
    */
-  advanceTime(minutes: number): GameTime {
+  previewAdvanceTime(minutes: number): GameTime {
     let { year, month, day, hour, minute } = this.currentTime;
 
     minute += minutes;
@@ -608,7 +645,11 @@ class TimeManager {
       day += daysInMonth(year, month);
     }
 
-    this.currentTime = { year, month, day, hour, minute };
+    return { year, month, day, hour, minute };
+  }
+
+  advanceTime(minutes: number): GameTime {
+    this.currentTime = this.previewAdvanceTime(minutes);
     this.saveToStorage();
 
     console.log(
@@ -674,6 +715,21 @@ class TimeManager {
 
   getTime(): GameTime {
     return { ...this.currentTime };
+  }
+
+  getSnapshot(): CampaignClockSnapshot {
+    return { time: this.getTime(), weather: this.currentWeather,
+      deadline: this.getDeadline(), deadlineTotalHours: this.deadlineTotalHours };
+  }
+
+  restoreSnapshot(snapshot: CampaignClockSnapshot): void {
+    if (!isCampaignClockSnapshot(snapshot)) throw new Error('Invalid campaign clock snapshot');
+    this.currentTime = { ...snapshot.time };
+    this.currentWeather = snapshot.weather;
+    this.deadline = snapshot.deadline ? { ...snapshot.deadline } : null;
+    this.deadlineTotalHours = snapshot.deadlineTotalHours;
+    this.saveToStorage();
+    this.saveWeatherToStorage();
   }
 
   getWeather(): string {
@@ -743,6 +799,7 @@ class TimeManager {
   setDeadline(deadline: GameTime | null, totalHours: number = 24): void {
     this.deadline = deadline ? { ...deadline } : null;
     this.deadlineTotalHours = totalHours > 0 ? totalHours : 24;
+    this.saveToStorage();
   }
 
   /**

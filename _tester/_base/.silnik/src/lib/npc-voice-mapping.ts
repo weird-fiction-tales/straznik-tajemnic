@@ -1,3 +1,5 @@
+import { isStarterAdventure } from './adventures/starter-runtime';
+import { getHauntingDossier } from './adventures/starter-dossier';
 /**
  * NPC voice auto-mapping (sesja 147 follow-up M6 D3)
  *
@@ -708,6 +710,8 @@ export function resolveNpcVoice(
     return npcVoiceMap.get(cleanName);
   }
 
+  if (cleanName === 'macario' && [...npcVoiceMap.keys()].filter(k => k.includes('macario')).length > 1) return undefined;
+
   const words = (cleanName || rawLower)
     .split(/\s+/)
     .filter((w) => w.length >= 3);
@@ -781,7 +785,7 @@ export function buildNpcToneOfVoice(
   }
 
   const genderStr = gender === 'female' ? 'female' : 'male';
-  const audioDirection = `Read the following in clear, natural Polish pronunciation with a ${trait} ${genderStr} character voice and a steady, engaging pace:`;
+  const audioDirection = `Read the following in clear, natural Polish pronunciation with a ${trait} ${genderStr} character voice and a steady, engaging pace. Use understated, conversational acting with emotional nuance and varied emphasis:`;
 
   return {
     voiceId,
@@ -810,13 +814,9 @@ export function resolveDynamicNpcVoice(
 ): { voiceId: string; audioDirection: string } {
   const rawLower = speakerName.trim().toLowerCase();
 
-  // 1. Sprawdź dynamiczny cache w pamięci
-  if (dynamicCache && dynamicCache.has(rawLower)) {
-    return dynamicCache.get(rawLower)!;
-  }
-
-  // 2. Sprawdź czy postać istnieje w mapie głosów (np. z localStorage gm_npcs)
-  const existingVoiceId = resolveNpcVoice(speakerName, npcVoiceMap);
+  // Keep the casting stable, but direct each segment using the current scene.
+  // Cached emotion must not outlive the moment it belongs to (Issue #835).
+  const existingVoiceId = resolveNpcVoice(speakerName, npcVoiceMap) || dynamicCache?.get(rawLower)?.voiceId;
 
   // 3. Rozpoznaj płeć i wiek
   const gender =
@@ -891,6 +891,8 @@ export function initializeAdventureNpcVoices(
     description?: string;
     hook?: string;
     era?: string;
+    locale?: string;
+    sourceBookId?: string;
     graph?: {
       npcs?: Array<{
         id?: string;
@@ -944,11 +946,16 @@ export function initializeAdventureNpcVoices(
               ? existing.voiceConfig.voiceId
               : toneResult.voiceId,
           voiceName: toneResult.voiceId,
-          languageCode: 'pl-PL',
+          languageCode: adventure.locale === 'en' ? 'en-US' : 'pl-PL',
           rate: 1.15,
         },
       };
 
+      if (isStarterAdventure(adventure)) {
+        const actor = getHauntingDossier(adventure.locale === 'en' ? 'en' : 'pl').actors.find(a => a.id === gn.id);
+        if (actor) { updatedNpc.id = actor.id; updatedNpc.portraitUrl = actor.portrait; }
+        if (existing?.voiceConfig) updatedNpc.voiceConfig = { ...existing.voiceConfig, languageCode: adventure.locale === 'en' ? 'en-US' : 'pl-PL' };
+      }
       npcMap.set(key, { ...existing, ...updatedNpc });
     }
 

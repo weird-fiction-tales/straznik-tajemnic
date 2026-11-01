@@ -1,3 +1,5 @@
+import { validateStarterState } from '@/lib/adventures/starter-runtime';
+import { getStarterStore } from '@/lib/adventures/starter-store';
 import { NextRequest, NextResponse } from 'next/server';
 import { createCampaignMemoryScope, isCampaignMemoryScope } from '@/core/memory/campaign-scope';
 import { getCampaignMemoryLedgerStore } from '@/core/memory/ledger-store';
@@ -34,6 +36,10 @@ export async function POST(request: NextRequest) {
     || !Array.isArray(body.snapshot.entries) || !Array.isArray(body.snapshot.checkpoints))) {
     return NextResponse.json({ error: 'Nieprawidłowa migawka pamięci' }, { status: 400 });
   }
+  if (body.dossierState !== undefined) {
+    try { validateStarterState(body.dossierState); } catch { return NextResponse.json({ error: 'Invalid starter snapshot' }, { status: 400 }); }
+    if (body.scope && body.dossierState.playthroughId !== body.scope.playthroughId) return NextResponse.json({ error: 'Starter scope mismatch' }, { status: 400 });
+  }
   try {
     const scope = isCampaignMemoryScope(body.scope) ? body.scope : createCampaignMemoryScope({
       id: typeof body.id === 'string' ? body.id : 'legacy-save',
@@ -43,7 +49,8 @@ export async function POST(request: NextRequest) {
     // Legacy imports use only the file's history, never the live ledger.
     const snapshot = body.snapshot ?? buildLegacySnapshot(scope, body.messages, body.characters, body.activeCharacterId);
     const restoredScope = getCampaignMemoryLedgerStore().restoreSnapshot(snapshot, body.requestId);
-    return NextResponse.json({ success: true, scope: restoredScope });
+    const dossierState = body.dossierState ? getStarterStore().restore(restoredScope.playthroughId, body.dossierState) : undefined;
+    return NextResponse.json({ success: true, scope: restoredScope, dossierState });
   } catch (error) {
     console.error('Memory restore failed:', error);
     return NextResponse.json({ error: 'Nie udało się odtworzyć pamięci' }, { status: 500 });

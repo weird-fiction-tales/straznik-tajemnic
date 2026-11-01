@@ -1,6 +1,9 @@
 'use client';
 
+import { immersion } from '@/lib/hardware/hue/immersion';
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
+import { toast } from '@/components/ui/use-toast';
 import type { Message } from '@/lib/types';
 import { loadAISettings, saveAISettings } from '@/lib/ai-settings';
 import { settingsEmitter } from '@/lib/settings-event-emitter';
@@ -21,9 +24,9 @@ import {
   getActiveCharacterSan,
   hasCombatOrChaseTag,
 } from '@/lib/audio/sound-director';
-import { SFX_PATTERNS } from '@/lib/parsers/patterns';
-import { playSFX, SFX_ENABLED } from '@/lib/audio/sfx-catalog';
+import { playSFX, SFX_ENABLED, stopCurrentSFX } from '@/lib/audio/sfx-catalog';
 import { persistentMediaCache } from '@/lib/persistent-media-cache';
+import { GEMINI_TTS_PROMPT_VERSION } from '@/lib/audio/gemini-tts-prompt';
 
 interface QueueItem {
   text: string;
@@ -76,6 +79,7 @@ import {
   stripMultilineArtifacts,
   extractEmotionTag,
 } from '@/lib/parsers/text-cleaner';
+import { hasLocalPlaytestTransport } from '@/lib/local-playtest-transport';
 import { getApiKeyHeaders, isPureTextMode } from '@/lib/api-keys-service';
 
 /**
@@ -95,11 +99,9 @@ const TTS_MODEL_NPC = 'gemini-3.1-flash-tts-preview';
  * IND-191: parametry odporności kolejki TTS na rate-limit / błędy transient.
  * Kolejka jest już SEKWENCYJNA (worker `await fetch` jeden segment na raz) - to bazowy
  * throttle. Retry honorujący `Retry-After` rozkłada rate reaktywnie (po 429 czekamy
- * `retryDelay` nim ponowimy → RPM sam spada pod limit). Cap chroni UX przed zawieszeniem
- * na pełne ~35s free-tier retryDelay.
+ * `retryDelay` nim ponowimy → RPM sam spada pod limit). Po 429 kolejka kończy buforowanie bez dalszych żądań przed pełnym terminem.
  */
 const MAX_TTS_RETRIES = 2; // próby ponowienia segmentu (poza pierwszą)
-const MAX_RETRY_WAIT_MS = 8000; // cap czekania po 429 (free-tier podaje ~35s)
 const TRANSIENT_RETRY_WAIT_MS = 400; // backoff dla 500/503/network
 
 /**
@@ -125,7 +127,7 @@ const STREAMING_SEGMENT_TARGET_CHARS = 100;
  * IND-191: fetch TTS z ponowieniem. Zwraca `audioUrl` albo `null` (segment niemy -
  * świadoma degradacja zamiast bezpowrotnej utraty audio bez próby ratunku).
  *
- * - 429 → honoruj `Retry-After` (capped MAX_RETRY_WAIT_MS) → ponów segment.
+ * - 429 → honoruj `Retry-After` → zatrzymaj syntezę kolejki do pełnego terminu.
  * - !ok (500/503) → krótki backoff → ponów.
  * - network throw → backoff → ponów.
  * - sukces → `result.success && result.audioUrl`.
@@ -138,6 +140,7 @@ const STREAMING_SEGMENT_TARGET_CHARS = 100;
 export function releaseAudioElement(audio: HTMLAudioElement | null): void {
   if (!audio) return;
   try {
+    audio.onplaying = null;
     audio.onended = null;
     audio.onerror = null;
     audio.onplay = null;
@@ -154,7 +157,7 @@ export function releaseAudioElement(audio: HTMLAudioElement | null): void {
  * IND-191: fetch TTS z ponowieniem. Zwraca `audioUrl` albo `null` (segment niemy -
  * świadoma degradacja zamiast bezpowrotnej utraty audio bez próby ratunku).
  *
- * - 429 → honoruj `Retry-After` (capped MAX_RETRY_WAIT_MS) → ponów segment.
+ * - 429 → honoruj `Retry-After` → zatrzymaj syntezę kolejki do pełnego terminu.
  * - !ok (500/503) → krótki backoff → ponów.
  * - network throw → backoff → ponów.
  * - sukces → `result.success && result.audioUrl`.
@@ -168,7 +171,7 @@ async function fetchTtsWithRetry(
     signal?: AbortSignal;
     onRateLimited?: (retryAfterSec: number) => void;
   }
-): Promise<string | null> {
+): Promise<{ audioUrl: string; provider: string; voice?: string } | null> {
   const { signal, onRateLimited } = options || {};
   for (let attempt = 0; attempt <= MAX_TTS_RETRIES; attempt++) {
     if (signal?.aborted) return null;
@@ -184,37 +187,16 @@ async function fetchTtsWithRetry(
 
       if (signal?.aborted) return null;
 
-      // Rate-limit: czekaj Retry-After (capped) i ponów. Po wyczerpaniu → segment niemy.
+      // A quota applies to the whole queue, not just this segment.
       if (response.status === 429) {
-        const retryAfterHeader = response.headers?.get?.('Retry-After') || '';
-        const retryAfter = parseInt(retryAfterHeader, 10);
-        if (Number.isFinite(retryAfter) && onRateLimited) {
-          onRateLimited(retryAfter);
-        }
-
-        if (attempt < MAX_TTS_RETRIES) {
-          const waitMs = Number.isFinite(retryAfter)
-            ? Math.min(retryAfter * 1000, MAX_RETRY_WAIT_MS)
-            : TRANSIENT_RETRY_WAIT_MS;
-          await new Promise((r) => {
-            let onAbort: (() => void) | undefined;
-            const timer = setTimeout(() => {
-              if (signal && onAbort) signal.removeEventListener('abort', onAbort);
-              r(null);
-            }, waitMs);
-            if (signal) {
-              onAbort = () => {
-                clearTimeout(timer);
-                r(null);
-              };
-              signal.addEventListener('abort', onAbort, { once: true });
-            }
-          });
-          if (signal?.aborted) return null;
-          continue;
-        }
-        console.warn(
-          `⚠️ TTS: wyczerpano ponowienia rate-limit (429). Pomiń segment.`
+        const header = response.headers?.get?.('Retry-After') || '';
+        const seconds = Number(header);
+        const retryAfter =
+          header && Number.isFinite(seconds)
+            ? seconds
+            : Math.max(0, (Date.parse(header) - Date.now()) / 1000);
+        onRateLimited?.(
+          Number.isFinite(retryAfter) ? Math.max(1, retryAfter) : 30
         );
         return null;
       }
@@ -226,6 +208,10 @@ async function fetchTtsWithRetry(
         let isNoAudioErr = false;
         try {
           const errData = await response.clone().json();
+          if (errData?.retryable === false) {
+            onRateLimited?.(30);
+            return null;
+          }
           if (
             errData?.details?.includes('inlineData') ||
             errData?.details?.includes('text-instead-of-audio') ||
@@ -237,7 +223,9 @@ async function fetchTtsWithRetry(
           // ignore
         }
         if (isNoAudioErr) {
-          console.warn('⚠️ TTS: Gemini zwrócił brak inlineData audio. Pomijam retry (ochrona 15 RPM).');
+          console.warn(
+            '⚠️ TTS: Gemini zwrócił brak inlineData audio. Pomijam retry (ochrona 15 RPM).'
+          );
           return null;
         }
 
@@ -245,7 +233,8 @@ async function fetchTtsWithRetry(
           await new Promise((r) => {
             let onAbort: (() => void) | undefined;
             const timer = setTimeout(() => {
-              if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+              if (signal && onAbort)
+                signal.removeEventListener('abort', onAbort);
               r(null);
             }, TRANSIENT_RETRY_WAIT_MS);
             if (signal) {
@@ -259,14 +248,19 @@ async function fetchTtsWithRetry(
           if (signal?.aborted) return null;
           continue;
         }
-        console.warn(
-          `⚠️ TTS: błąd HTTP ${response.status}. Pomiń segment.`
-        );
+        console.warn(`⚠️ TTS: błąd HTTP ${response.status}. Pomiń segment.`);
         return null;
       }
 
       const result = await response.json();
-      if (result.success && result.audioUrl) return result.audioUrl;
+      if (result.success && typeof result.audioUrl === 'string')
+        return {
+          audioUrl: result.audioUrl,
+          provider: ['macos-zosia', 'macos-samantha'].includes(result.provider)
+            ? result.provider
+            : 'gemini',
+          voice: typeof result.voice === 'string' ? result.voice : undefined,
+        };
       return null;
     } catch (e: unknown) {
       if (signal?.aborted || (e instanceof Error && e.name === 'AbortError')) {
@@ -381,11 +375,15 @@ export function findDialogueClosingQuote(
 }
 
 export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
+  const t = useTranslations('TTSSettings');
+  const blockedUntilRef = useRef(0);
+  const providerRef = useRef<{ provider: string; voice?: string } | null>(null);
+  const localNoticeRef = useRef('');
+  const quotaNoticeRef = useRef(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
-  const [currentAudio, setCurrentAudioState] = useState<HTMLAudioElement | null>(
-    null
-  );
+  const [currentAudio, setCurrentAudioState] =
+    useState<HTMLAudioElement | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const setCurrentAudio = useCallback((audio: HTMLAudioElement | null) => {
     currentAudioRef.current = audio;
@@ -447,6 +445,9 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
   const preloadedAudioRef = useRef<Map<number, HTMLAudioElement | null>>(
     new Map()
   );
+  const segmentSourceRef = useRef<
+    Map<number, { messageId: string; text: string }>
+  >(new Map());
   const sfxQueueRef = useRef<Map<number, string>>(new Map());
   const isProcessingQueueRef = useRef(false);
   const isPlayingQueueRef = useRef(false);
@@ -466,7 +467,9 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
   // w stopCurrentAudio (wołanym też przy ID-change → nowa wiadomość startuje świeżo).
   const completedMessageIdsRef = useRef<Set<string>>(new Set());
   // Dynamiczny cache głosów i reżyserii NPC w trakcie sesji (gwarantuje spójność wokalną postaci)
-  const dynamicNpcVoiceMapRef = useRef<Map<string, { voiceId: string; audioDirection: string }>>(new Map());
+  const dynamicNpcVoiceMapRef = useRef<
+    Map<string, { voiceId: string; audioDirection: string }>
+  >(new Map());
   // Śledzi aktywnego mówcę NPC w obrębie bieżącej linii dialogowej (Issue #172: wielozdaniowe wypowiedzi postaci)
   const activeNpcSpeakerRef = useRef<string | null>(null);
   // Śledzi znak otwierający aktywny dialog (Issue #737: hierarchia cytatów wewnętrznych)
@@ -503,8 +506,10 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
   const pendingStandaloneMoodRef = useRef<string | undefined>(undefined);
 
   const stopCurrentAudio = useCallback(
-    (preserveBuffering = false) => {
+    (preserveBuffering = false, preserveImmersion = false) => {
       console.log('🔊 TTS: STOP called. Resetting state.');
+      stopCurrentSFX();
+      sfxQueueRef.current.clear();
       generationIdRef.current++;
 
       if (abortControllerRef.current) {
@@ -528,6 +533,8 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
         releaseAudioElement(audio);
       });
       preloadedAudioRef.current.clear();
+      segmentSourceRef.current.clear();
+      if (!preserveImmersion) immersion.cancel();
       queueRef.current = [];
       pendingQueueRef.current = [];
       isProcessingQueueRef.current = false;
@@ -589,7 +596,9 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
   // Zatrzymanie lektora narracji, gdy gracz odtwarza diegetyczny handout audio (Issue #703 / Q6)
   useEffect(() => {
     const handlePauseTTS = () => {
-      console.log('🔇 [TTS] Zatrzymano narrację MG na rzecz odtwarzanego handoutu audio');
+      console.log(
+        '🔇 [TTS] Zatrzymano narrację MG na rzecz odtwarzanego handoutu audio'
+      );
       stopCurrentAudio();
     };
 
@@ -602,17 +611,25 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
   }, [stopCurrentAudio]);
 
   const toggleAudioPause = useCallback(() => {
+    immersion.cancel();
     const audio = currentAudioRef.current;
     if (audio) {
       if (audio.paused) {
+        void immersion.resumePlayback().catch(() => {});
         audio.play().catch(console.error);
         setIsAudioPaused(false);
       } else {
+        void immersion.pausePlayback().catch(() => {});
         audio.pause();
         setIsAudioPaused(true);
       }
     }
   }, []);
+
+  useEffect(() => {
+    providerRef.current = null;
+    stopCurrentAudio();
+  }, [locale, stopCurrentAudio]);
 
   // Worker przetwarzający kolejkę
   const runQueueWorker = useCallback(async () => {
@@ -621,12 +638,76 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
     const currentSettings = loadAISettings();
 
     try {
+      // Resolve the provider before cache lookup, including after a locale change.
+      if (
+        !providerRef.current &&
+        (isPureTextMode() || persistentMediaCache.isAvailable())
+      ) {
+        if (Date.now() < blockedUntilRef.current) {
+          pendingQueueRef.current = [];
+          finishInitialBufferingRef.current();
+          return;
+        }
+        const generation = generationIdRef.current;
+        if (
+          !abortControllerRef.current ||
+          abortControllerRef.current.signal.aborted
+        )
+          abortControllerRef.current = new AbortController();
+        const controller = abortControllerRef.current;
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        try {
+          const response = await fetch(
+            `/api/tts/gemini?languageCode=${locale === 'en' ? 'en-US' : 'pl-PL'}`,
+            { method: 'GET', signal: controller.signal }
+          );
+          if (generation !== generationIdRef.current) return;
+          if (!response.ok) throw new Error('TTS_CAPABILITIES_UNAVAILABLE');
+          const profile = await response.json();
+          if (generation !== generationIdRef.current) return;
+          providerRef.current = {
+            provider: ['macos-zosia', 'macos-samantha'].includes(
+              profile.provider
+            )
+              ? profile.provider
+              : 'gemini',
+            voice: profile.voice,
+          };
+        } catch {
+          if (generation !== generationIdRef.current) return;
+          blockedUntilRef.current = Date.now() + 30000;
+          pendingQueueRef.current = [];
+          finishInitialBufferingRef.current();
+          if (!quotaNoticeRef.current) {
+            quotaNoticeRef.current = true;
+            toast({ title: t('unavailableNotice') });
+          }
+          return;
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+      if (
+        isPureTextMode() &&
+        !hasLocalPlaytestTransport() &&
+        !providerRef.current?.provider.startsWith('macos-')
+      ) {
+        pendingQueueRef.current = [];
+        finishInitialBufferingRef.current();
+        return;
+      }
       while (pendingQueueRef.current.length > 0) {
         const currentGen = generationIdRef.current;
         // Przenieś z pending do głównej kolejki przetwarzania
         const item = pendingQueueRef.current.shift();
         if (!item) continue;
-        const { text, voiceId: overrideVoiceId, audioDirection, speedMultiplier, sfxPresetId } = item;
+        const {
+          text,
+          voiceId: overrideVoiceId,
+          audioDirection,
+          speedMultiplier,
+          sfxPresetId,
+        } = item;
         if (!text) continue;
 
         const index = processingIndexRef.current++;
@@ -639,17 +720,29 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
           let audioUrl: string | null = null;
           // Faza 2 sesji 147: voiceId z multi-voice parsera ma priorytet nad settings.
           const effectiveVoice =
-            overrideVoiceId || currentSettings.voiceSettings?.voiceId || 'Sadaltager';
+            overrideVoiceId ||
+            currentSettings.voiceSettings?.voiceId ||
+            'Sadaltager';
 
           // Gemini TTS: wyłączny silnik audio (offline-first / BYOK)
           const geminiModel = overrideVoiceId
             ? TTS_MODEL_NPC
             : TTS_MODEL_NARRATOR;
           // Issue #78: Sprawdź pamięć podręczną IndexedDB przed wywołaniem API sieciowego
-          const ttsCacheKey = persistentMediaCache.generateTtsCacheKey(
-            text,
-            `${effectiveVoice}_${locale}_${audioDirection || ''}`
-          );
+          let profile = providerRef.current || {
+            provider: 'gemini',
+            voice: effectiveVoice,
+          };
+          const cacheVoice = () =>
+            profile.provider === 'gemini'
+              ? effectiveVoice
+              : profile.voice || effectiveVoice;
+          const cacheKey = () =>
+            persistentMediaCache.generateTtsCacheKey(
+              text,
+              `${profile.provider}_${profile.provider === 'gemini' ? `${geminiModel}_${GEMINI_TTS_PROMPT_VERSION}` : ''}_${cacheVoice()}_${locale}_${profile.provider === 'gemini' ? audioDirection || '' : ''}`
+            );
+          let ttsCacheKey = cacheKey();
 
           if (persistentMediaCache.isAvailable()) {
             try {
@@ -663,19 +756,24 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
           }
 
           if (generationIdRef.current !== currentGen) {
-            console.log(`🔊 TTS Worker: Segment ${index} unieważniony (stara generacja)`);
+            console.log(
+              `🔊 TTS Worker: Segment ${index} unieważniony (stara generacja)`
+            );
             break;
           }
 
-          if (!audioUrl) {
-            if (!abortControllerRef.current || abortControllerRef.current.signal.aborted) {
+          if (!audioUrl && Date.now() >= blockedUntilRef.current) {
+            if (
+              !abortControllerRef.current ||
+              abortControllerRef.current.signal.aborted
+            ) {
               abortControllerRef.current = new AbortController();
             }
             const signal = abortControllerRef.current.signal;
 
             // IND-191: fetch z retry (429 honoruje Retry-After, transient backoff).
             // Issue #162 + #200: przekazujemy audioDirection jako instrukcję reżyserską dla Gemini TTS
-            audioUrl = await fetchTtsWithRetry(
+            const generated = await fetchTtsWithRetry(
               '/api/tts/gemini',
               {
                 text,
@@ -687,6 +785,11 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
               {
                 signal,
                 onRateLimited: (retryAfterSec) => {
+                  blockedUntilRef.current = Date.now() + retryAfterSec * 1000;
+                  if (!quotaNoticeRef.current) {
+                    quotaNoticeRef.current = true;
+                    toast({ title: t('unavailableNotice') });
+                  }
                   if (retryAfterSec > 10) {
                     console.warn(
                       `⚠️ [TTS] Wykryto rate-limit 429 z Retry-After=${retryAfterSec}s > 10s. Aktywacja bezpiecznika 15 RPM (agregacja akapitowa).`
@@ -699,8 +802,20 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
               }
             );
 
+            audioUrl = generated?.audioUrl || null;
+            if (generated) {
+              profile = {
+                provider: generated.provider,
+                voice: generated.voice || effectiveVoice,
+              };
+              providerRef.current = profile;
+              ttsCacheKey = cacheKey();
+            }
+
             if (generationIdRef.current !== currentGen || signal.aborted) {
-              console.log(`🔊 TTS Worker: Segment ${index} odrzucony po fetch (stara generacja lub anulowano)`);
+              console.log(
+                `🔊 TTS Worker: Segment ${index} odrzucony po fetch (stara generacja lub anulowano)`
+              );
               break;
             }
 
@@ -708,7 +823,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
               persistentMediaCache
                 .setTtsAudio(ttsCacheKey, audioUrl, {
                   text,
-                  voiceId: effectiveVoice,
+                  voiceId: cacheVoice(),
                   languageCode: locale === 'en' ? 'en-US' : 'pl-PL',
                 })
                 .catch(() => {});
@@ -720,18 +835,38 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
           }
 
           if (audioUrl) {
+            if (
+              profile.provider.startsWith('macos-') &&
+              localNoticeRef.current !== profile.provider
+            ) {
+              localNoticeRef.current = profile.provider;
+              toast({
+                title: t('localVoiceNotice', {
+                  voice:
+                    profile.voice || (locale === 'en' ? 'Samantha' : 'Zosia'),
+                }),
+              });
+            }
             const audio = new Audio(audioUrl);
             audio.volume = (currentSettings.voiceSettings?.volume || 75) / 100;
-            const baseSpeed = currentSettings.voiceSettings?.speed || 0.92;
+            const baseSpeed = currentSettings.voiceSettings?.speed ?? 1.0;
             audio.playbackRate = baseSpeed;
             if ('preservesPitch' in audio) {
-              (audio as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+              (
+                audio as HTMLAudioElement & { preservesPitch?: boolean }
+              ).preservesPitch = true;
             }
             preloadedAudioRef.current.set(index, audio);
+            segmentSourceRef.current.set(index, {
+              messageId: currentMessageIdRef.current ?? '',
+              text,
+            });
             if (sfxPresetId) {
               sfxQueueRef.current.set(index, sfxPresetId);
             }
-            console.log(`✅ TTS Worker: Ready segment ${index} (speed=${baseSpeed.toFixed(2)}x)`);
+            console.log(
+              `✅ TTS Worker: Ready segment ${index} (speed=${baseSpeed.toFixed(2)}x)`
+            );
 
             if (isInitialBufferingRef.current) {
               const bufferedCount = preloadedAudioRef.current.size;
@@ -799,7 +934,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
         finishInitialBufferingRef.current();
       }
     }
-  }, [locale]);
+  }, [locale, t]);
 
   const playbackIndexRef = useRef(0);
 
@@ -816,7 +951,10 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
 
     try {
       while (true) {
-        if (isAwaitingInitialPlayRef.current || generationIdRef.current !== currentGen) {
+        if (
+          isAwaitingInitialPlayRef.current ||
+          generationIdRef.current !== currentGen
+        ) {
           console.log(
             '🔇 TTS Player: Awaiting initial play or aborted. Halting playback.'
           );
@@ -852,27 +990,40 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
           continue;
         }
 
-        if (isAwaitingInitialPlayRef.current || generationIdRef.current !== currentGen) {
+        if (
+          isAwaitingInitialPlayRef.current ||
+          generationIdRef.current !== currentGen
+        ) {
           break;
         }
 
         console.log(`▶️ TTS Player: Playing segment ${currentIndex}`);
         const currentSettings = loadAISettings();
         if (!audio.playbackRate || audio.playbackRate === 1) {
-          const currentSpeed = currentSettings.voiceSettings?.speed || 0.92;
+          const currentSpeed = currentSettings.voiceSettings?.speed ?? 1.0;
           audio.playbackRate = currentSpeed;
         }
         if ('preservesPitch' in audio) {
-          (audio as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+          (
+            audio as HTMLAudioElement & { preservesPitch?: boolean }
+          ).preservesPitch = true;
         }
-        // SFX trigger dla bieżącego segmentu lektora (Issue #504: wyłączone)
+        // Anchor light and SFX to actual playback, not synthesis or SSE arrival.
         const sfxId = sfxQueueRef.current.get(currentIndex);
-        if (sfxId) {
-          sfxQueueRef.current.delete(currentIndex);
-          if (SFX_ENABLED) {
-            playSFX(sfxId);
-          }
-        }
+        sfxQueueRef.current.delete(currentIndex);
+        audio.onplaying = () => {
+          audio.onplaying = null;
+          const source = segmentSourceRef.current.get(currentIndex);
+          const emitted = source
+            ? immersion.timeline.segment(
+                source.messageId,
+                source.text,
+                currentIndex
+              )
+            : false;
+          segmentSourceRef.current.delete(currentIndex);
+          if (!emitted && sfxId && SFX_ENABLED) playSFX(sfxId);
+        };
         setCurrentAudio(audio);
 
         await new Promise<void>((resolve) => {
@@ -885,7 +1036,10 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
           };
           currentPlayResolverRef.current = safeResolve;
           audio.onended = safeResolve;
-          audio.onerror = safeResolve;
+          audio.onerror = () => {
+            immersion.cancel();
+            safeResolve();
+          };
           audio.play().catch(safeResolve);
         });
 
@@ -939,14 +1093,14 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
 
   const addToQueue = useCallback(
     (fullRawText: string, messageId?: string, flush: boolean = false) => {
-      if (!voiceEnabled || !isTTSEnabled || !fullRawText || isPureTextMode()) return;
+      if (!voiceEnabled || !isTTSEnabled || !fullRawText) return;
 
       // Jeśli to zupełnie nowa wiadomość (inny ID), zresetuj postęp i audio
       if (messageId && currentMessageIdRef.current !== messageId) {
         console.log(
           `🔊 TTS ID Change: ${currentMessageIdRef.current} -> ${messageId}`
         );
-        stopCurrentAudio(isInitialBufferingRef.current);
+        stopCurrentAudio(isInitialBufferingRef.current, true);
         currentMessageIdRef.current = messageId;
         rawProcessedPosRef.current = 0;
         processedSentenceCountRef.current = 0;
@@ -1011,7 +1165,10 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
       stripped = stripped
         .replace(/\[[^\]]*$/, '')
         .replace(/\{[^}]*$/, '')
-        .replace(/(?:^|\n)\s*(?:MYŚLI_MG|MYSLI_MG|THOUGHTS|CEL_NARRACYJNY|NARRATIVE_GOAL|NASTRÓJ|NASTROJ|MOOD|REŻYSER_SCENY|SCENE_DIRECTOR|TECHNIKA_MG|MG_TECHNIQUE|RAPORT_AKTU|ACT_REPORT)\s*:[^\n]*$/gi, '');
+        .replace(
+          /(?:^|\n)\s*(?:MYŚLI_MG|MYSLI_MG|THOUGHTS|CEL_NARRACYJNY|NARRATIVE_GOAL|NASTRÓJ|NASTROJ|MOOD|REŻYSER_SCENY|SCENE_DIRECTOR|TECHNIKA_MG|MG_TECHNIQUE|RAPORT_AKTU|ACT_REPORT)\s*:[^\n]*$/gi,
+          ''
+        );
 
       // Issue #735: Połączenie etykiety mówcy NPC z następującą po nowej linii kwestią dialogową
       // np. "Rosalia:\n„Czego tu...”" -> "Rosalia: „Czego tu...”"
@@ -1175,8 +1332,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
             quoteMatchInBetween && quoteMatchInBetween.index !== undefined
               ? between.slice(0, quoteMatchInBetween.index)
               : between;
-          const betweenEmotion =
-            extractEmotionTag(beforeQuote)?.audioDirection;
+          const betweenEmotion = extractEmotionTag(beforeQuote)?.audioDirection;
           if (betweenEmotion && openRunRef.current) {
             const currentDir = openRunRef.current.audioDirection || '';
             if (!currentDir.includes(betweenEmotion)) {
@@ -1206,20 +1362,10 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
 
         for (const sentenceItem of newSentences) {
           const { raw, clean, startIndex, endIndex } = sentenceItem;
-          // Detekcja SFX dla bieżącego zdania: najpierw jawny tag [SFX: id], potem wzorce słowne
-          let sentenceSfxId: string | undefined;
-          const explicitSfxMatch = raw.match(/\[(?:SFX|DŹWIĘK|DZWIEK):\s*([a-zA-Z0-9_-]+)\]/i);
-          if (explicitSfxMatch) {
-            sentenceSfxId = explicitSfxMatch[1].toLowerCase();
-          } else {
-            for (const sfxEntry of SFX_PATTERNS) {
-              const rx = new RegExp(sfxEntry.pattern.source, sfxEntry.pattern.flags);
-              if (rx.test(clean)) {
-                sentenceSfxId = sfxEntry.presetId;
-                break;
-              }
-            }
-          }
+          // Only authored cues trigger audio. Mentioning a prop is not an event.
+          const sentenceSfxId = raw
+            .match(/\[(?:SFX|DŹWIĘK|DZWIEK):\s*([a-zA-Z0-9_-]+)\]/i)?.[1]
+            .toLowerCase();
 
           // Issue #544: Cooldown dla dławienia 15 RPM (automatyczny powrót po upływie okna)
           const isCurrentlyThrottled =
@@ -1234,7 +1380,10 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
 
           // Issue #172 + Issue #562: Jeśli pomiędzy poprzednim przetworzonym zdaniem a bieżącym nastąpił
           // znak nowej linii, zamknięcie cudzysłowu lub domknięty w kolejnym chunku tag emocji.
-          const between = stripped.slice(prevSentenceEndRef.current, startIndex);
+          const between = stripped.slice(
+            prevSentenceEndRef.current,
+            startIndex
+          );
           processBetweenGap(between, isCurrentlyThrottled);
 
           // Marker: legacy `@Imię: dialog` lub `Imię: „dialog”` (gm-protocol).
@@ -1267,7 +1416,10 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
           // Filtr prefiksów technicznych NPC (Raport policji:, Wskazówka:, Uwaga:)
           const TECHNICAL_NPC_PREFIXES =
             /^(?:Raport policji|Wskazówka|Wskazowka|Uwaga|Notatka|System|Komentarz|Status|Wskazówki|Wskazowki)\b/i;
-          if (markerMatch && TECHNICAL_NPC_PREFIXES.test(markerMatch[2].trim())) {
+          if (
+            markerMatch &&
+            TECHNICAL_NPC_PREFIXES.test(markerMatch[2].trim())
+          ) {
             markerMatch = null;
             isTrailingSpeakerAttribution = false;
           }
@@ -1324,16 +1476,25 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
                 if (openQuoteMatch) {
                   hasOpeningQuoteInMarker = true;
                   openedWithQuoteChar = openQuoteMatch[1];
-                  activeDialogueOpenedQuoteCharRef.current = openedWithQuoteChar;
+                  activeDialogueOpenedQuoteCharRef.current =
+                    openedWithQuoteChar;
                   rawPrefixBeforeBody += openQuoteMatch[0];
                   rawSpokenBody = rawSpokenBody.slice(openQuoteMatch[0].length);
-                } else if (!markerMatch && activeDialogueOpenedQuoteCharRef.current) {
-                  openedWithQuoteChar = activeDialogueOpenedQuoteCharRef.current;
+                } else if (
+                  !markerMatch &&
+                  activeDialogueOpenedQuoteCharRef.current
+                ) {
+                  openedWithQuoteChar =
+                    activeDialogueOpenedQuoteCharRef.current;
                 }
               }
               const closingQuoteMatch = findDialogueClosingQuote(
                 rawSpokenBody,
-                markerMatch ? (hasOpeningQuoteInMarker ? (activeDialogueOpenedQuoteCharRef.current || '„') : undefined) : (activeDialogueOpenedQuoteCharRef.current || '„')
+                markerMatch
+                  ? hasOpeningQuoteInMarker
+                    ? activeDialogueOpenedQuoteCharRef.current || '„'
+                    : undefined
+                  : activeDialogueOpenedQuoteCharRef.current || '„'
               );
               if (closingQuoteMatch && closingQuoteMatch.index !== undefined) {
                 shouldResetNpcAfterSentence = true;
@@ -1348,17 +1509,13 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
                 emotionMood = extractEmotionTag(
                   `${rawPrefixBeforeBody}${rawInsideQuote}`
                 );
-                moodDirection =
-                  emotionMood?.audioDirection || priorPendingMood;
+                moodDirection = emotionMood?.audioDirection || priorPendingMood;
                 inlineNarratorMoodDirection =
                   extractEmotionTag(rawAfterQuote)?.audioDirection;
                 const cleanAfterQuote = cleanForTtsBuffer(rawAfterQuote)
                   .replace(/^[\s,.;:–—-]+/, '')
                   .trim();
-                if (
-                  cleanAfterQuote &&
-                  /[\p{L}\p{N}]/u.test(cleanAfterQuote)
-                ) {
+                if (cleanAfterQuote && /[\p{L}\p{N}]/u.test(cleanAfterQuote)) {
                   inlineNarratorTail = cleanAfterQuote;
                   hasExplicitInsideQuoteOverride = true;
                   const cleanInsideQuote = cleanForTtsBuffer(rawInsideQuote);
@@ -1386,9 +1543,9 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
             ));
             textForQueue = hasExplicitInsideQuoteOverride
               ? markerMatch[3].trim()
-              : (markerMatch[3] !== undefined && markerMatch[3] !== null)
-              ? markerMatch[3].trim()
-              : clean;
+              : markerMatch[3] !== undefined && markerMatch[3] !== null
+                ? markerMatch[3].trim()
+                : clean;
           } else if (activeNpcSpeakerRef.current && !isNarratorOnlyMode) {
             // Issue #172: Kontynuacja dialogu tej samej postaci w obrębie tej samej linii/akapitu
             ({ voiceId, audioDirection } = resolveNpcSegmentVoice(
@@ -1435,7 +1592,10 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
           }
           if (!hasSpokenWords && !inlineNarratorTail) {
             const isBareSpeakerLabel = !!markerMatch && !markerMatch[3].trim();
-            if (!isBareSpeakerLabel && (shouldResetNpcAfterSentence || raw.includes('\n'))) {
+            if (
+              !isBareSpeakerLabel &&
+              (shouldResetNpcAfterSentence || raw.includes('\n'))
+            ) {
               activeNpcSpeakerRef.current = null;
             }
             prevSentenceEndRef.current = endIndex;
@@ -1447,7 +1607,8 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
             // dokleja się do otwartego runu = jedno wywołanie TTS.
             if (
               openRunRef.current &&
-              (openRunRef.current.voiceId !== voiceId ||
+              (!!sentenceSfxId ||
+                openRunRef.current.voiceId !== voiceId ||
                 openRunRef.current.audioDirection !== audioDirection)
             ) {
               closeRun();
@@ -1503,7 +1664,8 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
             !isLastSentenceWithUnclosedBracket
           ) {
             if (!isCurrentlyThrottled) {
-              const currentRunLength = openRunRef.current.texts.join(' ').length;
+              const currentRunLength =
+                openRunRef.current.texts.join(' ').length;
               const threshold = !hasDispatchedFirstSegmentRef.current
                 ? EARLY_FIRST_SEGMENT_MIN_CHARS
                 : STREAMING_SEGMENT_TARGET_CHARS;
@@ -1575,7 +1737,8 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
               earlySpokenCharsRef.current,
               lastSentenceEnd
             );
-            const spanEmotionDirection = extractEmotionTag(newSpan)?.audioDirection;
+            const spanEmotionDirection =
+              extractEmotionTag(newSpan)?.audioDirection;
             const cleanSpan = cleanForTtsBuffer(newSpan);
             // Pierwszy segment musi mieć sensowną długość (próg), kolejne wczesne
             // segmenty domykają zdania bez limitu (płynna kontynuacja audio).
@@ -1612,21 +1775,12 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
             i === 0 && earlySpokenCharsRef.current > 0
               ? paragraphs[0].slice(earlySpokenCharsRef.current)
               : paragraphs[i];
-          const paraEmotionDirection = extractEmotionTag(rawParagraph)?.audioDirection;
+          const paraEmotionDirection =
+            extractEmotionTag(rawParagraph)?.audioDirection;
           const cleanParagraph = cleanForTtsBuffer(rawParagraph);
-          let paraSfxId: string | undefined;
-          const explicitParaSfxMatch = rawParagraph.match(/\[(?:SFX|DŹWIĘK|DZWIEK):\s*([a-zA-Z0-9_-]+)\]/i);
-          if (explicitParaSfxMatch) {
-            paraSfxId = explicitParaSfxMatch[1].toLowerCase();
-          } else {
-            for (const sfxEntry of SFX_PATTERNS) {
-              const rx = new RegExp(sfxEntry.pattern.source, sfxEntry.pattern.flags);
-              if (rx.test(cleanParagraph)) {
-                paraSfxId = sfxEntry.presetId;
-                break;
-              }
-            }
-          }
+          const paraSfxId = rawParagraph
+            .match(/\[(?:SFX|DŹWIĘK|DZWIEK):\s*([a-zA-Z0-9_-]+)\]/i)?.[1]
+            .toLowerCase();
           if (cleanParagraph && /[\p{L}\p{N}]/u.test(cleanParagraph)) {
             const paragraphBaseDirection = buildAudioDirection({
               isNpc: false,
@@ -1700,7 +1854,9 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
     // Timeout bezpieczeństwa na wypadek absolutnej awarii API lub wycieku pętli powtórzeń (cap na retryDelay)
     bufferTimeoutRef.current = setTimeout(() => {
       if (isInitialBufferingRef.current) {
-        console.warn('🔇 TTS: Timeout buforowania. Zrzucam Hard-loading screen.');
+        console.warn(
+          '🔇 TTS: Timeout buforowania. Zrzucam Hard-loading screen.'
+        );
         finishInitialBufferingRef.current();
       }
     }, 15000);
@@ -1763,7 +1919,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
 
   const generateVoiceForMessage = useCallback(
     async (message: Message) => {
-      if (!voiceEnabled || !isTTSEnabled || message.role !== 'assistant' || isPureTextMode())
+      if (!voiceEnabled || !isTTSEnabled || message.role !== 'assistant')
         return;
       addToQueue(message.content, message.id, true);
     },

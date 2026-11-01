@@ -2,11 +2,13 @@
 
 <img src="docs/assets/06-banner-1500x500.png" alt="Strażnik Tajemnic AI / Keeper of Arcane Lore AI" width="820">
 
-# 𓂀 Strażnik Tajemnic AI / Keeper of Arcane Lore AI (v0.9.5)
+# 𓂀 Strażnik Tajemnic AI / Keeper of Arcane Lore AI (v0.9.6)
 
 **Nieoficjalny, fanowski Mistrz Gry AI do sesji RPG w klimacie lovecraftowskim.**  
 *An unofficial, fan-made AI Game Master for RPG sessions in the Lovecraftian setting.*
 
+> Kod i lokalna aplikacja macOS: **0.9.6**. Instalatory publiczne poniżej pozostają w wersji **0.9.5**. [Zakres 0.9.6](docs/RELEASE-0.9.6.md).<br>
+> Source and local macOS application: **0.9.6**. Public installers below remain at **0.9.5**.<br>
 > v0.9.5 jest stabilnym wydaniem na Windows oraz macOS. Pobierz paczkę ZIP poniżej.<br>
 > v0.9.5 is a stable release for Windows and macOS. Download the ZIP package below.
 
@@ -18,7 +20,7 @@
 
 ---
 
-# 🇵🇱 Strażnik Tajemnic AI (v0.9.5)
+# 🇵🇱 Strażnik Tajemnic AI (v0.9.6)
 
 Prowadź sesje śledczego RPG grozy w klimacie weird fiction solo lub przy jednym laptopie (Hot Seat). Wklejasz własny klucz Gemini, wgrywasz **swój** podręcznik, a zapisy stanu gry lądują na Twoim dysku. Nie potrzebujesz konta, subskrypcji ani zewnętrznej bazy danych. Wszystko działa lokalnie na Twoim komputerze.
 
@@ -201,7 +203,7 @@ Kod: **MIT** (patrz [`LICENSE`](./LICENSE)). Projekt fanowski i niekomercyjny. S
 
 ---
 
-# 🇺🇸 Keeper of Arcane Lore AI (v0.9.5)
+# 🇺🇸 Keeper of Arcane Lore AI (v0.9.6)
 
 Run your d100 investigative weird fiction RPG sessions solo or with a friend on a single laptop (Hot Seat). You provide your own Gemini API key, upload **your own** rulebook, and saves are stored on your local disk. The app requires no account, subscription, or external databases. Everything runs locally on your machine.
 

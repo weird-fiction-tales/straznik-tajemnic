@@ -43,6 +43,105 @@ describe('GeminiChatProvider.finishReason', () => {
     mockGenerateContent.mockReset();
   });
 
+  afterEach(() => jest.useRealTimers());
+
+  it.each(['chat', 'streamChat'] as const)('recovers a failed connection with the next model in %s', async method => {
+    const mock = method === 'chat' ? mockGenerateContent : mockGenerateContentStream;
+    mock.mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(method === 'chat' ? {text: 'Recovered scene'} : streamResponse([{text: 'Recovered scene'}]));
+    const provider = new GeminiChatProvider('synthetic-key', 'unavailable-model');
+    const result = await provider[method](request);
+    if ('stream' in result) {
+      const chunks = []; for await (const chunk of result.stream) chunks.push(chunk.text);
+      expect(chunks.join('')).toBe('Recovered scene');
+    } else expect(result.text).toBe('Recovered scene');
+    expect(mock).toHaveBeenCalledTimes(2);
+    expect(mock.mock.calls[1][0].model).not.toBe('unavailable-model');
+  });
+
+  it('aborts a model that never returns headers and recovers within the total budget', async () => {
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValueOnce(streamResponse([{text: 'Recovered scene'}]));
+    const pending = new GeminiChatProvider('synthetic-key', 'unavailable-model').streamChat(request);
+    await jest.advanceTimersByTimeAsync(15_000);
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(2);
+    const result = await pending;
+    const chunks = []; for await (const chunk of result.stream) chunks.push(chunk.text);
+    expect(chunks.join('')).toBe('Recovered scene');
+    expect(mockGenerateContentStream.mock.calls[0][0].config.abortSignal.aborted).toBe(true);
+  });
+
+  it('bounds a stalled stream after partial text without joining a second model to it', async () => {
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockResolvedValueOnce((async function* () {
+      yield {text: 'Partial scene'}; await new Promise(() => {});
+    })());
+    const result = await new GeminiChatProvider('synthetic-key', 'stalled-model').streamChat(request);
+    let failure: unknown;
+    const consumed = (async () => {try {for await (const _chunk of result.stream) { /* consume */ }} catch (error) {failure = error;}})();
+    await jest.advanceTimersByTimeAsync(15_000);
+    expect(failure).toMatchObject({name:'TimeoutError',message:'GEMINI_REQUEST_TIMEOUT'});
+    await consumed;
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors player cancellation without starting a fallback', async () => {
+    const controller = new AbortController();
+    mockGenerateContentStream.mockImplementationOnce(() => new Promise(() => {}));
+    const configured = {...request, signal:controller.signal};
+    const pending = new GeminiChatProvider('synthetic-key', 'cancelled-model').streamChat(configured);
+    const rejected = expect(pending).rejects.toMatchObject({name:'AbortError'});
+    controller.abort();
+    await rejected;
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers a connection stalled before its first chunk', async () => {
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockResolvedValueOnce({[Symbol.asyncIterator]:()=>({next:()=>new Promise(()=>{}),return:jest.fn(async()=>({done:true}))})})
+      .mockResolvedValueOnce(streamResponse([{text:'Recovered scene'}]));
+    const pending=new GeminiChatProvider('synthetic-key','stalled-model').streamChat(request);
+    const consumed=(async()=>{const result=await pending;const chunks=[];for await(const chunk of result.stream)chunks.push(chunk.text);return chunks;})();
+    const settled=consumed.catch(error=>error);
+    await jest.advanceTimersByTimeAsync(15_000);
+    expect(await settled).toEqual(['Recovered scene']);
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['timeout','cancel'])('propagates %s from an empty-response retry',async mode=>{
+    jest.useFakeTimers();
+    const controller=new AbortController();
+    mockGenerateContentStream.mockResolvedValueOnce(streamResponse([])).mockImplementationOnce(()=>new Promise(()=>{}));
+    const result=await new GeminiChatProvider('synthetic-key','empty-model').streamChat({...request,signal:controller.signal});
+    let failure:unknown;const texts:string[]=[];
+    const consumed=(async()=>{try{for await(const chunk of result.stream)texts.push(chunk.text);}catch(error){failure=error;}})();
+    await jest.advanceTimersByTimeAsync(0);
+    if(mode==='cancel')controller.abort();else await jest.advanceTimersByTimeAsync(15_000);
+    await consumed;
+    expect(failure).toMatchObject({name:mode==='cancel'?'AbortError':'TimeoutError'});
+    expect(texts).toEqual([]);
+  });
+
+  it('closes the SDK iterator when its consumer leaves early',async()=>{
+    const close=jest.fn(async()=>({done:true,value:undefined}));
+    mockGenerateContentStream.mockResolvedValueOnce({[Symbol.asyncIterator]:()=>({next:async()=>({done:false,value:{text:'Scene'}}),return:close})});
+    const result=await new GeminiChatProvider('synthetic-key','test-model').streamChat(request);
+    for await(const _chunk of result.stream)break;
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(mockGenerateContentStream.mock.calls[0][0].config.abortSignal.aborted).toBe(true);
+  });
+
+  it('ends all stalled model attempts at the shared total deadline',async()=>{
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockImplementation(()=>new Promise(()=>{}));
+    const pending=new GeminiChatProvider('synthetic-key','stalled-model').streamChat({...request,timeoutMs:20_000});
+    const settled=pending.catch(error=>error);
+    await jest.advanceTimersByTimeAsync(20_000);
+    expect(await settled).toMatchObject({name:'TimeoutError'});
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['legacy', 'options'] as const)('blocks %s document attachments before any SDK request', async (location) => {
     const fileAttachments = [{ fileUri: 'https://example.invalid/synthetic.pdf', mimeType: 'application/pdf' }];
     const provider = new GeminiChatProvider('synthetic-key', 'gemini-test');
@@ -185,6 +284,17 @@ describe('GeminiChatProvider.finishReason', () => {
     expect(mockGenerateContent.mock.calls[1][0].model).toBe('gemini-test');
   });
 
+  it.each(['chat','streamChat'] as const)('moves to fallback without retrying an exhausted daily quota in %s',async method=>{
+    const daily=new Error('429 RESOURCE_EXHAUSTED Quota exceeded GenerateRequestsPerDayPerProjectPerModel-FreeTier retryDelay:63755s');
+    const mock=method==='chat'?mockGenerateContent:mockGenerateContentStream;
+    mock.mockRejectedValueOnce(daily).mockResolvedValueOnce(method==='chat'?{text:'Fallback works'}:streamResponse([{text:'Fallback works'}]));
+    const provider=new GeminiChatProvider('synthetic-daily-key','gemini-test-daily');
+    await provider[method](request);
+    expect(mock).toHaveBeenCalledTimes(2);
+    expect(mock.mock.calls[0][0].model).toBe('gemini-test-daily');
+    expect(mock.mock.calls[1][0].model).not.toBe('gemini-test-daily');
+  });
+
   describe('Google API sampling & thinking deprecation migration', () => {
     it('nie dołącza temperature, topP, topK ani thinkingBudget dla nowoczesnych modeli Gemini 3.x', async () => {
       mockGenerateContent.mockResolvedValueOnce({
@@ -291,5 +401,60 @@ describe('GeminiChatProvider.finishReason', () => {
       const callConfig25 = mockGenerateContent.mock.calls[1][0].config;
       expect(callConfig25.thinkingConfig).toEqual({ thinkingBudget: 1024 });
     });
+  });
+});
+
+describe('fallback candidate generation configuration', () => {
+  beforeEach(() => { mockGenerateContentStream.mockReset(); mockGenerateContent.mockReset(); });
+  const primary = 'gemini-2.5-flash';
+  const daily = new Error('429 RESOURCE_EXHAUSTED GenerateRequestsPerDayPerProjectPerModel-FreeTier');
+  const cachedRequest: ChatCompletionRequest = {...request,
+    geminiOptions:{topK:20,thinkingLevel:'low',additionalContext:['CONTEXT_SENTINEL'],
+      resolvedCachedContent:{name:'cachedContents/synthetic-primary',model:'models/'+primary}}};
+
+  it.each(['chat','streamChat'] as const)('%s rebuilds config and drops model-bound cache for each actual modern fallback', async method => {
+    for (const target of ['gemini-flash-latest','gemini-3.1-flash-lite','gemini-flash-lite-latest']) {
+      const sdk=method==='chat'?mockGenerateContent:mockGenerateContentStream;
+      sdk.mockReset().mockImplementation(async ({model}:{model:string}) => {
+        if(model!==target)throw daily;
+        return method==='chat'?{text:'Fallback works'}:streamResponse([{text:'Fallback works'}]);
+      });
+      const provider=new GeminiChatProvider('synthetic-key',primary);
+      await provider[method](cachedRequest);
+      const initial=sdk.mock.calls[0][0];
+      expect(initial.config).toMatchObject({temperature:0.7,topP:0.9,topK:20,thinkingConfig:{thinkingBudget:0},cachedContent:'cachedContents/synthetic-primary'});
+      const actual=sdk.mock.calls.at(-1)![0];
+      expect(actual.model).toBe(target);
+      expect(actual.config.temperature).toBeUndefined();
+      expect(actual.config.topP).toBeUndefined();
+      expect(actual.config.topK).toBeUndefined();
+      expect(actual.config.thinkingConfig).toEqual({thinkingLevel:'LOW'});
+      expect(actual.config.cachedContent).toBeUndefined();
+      expect(actual.config.systemInstruction).toBe(request.systemPrompt);
+      expect(actual.contents).toEqual(initial.contents);
+      expect(JSON.stringify(actual.contents)).toContain('CONTEXT_SENTINEL');
+    }
+  });
+
+  it.each(['gemini-3.1-flash-lite','gemini-flash-lite-latest'])('empty-stream retry retains actual %s config without primary cache or sampling', async target => {
+    let targetCalls=0;
+    mockGenerateContentStream.mockImplementation(async ({model}:{model:string}) => {
+      if(model!==target)throw daily;
+      return streamResponse(++targetCalls===1?[]:[{text:'Recovered narration'}]);
+    });
+    const provider=new GeminiChatProvider('synthetic-key',primary);
+    const result=await provider.streamChat(cachedRequest);
+    const text=[];
+    for await(const chunk of result.stream)text.push(chunk.text);
+    expect(text).toEqual(['Recovered narration']);
+    const actual=mockGenerateContentStream.mock.calls.at(-1)![0];
+    expect(actual.model).toBe(target);
+    expect(actual.config.temperature).toBeUndefined();
+    expect(actual.config.topP).toBeUndefined();
+    expect(actual.config.topK).toBeUndefined();
+    expect(actual.config.thinkingConfig).toEqual({thinkingLevel:'MINIMAL'});
+    expect(actual.config.cachedContent).toBeUndefined();
+    expect(actual.config.systemInstruction).toBe(request.systemPrompt);
+    expect(targetCalls).toBe(2);
   });
 });

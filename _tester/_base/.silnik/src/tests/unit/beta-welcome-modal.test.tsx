@@ -31,6 +31,8 @@ jest.mock('next-intl', () => ({
       readyItem8Desc: 'Mistrz Gry i lektor TTS',
       readyItem9Title: 'Pościgi Piesze i Pojazdowe (d100 RAW Rozdział 7)',
       readyItem9Desc: 'Deterministyczna mechanika pościgów',
+      openingNodeTitle: 'Początek zgodny z teczką przygody',
+      openingNodeDesc: 'Kontrola sceny otwarcia gotowa w kodzie (w trakcie testów rozgrywki).',
       inProgressItem1Title: 'Zaawansowane Rytuały i Magia',
       inProgressItem1Desc: 'Księgi w ekwipunku',
       inProgressItem2Title: 'Import Własnych Scenariuszy z PDF',
@@ -57,6 +59,7 @@ describe('BetaWelcomeModal', () => {
     expect(screen.getByText(/Moduły w Budowie/i)).toBeInTheDocument();
     expect(screen.getByText(/Karta Badacza CoC 7e RAW/i)).toBeInTheDocument();
     expect(screen.getByText(/Scenariusze i Handouty Strefy 11/i)).toBeInTheDocument();
+    expect(screen.getByTestId('beta-opening-node')).toHaveTextContent('Początek zgodny z teczką przygody');
     expect(screen.getByText(/issue@callofchtulhu\.pl/i)).toBeInTheDocument();
   });
 

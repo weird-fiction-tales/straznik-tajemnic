@@ -43,6 +43,7 @@ export function StartQualityPresets({
       >
         {t('title')}
       </h2>
+      <p className="text-sm text-muted-foreground mb-3">{t('description')}</p>
       <div
         role="group"
         aria-label={t('title')}

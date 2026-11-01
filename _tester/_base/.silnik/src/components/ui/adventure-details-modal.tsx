@@ -111,7 +111,7 @@ export function AdventureDetailsModal({
             </DialogTitle>
             {adventure.source && (
               <div className="flex items-center justify-center gap-2 mt-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-brass/15 border border-brass/40 text-amber-200 text-xs font-mono tracking-wider uppercase rounded-sm">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-brass/15 border border-brass/40 text-brass text-xs font-mono tracking-wider uppercase rounded-sm">
                   <BookOpen className="h-3.5 w-3.5 text-brass" />
                   Tom źródłowy: {adventure.source}
                 </span>
@@ -361,7 +361,7 @@ export function AdventureDetailsModal({
               onChoose(adventure);
               onClose();
             }}
-            className="px-10 py-4 font-display font-black uppercase tracking-[0.2em] text-sm sm:text-base bg-gradient-to-r from-[#d4af37] to-[#b88d26] text-[#050807] hover:brightness-110 shadow-[0_4px_18px_rgba(212,175,55,0.4)]"
+            className="px-10 py-4 font-display font-black uppercase tracking-[0.2em] text-sm sm:text-base bg-primary text-primary-foreground hover:brightness-110 shadow-[0_4px_18px_rgba(212,175,55,0.4)]"
           >
             {t('choose')}
           </Button>

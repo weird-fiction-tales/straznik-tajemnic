@@ -36,6 +36,35 @@ export interface AgencyLintResult {
 export interface AgencyLintOptions {
   isDuet?: boolean;
   locale?: 'pl' | 'en';
+  /** Exact current human declaration, never assistant text or history. */
+  declaredAction?: {characterName:string;text:string};
+}
+
+/** Narrow permission: a declared entry authorizes that investigator and that literal destination only. */
+function isDeclaredEntry(text:string,index:number,options:AgencyLintOptions,characterName?:string):boolean {
+  const declaration=options.declaredAction;
+  if(!declaration?.text||!declaration.characterName)return false;
+  if(characterName&&!extractNameVariants(declaration.characterName).some(name=>name.toLocaleLowerCase()===characterName.toLocaleLowerCase()))return false;
+  if(!characterName&&options.isDuet)return false;
+  const en=options.locale==='en';
+  const response=text.slice(index).replace(/[*_]/g,'').toLocaleLowerCase();
+  const destination=response.match(en
+    ? /^(?:you\s+)?(?:enter(?:s|ed|ing)?|step(?:s|ped)?\s+(?:into|inside)|walk(?:s|ed)?\s+into)\s+(?:the\s+|a\s+)?([\p{L}\p{N}-]+)/u
+    : /^(?:wchodzi(?:sz|cie)?|wszedł(?:eś)?|weszła(?:ś)?|weszli(?:ście)?)\s+(?:do|w)\s+([\p{L}\p{N}-]+)/u);
+  const singleTargetTail=(value:string)=>/^(?:\s*$|\s*[,.;:!?\n]|\s+za zaproszeniem(?=\s*[,.;:!?\n]|\s*$))/u.test(value);
+  const target=destination?.[1];
+  if(!target||!singleTargetTail(response.slice(destination![0].length)))return false;
+  // Quoted dialogue and hypothetical/negated actions do not authorize physical movement.
+  const human=declaration.text.replace(/[„“"][^”"\n]*[”"]/g,'').replace(/(?<![\p{L}])'[^'\n]*'(?![\p{L}])/gu,'').toLocaleLowerCase();
+  if(/(?<![\p{L}\p{N}])(?:jeżeli|jeśli|gdyby\w*|pod warunkiem|if|unless|would|could)(?![\p{L}\p{N}])/u.test(human))return false;
+  const entry=en ? /\bi\s+(?:enter|step\s+(?:into|inside)|walk\s+into)\s+(?:the\s+|a\s+)?([\p{L}\p{N}-]+)/gu
+    : /(?<![\p{L}\p{N}])(?:wchodzę|wejdę)\s+(?:do|w)\s+([\p{L}\p{N}-]+)/gu;
+  for(const match of human.matchAll(entry)){
+    if(human.slice(match.index!+match[0].length).match(/[.!?;\n]/)?.[0]==='?')continue;
+    const prefix=human.slice(0,match.index).split(/[.!?;\n]/).at(-1)||'';
+    if(match[1]===target&&singleTargetTail(human.slice(match.index!+match[0].length))&&!isNegatedBefore(prefix)&&!/(?:^|\s)(?:jeśli|gdyby\w*|czy|if|unless|would|could)(?:\s|$)/u.test(prefix))return true;
+  }
+  return false;
 }
 
 function escapeRegex(str: string): string {
@@ -585,6 +614,7 @@ export function lintAgencyViolations(
               continue;
             }
 
+            if(check.type==='movement'&&isDeclaredEntry(text,globalOffset,options,charName))continue;
             violations.push({
               characterName: charName,
               type: check.type,
@@ -645,6 +675,7 @@ export function lintAgencyViolations(
     if (!validateSecondPersonMatch(match[0].trim(), text.slice(0, match.index))) {
       continue;
     }
+    if(isDeclaredEntry(text,match.index,{...options,isDuet},undefined))continue;
     violations.push({
       type: 'movement',
       matchedSnippet: match[0].trim(),

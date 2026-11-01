@@ -30,11 +30,48 @@ describe('equipment catalog', () => {
     expect(resolveCatalogAsset(flashlight, '1920s')).toBe(
       '/equipment/catalog/flashlight-1920s.webp'
     );
-    expect(resolveCatalogAsset(flashlight, 'prl-1970s')).toBeUndefined();
+    expect(resolveCatalogAsset(flashlight, '1950s')).toBeUndefined();
     expect(resolveCatalogAsset(rope, '1920s')).toBe(
       '/equipment/catalog/rope-1920s.webp'
     );
     expect(resolveCatalogAsset(rope, 'prl-1970s')).toBeUndefined();
+  });
+
+  it.each([
+    ['light.flashlight', 'Latarka', '/equipment/catalog/police-flashlight-prl.webp'],
+    ['tool.camera', 'Aparat fotograficzny', '/equipment/catalog/camera-prl-1970s.webp'],
+    ['tool.compass', 'Kompas', '/equipment/catalog/compass-shared.webp'],
+  ])('przypisuje zatwierdzony wariant PRL: %s', (templateId, name, imageUrl) => {
+    const template = findEquipmentTemplate(templateId);
+    expect(resolveCatalogAsset(template, 'prl-1970s')).toBe(imageUrl);
+    expect(applyCatalogTemplate({ id: 'legacy-' + templateId, name, category: 'tool' }, 'prl-1970s'))
+      .toMatchObject({ templateId, imageUrl, visualSource: 'catalog', eraVariantId: templateId + '-prl-1970s' });
+  });
+
+  it.each([undefined, '/equipment/predefined/tool.svg'])
+    ('naprawia pusty obraz generated we wznowionym zapisie (%s), zachowując własny obraz', (imageUrl) => {
+      const customImage = 'data:image/webp;base64,story';
+      const migrated = migrateEquipmentCatalog([
+        { id: 'missing', name: 'Latarka', category: 'tool', visualSource: 'generated', imageUrl },
+        { id: 'custom', name: 'Latarka', category: 'tool', visualSource: 'generated', imageUrl: customImage },
+      ], 'prl-1970s');
+
+      expect(migrated?.[0]).toMatchObject({
+        id: 'missing', imageUrl: '/equipment/catalog/police-flashlight-prl.webp', visualSource: 'catalog',
+      });
+      expect(migrated?.[1]).toEqual({
+        id: 'custom', name: 'Latarka', category: 'tool', visualSource: 'generated', imageUrl: customImage,
+      });
+      expect(migrateEquipmentCatalog(migrated, 'prl-1970s')).toEqual(migrated);
+    });
+
+  it('nie zastępuje ilustracji materiału teczki szablonem katalogowym', () => {
+    const dossierItem = {
+      id: 'dossier-photo', name: 'Fotografia', category: 'document' as const,
+      visualSource: 'fallback' as const, imageUrl: '/adventure-packs/cien-nad-prabutami/fotografia.jpg',
+      dossierBinding: { adventureId: 'cien-nad-prabutami', editionFingerprint: 'sha256:edition', recordId: 'photo-item' },
+    };
+    expect(applyCatalogTemplate(dossierItem, 'prl-1970s')).toBe(dossierItem);
   });
 
   it('migruje stary zapis po nazwie, zachowując stabilne ID egzemplarza i nadając eraVariantId', () => {
@@ -539,15 +576,15 @@ describe('equipment catalog', () => {
     // W epoce 1920s ma dedykowany render
     expect(resolveCatalogAsset(camera, '1920s')).toBe('/equipment/catalog/camera-1920s.webp');
 
-    // W epoce PRL nie zwraca aparatu z 1920s - czeka na camera-prl.webp i używa bezpiecznej ikony kategorii
-    expect(resolveCatalogAsset(camera, 'prl-1970s')).toBeUndefined();
+    // W epoce PRL ma własny aparat analogowy zamiast renderu z lat 20.
+    expect(resolveCatalogAsset(camera, 'prl-1970s')).toBe('/equipment/catalog/camera-prl-1970s.webp');
 
     const appliedPrl = applyCatalogTemplate(
       { id: 'test_cam_prl', name: 'Aparat fotograficzny', category: 'tool' },
       'prl-1970s'
     );
     expect(appliedPrl.imageUrl).not.toBe('/equipment/catalog/camera-1920s.webp');
-    expect(appliedPrl.imageUrl).toBe('/equipment/predefined/tool.svg');
+    expect(appliedPrl.imageUrl).toBe('/equipment/catalog/camera-prl-1970s.webp');
   });
 
   it('obsługuje tool.electronics-case-prl w epoce 2000s oraz modern bez odrzucania szablonu', () => {

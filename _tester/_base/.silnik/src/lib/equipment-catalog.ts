@@ -83,7 +83,7 @@ export const EQUIPMENT_CATALOG: EquipmentTemplate[] = [
     category: 'tool',
     visualTreatment: 'mundane',
     availableIn: ['1920s', '1940s', 'prl-1970s', 'modern'],
-    assetPaths: { '1920s': '/equipment/catalog/flashlight-1920s.webp', '1940s': '/equipment/catalog/flashlight-1940s.webp', 'modern': '/equipment/catalog/flashlight-modern.webp', },
+    assetPaths: { '1920s': '/equipment/catalog/flashlight-1920s.webp', '1940s': '/equipment/catalog/flashlight-1940s.webp', 'prl-1970s': '/equipment/catalog/police-flashlight-prl.webp', 'modern': '/equipment/catalog/flashlight-modern.webp', },
     value: 3,
   },
   {
@@ -145,7 +145,7 @@ export const EQUIPMENT_CATALOG: EquipmentTemplate[] = [
     category: 'tool',
     visualTreatment: 'mundane',
     availableIn: ALL_ERAS,
-    assetPaths: { '1890s': '/equipment/catalog/camera-1890s.webp', '1920s': '/equipment/catalog/camera-1920s.webp', '1930s': '/equipment/catalog/camera-1930s.webp', '1940s': '/equipment/catalog/camera-1940s.webp', '1980s': '/equipment/catalog/camera-1980s.webp', 'modern': '/equipment/catalog/dslr-camera-modern.webp', },
+    assetPaths: { '1890s': '/equipment/catalog/camera-1890s.webp', '1920s': '/equipment/catalog/camera-1920s.webp', '1930s': '/equipment/catalog/camera-1930s.webp', '1940s': '/equipment/catalog/camera-1940s.webp', 'prl-1970s': '/equipment/catalog/camera-prl-1970s.webp', '1980s': '/equipment/catalog/camera-1980s.webp', 'modern': '/equipment/catalog/dslr-camera-modern.webp', },
     value: 30,
   },
   {
@@ -166,7 +166,7 @@ export const EQUIPMENT_CATALOG: EquipmentTemplate[] = [
     category: 'tool',
     visualTreatment: 'mundane',
     availableIn: ALL_ERAS,
-    assetPaths: { '1890s': '/equipment/catalog/compass-1890s.webp', '1920s': '/equipment/catalog/compass-1920s.webp', '1930s': '/equipment/catalog/compass-1930s.webp', '1940s': '/equipment/catalog/compass-1940s.webp', '1980s': '/equipment/catalog/compass-1980s.webp', 'modern': '/equipment/catalog/compass-modern.webp', },
+    assetPaths: { '1890s': '/equipment/catalog/compass-1890s.webp', '1920s': '/equipment/catalog/compass-1920s.webp', '1930s': '/equipment/catalog/compass-1930s.webp', '1940s': '/equipment/catalog/compass-1940s.webp', 'prl-1970s': '/equipment/catalog/compass-shared.webp', '1980s': '/equipment/catalog/compass-1980s.webp', 'modern': '/equipment/catalog/compass-modern.webp', },
     modifiers: { skill: 'Nawigacja', bonus: 10 },
     value: 5,
   },
@@ -2069,7 +2069,15 @@ export function applyCatalogTemplate(
   item: EquipmentItem,
   era: EquipmentVisualEra | string = '1920s'
 ): EquipmentItem {
-  if (item.visualSource === 'generated') return item;
+  if (item.dossierBinding) return item;
+  const isSvgOrFallback =
+    !item.imageUrl ||
+    item.imageUrl.endsWith('.svg') ||
+    item.imageUrl.startsWith('data:image/svg+xml') ||
+    item.imageUrl.includes('/predefined/') ||
+    item.imageUrl.includes('/equipment/predefined/') ||
+    item.visualSource === 'fallback';
+  if (item.visualSource === 'generated' && !isSvgOrFallback) return item;
   const template = findEquipmentTemplate(item.templateId ?? item.name, item.category);
   if (!template) return item;
 
@@ -2100,18 +2108,13 @@ export function applyCatalogTemplate(
   }
 
   const catalogAsset = resolveCatalogAsset(template, visualEra);
-  const isCustomDataImage = Boolean(item.imageUrl && item.imageUrl.startsWith('data:'));
+  const isCustomDataImage = Boolean(
+    item.imageUrl?.startsWith('data:') && !item.imageUrl.startsWith('data:image/svg+xml')
+  );
 
   const isCatalogManaged =
     item.visualSource === 'catalog' ||
     Boolean(item.imageUrl && item.imageUrl.startsWith('/equipment/catalog/'));
-
-  const isSvgOrFallback =
-    !item.imageUrl ||
-    item.imageUrl.endsWith('.svg') ||
-    item.imageUrl.includes('/predefined/') ||
-    item.imageUrl.includes('/equipment/predefined/') ||
-    item.visualSource === 'fallback';
 
   const resolvedCategory =
     isExactNameOrIdMatch || !item.category || item.category === 'personal'

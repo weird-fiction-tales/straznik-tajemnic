@@ -1,4 +1,6 @@
 import { createHash } from 'crypto';
+import { CampaignContextBudgetError, estimateTokens } from '@/lib/ai-providers/context-budget';
+export { CampaignContextBudgetError } from '@/lib/ai-providers/context-budget';
 import { DEFAULT_GEMINI_MODEL } from '@/lib/ai-providers/constants';
 import { getGeminiClient } from '@/lib/gemini-client-pool';
 import { getContextLimit } from '@/lib/model-registry';
@@ -42,25 +44,12 @@ const retrieveMemory: (
   options?: RetrievalOptions,
 ) => Promise<CampaignMemoryRetrieval> = searchCampaignMemory;
 
-export class CampaignContextBudgetError extends Error {
-  readonly code = 'CAMPAIGN_CONTEXT_BUDGET_EXCEEDED';
-
-  constructor(readonly requiredTokens: number, readonly availableTokens: number) {
-    super(`Protected campaign input requires ${requiredTokens} tokens; ${availableTokens} available`);
-    this.name = 'CampaignContextBudgetError';
-  }
-}
-
 export interface PreparedCampaignContext {
   messages: Message[];
   summarySection: string | null;
   memorySection: string;
   retrieval: CampaignMemoryRetrieval | null;
   compacted: boolean;
-}
-
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
 }
 
 function messageTokens(message: Message): number {
@@ -77,31 +66,24 @@ function sourceHash(messages: Message[]): string {
 
 type Compaction = Pick<PreparedCampaignContext, 'messages' | 'summarySection' | 'compacted'>;
 
-// Select only the outbound context. Never mutate the original history or ledger.
-// The latest player action and everything following it are protected verbatim.
+// Validate only. Selection belongs to compaction, never to a second lossy pass.
 export function fitContext(context: Compaction, budget: number): Compaction {
-  if (!Number.isFinite(budget) || budget < 0) throw new CampaignContextBudgetError(0,budget);
-  let protectedStart = context.messages.length - 1;
-  for (let index = context.messages.length - 1; index >= 0; index -= 1) {
-    if (context.messages[index].role === 'user') {
-      protectedStart = index;
-      break;
-    }
+  const required = context.messages.reduce((n, m) => n + messageTokens(m), 0)
+    + estimateTokens(context.summarySection ?? '');
+  if (!Number.isFinite(budget) || budget < 0 || required > budget) {
+    throw new CampaignContextBudgetError(required, budget);
   }
-  protectedStart = Math.max(0, protectedStart);
-  const protectedTokens = context.messages.slice(protectedStart).reduce((sum, message) => sum + messageTokens(message), 0);
-  if (protectedTokens > budget) throw new CampaignContextBudgetError(protectedTokens, budget);
-  let summarySection = context.summarySection;
-  if (protectedTokens + estimateTokens(summarySection ?? '') > budget) summarySection = null;
-  let total = context.messages.reduce((sum, message) => sum + messageTokens(message), 0)
-    + estimateTokens(summarySection ?? '');
-  let start = 0;
-  while (total > budget && start < protectedStart) total -= messageTokens(context.messages[start++]);
-  return {
-    messages: start === 0 ? context.messages : context.messages.slice(start),
-    summarySection,
-    compacted: context.compacted || start > 0,
-  };
+  return context;
+}
+
+function protectedHistoryStart(messages: Message[]): number {
+  const lastUser = messages.map(m => m.role).lastIndexOf('user');
+  if (lastUser < 0) return Math.max(0, messages.length - 1);
+  // Keep the GM's preceding response together with the action it prompted.
+  for (let i = lastUser - 1; i >= 0; i--) {
+    if (messages[i].role === 'assistant') return i;
+  }
+  return lastUser;
 }
 
 function takeWithinBudget(messages: Message[], budget: number, fromEnd: boolean, maxMessages?: number): Message[] {
@@ -252,7 +234,9 @@ export class CampaignContextEngine {
     const budget = Math.floor(limit);
     const original: Compaction = { messages: input.messages, summarySection: null, compacted: false };
     // Preflight before any compressor call, including cooldown and scope-less paths.
-    const fallback = fitContext(original, budget);
+    const protectedStart = protectedHistoryStart(input.messages);
+    fitContext({ ...original, messages: input.messages.slice(protectedStart) }, budget);
+    const fallback = () => fitContext(original, budget);
     const total = input.messages.reduce((sum, entry) => sum + estimateTokens(entry.content) + 8, 0);
 
     const adaptiveTokenThreshold = input.adaptiveTokenThreshold ?? ADAPTIVE_TOKEN_THRESHOLD;
@@ -268,7 +252,7 @@ export class CampaignContextEngine {
     const exceedsTokenThreshold = total > tokenThreshold;
 
     if (!input.scope || (!exceedsTokenThreshold && !exceedsTurnThreshold)) {
-      return fallback;
+      return fallback();
     }
 
     const effectiveBudget = Math.min(budget, adaptiveTokenThreshold);
@@ -284,13 +268,11 @@ export class CampaignContextEngine {
     const head = takeWithinBudget(input.messages, headBudget, false, maxHeadMessages);
     const tailPool = input.messages.slice(head.length);
     let tail = takeWithinBudget(tailPool, tailBudget, true, maxTailMessages);
-    const lastUser = input.messages.map((message) => message.role).lastIndexOf('user');
-    const protectedStart = Math.max(0, lastUser < 0 ? input.messages.length - 1 : lastUser);
     if (input.messages.length - tail.length > protectedStart) tail = input.messages.slice(Math.max(head.length, protectedStart));
     const start = head.length;
     const endExclusive = input.messages.length - tail.length;
     if (endExclusive <= start) {
-      return fallback;
+      return fallback();
     }
 
     const cached = this.ledger.getLatestCheckpoint(input.scope.playthroughId);
@@ -323,7 +305,7 @@ export class CampaignContextEngine {
     }
 
     const failure = this.ledger.getCompressionFailure(input.scope.playthroughId);
-    if (failure.retryAfter && Date.parse(failure.retryAfter) > Date.now()) return fallback;
+    if (failure.retryAfter && Date.parse(failure.retryAfter) > Date.now()) return fallback();
 
     try {
       const client = getGeminiClient(input.apiKey);
@@ -367,8 +349,8 @@ export class CampaignContextEngine {
       return prepared;
     } catch (error) {
       this.ledger.recordCompressionFailure(input.scope.playthroughId);
-      console.warn('Campaign context compression failed; selecting bounded context without deleting history:', error);
-      return fallback;
+      console.warn('Campaign context compression failed; retaining full history or rejecting the turn:', error);
+      return fallback();
     }
   }
 }

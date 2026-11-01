@@ -69,7 +69,7 @@ describe('MedicalCareModal Component (Issue #523)', () => {
       />
     );
 
-    const eyebrow = screen.getByText('MISKATONIC ARCHIVES • 1920s');
+    const eyebrow = screen.getByText('ARCHIWUM MISKATONIC • LATA 20.');
     expect(eyebrow).toBeInTheDocument();
     expect(eyebrow).toHaveClass('text-primary', 'font-special-elite');
 
@@ -79,7 +79,7 @@ describe('MedicalCareModal Component (Issue #523)', () => {
 
     // Wybrany okres (1_week) i placówka (public_hospital) mają szmaragdowy akcent
     const weekBtn = screen.getByRole('button', { name: /1 tydzień/i });
-    expect(weekBtn).toHaveClass('bg-primary/20', 'text-primary', 'border-primary');
+    expect(weekBtn).toHaveClass('bg-primary/10', 'text-foreground', 'border-primary');
 
     const clinicCard = screen.getByText(/Prywatna Klinika/i).closest('div.p-3');
     expect(clinicCard).not.toBeNull();

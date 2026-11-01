@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 /**
  * @file sfx-hue-sync.test.ts
  * Testy jednostkowe integracji SFX z rozbłyskami Philips Hue (Issue #789).
@@ -5,6 +7,7 @@
 
 import { LightDirector } from '@/lib/hardware/hue/light-director';
 import { HueClient } from '@/lib/hardware/hue/hue-client';
+import { IMMERSION_SFX } from '@/lib/hardware/hue/immersion';
 import {
   SFX_CATALOG,
   playSFX,
@@ -37,7 +40,9 @@ describe('SFX & Philips Hue Audiovisual Synchronization (Issue #789)', () => {
     });
 
     it('triggerLightningFlash wywołuje zimny rozbłysk 6500K (80ms) i powraca do barwy sceny', async () => {
-      const applySpy = jest.spyOn(client, 'applyToSelectedLights').mockResolvedValue();
+      const applySpy = jest
+        .spyOn(client, 'applyToSelectedLights')
+        .mockResolvedValue();
 
       const result = await director.triggerLightningFlash();
       expect(result).toBe(true);
@@ -58,7 +63,9 @@ describe('SFX & Philips Hue Audiovisual Synchronization (Issue #789)', () => {
     });
 
     it('triggerGunshotFlash wywołuje ciepły mikro-rozbłysk 3000K (60ms) i powraca do nastroju sceny', async () => {
-      const applySpy = jest.spyOn(client, 'applyToSelectedLights').mockResolvedValue();
+      const applySpy = jest
+        .spyOn(client, 'applyToSelectedLights')
+        .mockResolvedValue();
 
       const result = await director.triggerGunshotFlash();
       expect(result).toBe(true);
@@ -77,7 +84,9 @@ describe('SFX & Philips Hue Audiovisual Synchronization (Issue #789)', () => {
     });
 
     it('triggerElectricalSpark generuje podwójne mikro-migotanie', async () => {
-      const applySpy = jest.spyOn(client, 'applyToSelectedLights').mockResolvedValue();
+      const applySpy = jest
+        .spyOn(client, 'applyToSelectedLights')
+        .mockResolvedValue();
 
       const result = await director.triggerElectricalSpark();
       expect(result).toBe(true);
@@ -119,7 +128,12 @@ describe('SFX & Philips Hue Audiovisual Synchronization (Issue #789)', () => {
     });
 
     it('miękki fallback: gdy mostek jest wyłączony, metody zwracają false bez wywołań HTTP', async () => {
-      client.updateConfig({ enabled: false, bridgeIp: '', appKey: '', selectedLightIds: [] });
+      client.updateConfig({
+        enabled: false,
+        bridgeIp: '',
+        appKey: '',
+        selectedLightIds: [],
+      });
       const applySpy = jest.spyOn(client, 'applyToSelectedLights');
 
       const lightningResult = await director.triggerLightningFlash();
@@ -137,8 +151,14 @@ describe('SFX & Philips Hue Audiovisual Synchronization (Issue #789)', () => {
     beforeEach(() => {
       localStorage.clear();
       jest.clearAllMocks();
-      window.HTMLMediaElement.prototype.play = jest.fn().mockResolvedValue(undefined);
+      window.HTMLMediaElement.prototype.play = jest
+        .fn()
+        .mockResolvedValue(undefined);
       window.HTMLMediaElement.prototype.pause = jest.fn();
+    });
+    it('every shared lighting cue references an existing SFX', () => {
+      for (const preset of Object.values(IMMERSION_SFX))
+        expect(SFX_CATALOG[preset]).toBeDefined();
     });
 
     it('SFX_ENABLED jest ustawione na true (odtwarzanie aktywne)', () => {
@@ -172,12 +192,15 @@ describe('SFX & Philips Hue Audiovisual Synchronization (Issue #789)', () => {
       dispatchSpy.mockRestore();
     });
 
-    it('katalog zawiera 54 zdefiniowane presety z poprawnymi ścieżkami audio', () => {
+    it('catalog references playable local files, including the recovered authored cues', () => {
       const ids = Object.keys(SFX_CATALOG);
-      expect(ids).toHaveLength(54);
+      expect(ids).toContain('paper_dossier_turn');
+      expect(ids).toContain('tape_mechanism');
       for (const id of ids) {
         const def = SFX_CATALOG[id];
-        expect(def.file).toMatch(/^\/sounds\/sfx\/.*\.mp3$/);
+        expect(def.file).toMatch(/^\/sounds\/sfx\/.*\.(mp3|webm)$/);
+        for (const file of def.files ?? [def.file])
+          expect(existsSync(join(process.cwd(), 'public', file))).toBe(true);
         expect(def.volume).toBeGreaterThan(0);
         expect(def.volume).toBeLessThanOrEqual(1.0);
       }

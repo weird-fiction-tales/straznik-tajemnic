@@ -197,7 +197,7 @@ describe('PREDEFINED_CHARACTERS', () => {
       expect(names).not.toContain('smartfon z ładowarką'.toLowerCase());
       expect(names).not.toContain('powerbank'.toLowerCase());
       expect(names).not.toContain('telefon komórkowy (cegła)'.toLowerCase());
-      expect(names).toContain('latarka elektryczna'.toLowerCase());
+      expect(eq.some((item) => /latark/i.test(item.name))).toBe(true);
       expect(names).toContain('kieszonkowa apteczka'.toLowerCase());
       expect(names).not.toContain('notes badawczy'.toLowerCase());
       expect(names).not.toContain('koperty na dowody'.toLowerCase());

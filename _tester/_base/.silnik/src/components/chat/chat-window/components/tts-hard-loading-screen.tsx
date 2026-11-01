@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import {
   Loader2,
@@ -100,39 +100,81 @@ export const TTSHardLoadingScreen: React.FC<TTSHardLoadingScreenProps> = ({
     return getBriefingAudio(adventureContext, { title, locale });
   }, [adventureContext, title, locale]);
 
-  const [isPlayingBriefing, setIsPlayingBriefing] = useState<boolean>(false);
-  const [briefingAudioEl, setBriefingAudioEl] = useState<HTMLAudioElement | null>(null);
+  const [briefingState, setBriefingState] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
+  const briefingAudioRef = useRef<HTMLAudioElement | null>(null);
+  const briefingRequestedRef = useRef(false);
+  const briefingRequestRef = useRef(0);
+  const briefingUrl = briefingAudio?.audioUrl;
+  const isPlayingBriefing = briefingState === 'playing';
+  const isLoadingBriefing = briefingState === 'loading';
+  const isBriefingRequested = isPlayingBriefing || isLoadingBriefing;
 
   useEffect(() => {
-    return () => {
-      if (briefingAudioEl) {
-        briefingAudioEl.pause();
-        briefingAudioEl.src = '';
-      }
+    setBriefingState('idle');
+    if (!isActive || !briefingUrl) return;
+
+    // Przygotuj lokalne nagranie podczas ładowania sesji; play wymaga kliknięcia.
+    const audio = new Audio(briefingUrl);
+    audio.preload = 'auto';
+    briefingAudioRef.current = audio;
+    audio.onplaying = () => {
+      if (briefingRequestedRef.current) setBriefingState('playing');
     };
-  }, [briefingAudioEl]);
+    audio.onwaiting = () => {
+      if (briefingRequestedRef.current) setBriefingState('loading');
+    };
+    audio.onended = audio.onpause = () => {
+      briefingRequestedRef.current = false;
+      briefingRequestRef.current += 1;
+      setBriefingState('idle');
+    };
+    audio.onerror = () => {
+      briefingRequestedRef.current = false;
+      briefingRequestRef.current += 1;
+      setBriefingState('error');
+    };
+    audio.load();
+
+    return () => {
+      briefingAudioRef.current = null;
+      briefingRequestedRef.current = false;
+      briefingRequestRef.current += 1;
+      audio.onplaying = audio.onwaiting = audio.onended = audio.onpause = audio.onerror = null;
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+    };
+  }, [isActive, briefingUrl, locale]);
+
+  const stopBriefingAudio = () => {
+    briefingRequestedRef.current = false;
+    briefingRequestRef.current += 1;
+    briefingAudioRef.current?.pause();
+    setBriefingState('idle');
+  };
 
   const toggleBriefingAudio = () => {
-    if (!briefingAudio?.audioUrl) return;
+    const audio = briefingAudioRef.current;
+    if (!audio) return;
 
-    if (isPlayingBriefing && briefingAudioEl) {
-      briefingAudioEl.pause();
-      setIsPlayingBriefing(false);
+    if (briefingRequestedRef.current) {
+      stopBriefingAudio();
       return;
     }
 
-    let audio = briefingAudioEl;
-    if (!audio) {
-      audio = new Audio(briefingAudio.audioUrl);
-      audio.onended = () => setIsPlayingBriefing(false);
-      audio.onerror = () => setIsPlayingBriefing(false);
-      setBriefingAudioEl(audio);
-    }
-
+    if (briefingState === 'error') audio.load();
+    briefingRequestedRef.current = true;
+    const request = ++briefingRequestRef.current;
+    setBriefingState('loading');
     audio.play().then(() => {
-      setIsPlayingBriefing(true);
+      if (briefingAudioRef.current === audio && briefingRequestRef.current === request && briefingRequestedRef.current) {
+        setBriefingState('playing');
+      }
     }).catch(() => {
-      setIsPlayingBriefing(false);
+      if (briefingAudioRef.current === audio && briefingRequestRef.current === request) {
+        briefingRequestedRef.current = false;
+        setBriefingState('error');
+      }
     });
   };
 
@@ -152,10 +194,7 @@ export const TTSHardLoadingScreen: React.FC<TTSHardLoadingScreenProps> = ({
   }, [adventureContext, eraContext, locale]);
 
   const handleConfirm = () => {
-    if (briefingAudioEl) {
-      briefingAudioEl.pause();
-      setIsPlayingBriefing(false);
-    }
+    stopBriefingAudio();
     if (onConfirmEnterGame) {
       onConfirmEnterGame();
     }
@@ -260,22 +299,28 @@ export const TTSHardLoadingScreen: React.FC<TTSHardLoadingScreenProps> = ({
                 <div className="mt-4 pt-3 border-t border-brass/25">
                   <button
                     type="button"
+                    data-testid="briefing-audio-toggle"
+                    data-state={briefingState}
+                    aria-pressed={isBriefingRequested}
+                    aria-busy={isLoadingBriefing}
                     onClick={toggleBriefingAudio}
                     className={`w-full group flex items-center justify-between px-3.5 py-2.5 rounded border transition-all duration-300 text-xs font-mono uppercase tracking-wider ${
-                      isPlayingBriefing
-                        ? 'bg-primary/20 border-primary text-primary-foreground shadow-[0_0_15px_rgba(17,179,163,0.3)]'
+                      isBriefingRequested
+                        ? 'bg-primary/20 border-primary text-gold-light shadow-[0_0_15px_rgba(17,179,163,0.3)]'
                         : 'bg-black/40 border-brass/40 text-gold-light hover:border-gold hover:bg-black/60 shadow-sm'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
                       <span
                         className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-                          isPlayingBriefing
+                          isBriefingRequested
                             ? 'bg-primary text-black'
                             : 'bg-gold/20 text-gold group-hover:bg-gold group-hover:text-black'
                         }`}
                       >
-                        {isPlayingBriefing ? (
+                        {isLoadingBriefing ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : isPlayingBriefing ? (
                           <Pause className="w-3.5 h-3.5 fill-current" />
                         ) : (
                           <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
@@ -283,10 +328,10 @@ export const TTSHardLoadingScreen: React.FC<TTSHardLoadingScreenProps> = ({
                       </span>
                       <div className="flex flex-col text-left">
                         <span className="font-semibold text-xs tracking-wide">
-                          {isPlayingBriefing ? t('pauseBriefing') : t('playBriefing')}
+                          {isLoadingBriefing ? t('cancelBriefing') : isPlayingBriefing ? t('pauseBriefing') : t('playBriefing')}
                         </span>
                         <span className="text-[10px] text-muted-foreground font-mono lowercase opacity-80">
-                          {isPlayingBriefing ? t('playingBriefing') : `${t('briefingAudioTitle')} • ~0:${briefingAudio.durationEstimateSeconds}`}
+                          {isLoadingBriefing ? t('startingBriefing') : isPlayingBriefing ? t('playingBriefing') : briefingState === 'error' ? t('briefingPlaybackError') : `${t('briefingAudioTitle')} • ~0:${briefingAudio.durationEstimateSeconds}`}
                         </span>
                       </div>
                     </div>
@@ -485,6 +530,11 @@ export const TTSHardLoadingScreen: React.FC<TTSHardLoadingScreenProps> = ({
                 {t('awaitingAccept')}
               </p>
             </div>
+          ) : onCancel ? (
+            <button type="button" onClick={onCancel} data-testid="loading-screen-cancel-btn"
+              className="min-h-11 px-4 py-2 border border-brass/40 text-brass font-display text-sm uppercase focus-visible:ring-2 focus-visible:ring-primary">
+              {t('cancelButton')}
+            </button>
           ) : null}
         </div>
       </div>

@@ -222,6 +222,22 @@ class EmbeddingService {
   }
 
   /**
+   * Generates an embedding with the local ONNX model regardless of RAG_PROVIDER.
+   * Use only for app-owned, approved dossier records; never falls back to a remote API.
+   */
+  async generateLocalEmbedding(text: string): Promise<number[] | null> {
+    if (!text || text.trim() === '') return null;
+    try {
+      const extractor = await getLocalPipeline();
+      const output = await extractor(text, { pooling: 'mean', normalize: true });
+      return output?.data ? Array.from(output.data) : null;
+    } catch (localErr) {
+      console.error('❌ [LocalEmbeddings] Błąd generowania lokalnego embeddingu dossier:', localErr);
+      return null;
+    }
+  }
+
+  /**
    * Generowanie embeddingu przez Google Gemini API (fallback / legacy).
    */
   private async generateGeminiEmbedding(

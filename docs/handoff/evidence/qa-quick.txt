@@ -1,0 +1,17 @@
+
+> straznik-tajemnic@0.9.5 qa:quick
+> npm run i18n:check && npm run navigation:check && npx tsc --noEmit
+
+
+> straznik-tajemnic@0.9.5 i18n:check
+> node scripts/validate-messages.mjs
+
+✓ <repo>/_tester/_base/.silnik/messages/pl.json: 6851 kluczy
+✓ <repo>/_tester/_base/.silnik/messages/en.json: 6851 kluczy
+
+✓ Drzewa kluczy pl.json i en.json są identyczne (1:1).
+
+> straznik-tajemnic@0.9.5 navigation:check
+> node scripts/generate-navigation-map.mjs --check
+
+PASS: rejestr nawigacji i Mermaid są zgodne.

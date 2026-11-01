@@ -157,6 +157,27 @@ describe('parseIntoSections (Handouty, obrazy i nagrania audio)', () => {
     expect(dialogue?.content).toContain('Nie podoba mi się to, doktorze.');
   });
 
+  it('zamyka handout przed dialogiem z interpunkcją po zamykającym cudzysłowie', () => {
+    const text = [
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      '📜 DOKUMENT ŚLEDCZY: LIST',
+      'Treść dokumentu.',
+      'Helena Krawczyk: „To już wszystko”.',
+    ].join('\n');
+
+    const sections = parseIntoSections(text);
+    expect(sections).toHaveLength(2);
+    expect(sections[0].type).toBe('handout');
+    expect(sections[0].content).toContain('Treść dokumentu.');
+    expect(sections[0].content).not.toContain('Helena Krawczyk:');
+    expect(sections[1]).toMatchObject({
+      type: 'dialogue',
+      speaker: 'Helena Krawczyk',
+      content: 'To już wszystko',
+      punctuationAfterQuote: '.',
+    });
+  });
+
   it('poprawnie parsuje przesyłkę pocztową PRZESYŁKA EKSPRESOWA – POCZTA POLSKA z oddzieleniem narracji po separatorze', () => {
     const text = [
       '[NOTATKA_BADACZA: Kto: Urząd Pocztowy Warszawa 1 | Dotyczy: Zapieczętowana przesyłka ekspresowa | Trop: Koperta zabezpieczona lakiem / zawartość nieznana do momentu otwarcia]',
@@ -331,6 +352,104 @@ describe('parseIntoSections (Handouty, obrazy i nagrania audio)', () => {
     const handoutEn = sectionsEn.find((s) => s.type === 'handout');
     expect(handoutEn).toBeDefined();
     expect(handoutEn?.handoutSlug).toBe('clue-02-boston-globe-1918');
+  });
+
+  it('parsuje dialog z kropką po cudzysłowie i zachowuje rozmówcę oraz interpunkcję', () => {
+    const sections = parseIntoSections('Helena Krawczyk: „Góra dała zielone światło na odcinek”.');
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0]).toMatchObject({
+      type: 'dialogue',
+      speaker: 'Helena Krawczyk',
+      content: 'Góra dała zielone światło na odcinek',
+      punctuationAfterQuote: '.',
+    });
+  });
+
+  it('łączy rozmówcę z kwestią w nowej linii także przy interpunkcji za cudzysłowem', () => {
+    const sections = parseIntoSections('Helena Krawczyk:\n„Góra dała zielone światło na odcinek”.');
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0]).toMatchObject({
+      type: 'dialogue',
+      speaker: 'Helena Krawczyk',
+      content: 'Góra dała zielone światło na odcinek',
+      punctuationAfterQuote: '.',
+    });
+  });
+
+  it.each(['.', '!', '?', ',', ';', ':', '…'])(
+    'zachowuje znak %s po zamykającym cudzysłowie dialogu',
+    (punctuation) => {
+      const sections = parseIntoSections(`Helena: „Wiadomość”${punctuation}`);
+
+      expect(sections[0]).toMatchObject({
+        type: 'dialogue',
+        speaker: 'Helena',
+        content: 'Wiadomość',
+        punctuationAfterQuote: punctuation,
+      });
+    }
+  );
+
+  it('parsuje dialog bez podpisu z kropką po zamykającym cudzysłowie', () => {
+    const sections = parseIntoSections('„Wiadomość bez podpisu”.');
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0]).toMatchObject({
+      type: 'dialogue',
+      content: 'Wiadomość bez podpisu',
+      punctuationAfterQuote: '.',
+    });
+  });
+
+  it('oddziela pełną kwestię od narracji przed i po niej w tym samym wierszu', () => {
+    const sections = parseIntoSections('Zamyka teczkę. Helena Krawczyk: „To raport dr. Nowaka. Przeczytaj go uważnie”. Odkłada okulary.');
+
+    expect(sections).toEqual([
+      { type: 'narrative', content: 'Zamyka teczkę.' },
+      { type: 'dialogue', speaker: 'Helena Krawczyk', content: 'To raport dr. Nowaka. Przeczytaj go uważnie', punctuationAfterQuote: '.', openingQuote: '„', closingQuote: '”' },
+      { type: 'narrative', content: 'Odkłada okulary.' },
+    ]);
+  });
+
+  it.each([
+    ['“', '”'], ['"', '"'], ['«', '»'],
+  ])('zachowuje cudzysłowy %s%s i kolejność dwóch rozmówców', (opening, closing) => {
+    const sections = parseIntoSections(`**Helena:** ${opening}First sentence. Second sentence${closing}. Dr Smith: ${opening}I understand${closing}! The door closes.`);
+
+    expect(sections).toEqual([
+      { type: 'dialogue', speaker: 'Helena', content: 'First sentence. Second sentence', punctuationAfterQuote: '.', openingQuote: opening, closingQuote: closing },
+      { type: 'dialogue', speaker: 'Dr Smith', content: 'I understand', punctuationAfterQuote: '!', openingQuote: opening, closingQuote: closing },
+      { type: 'narrative', content: 'The door closes.' },
+    ]);
+  });
+
+  it('nie zamienia cytowanego tytułu w środku narracji w wypowiedź NPC', () => {
+    expect(parseIntoSections('Na stole leży gazeta „Wieczór”. Helena zamyka drzwi.')).toEqual([
+      { type: 'narrative', content: 'Na stole leży gazeta „Wieczór”. Helena zamyka drzwi.' },
+    ]);
+  });
+
+  it('zachowuje cytat zagnieżdżony w wypowiedzi i nie gubi niedomkniętej kwestii', () => {
+    expect(parseIntoSections('Helena: „Powiedział: "Wrócę". Poczekaj”.')).toEqual([
+      { type: 'dialogue', speaker: 'Helena', content: 'Powiedział: "Wrócę". Poczekaj', punctuationAfterQuote: '.', openingQuote: '„', closingQuote: '”' },
+    ]);
+    expect(parseIntoSections('Helena: „Niedokończona wypowiedź')).toEqual([
+      { type: 'narrative', content: 'Helena: „Niedokończona wypowiedź' },
+    ]);
+  });
+
+  it('nie kończy cytatu ASCII na escapowanych cudzysłowach wewnętrznych', () => {
+    expect(parseIntoSections(String.raw`Helena: "He said \"Wait\". Keep going". Rain falls.`)).toEqual([
+      { type: 'dialogue', speaker: 'Helena', content: String.raw`He said \"Wait\". Keep going`, punctuationAfterQuote: '.', openingQuote: '"', closingQuote: '"' },
+      { type: 'narrative', content: 'Rain falls.' },
+    ]);
+  });
+
+  it('przy niejednoznacznych nieescapowanych cytatach ASCII zachowuje całą wypowiedź', () => {
+    const sections = parseIntoSections('Helena: "He said "Wait". Keep going".');
+    expect(sections.find(section => section.type === 'dialogue')?.content).toBe('He said "Wait". Keep going');
   });
 });
 

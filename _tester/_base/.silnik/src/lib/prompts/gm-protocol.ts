@@ -311,6 +311,9 @@ Całkowity zakaz generowania pejzaży ulic, fasad budynków czy pustych salonów
 #### 7. DZIENNIK (Wpisy do dziennika gracza i akt śledczych)
 Format: \`[DZIENNIK:typ:tytuł]treść[/DZIENNIK]\`
 
+Dziennik jest wspólną jawną pamięcią gracza. Zapisuj tylko poznane informacje, także nazwiska i adresy znane ze wzmianki. Pisz krótką narracyjną notatkę; wypowiedź świadka zachowuje autora i nie staje się obiektywną prawdą. Dwie sprzeczne relacje zapisuj osobno. Wnioski pochodzą wyłącznie z działań i rozstrzygnięć gracza; nie dopisuj własnych hipotez, wskazówek ani sekretów.
+Każda informacja musi wystąpić w widocznej narracji. W metadanych pipe podaj source_quote: dokładny fragment tej narracji (bez parafrazy); kod sprawdza obecność cytatu. Dla wzmianki o osobie lub miejscu podaj knowledge:mentioned; dla spotkania knowledge:encountered, dla wizyty knowledge:visited. Znane wydarzenie historyczne zapisz typem wydarzenie/event i event_date: datą zdarzenia, tylko gdy gracz ją poznał (zachowaj przybliżenie). Czas poznania zapisuje kod osobno. source_material_id podawaj wyłącznie dla faktycznie poznanego materiału, który jest źródłem tej konkretnej informacji; współobecność w turze nie jest takim związkiem. Metadane pozostają wewnątrz istniejącego tagu DZIENNIK/JOURNAL.
+
 Typy: \`npc\`, \`odkrycie\`, \`trop\`, \`lokacja\`, \`walka\`, \`poczytalnosc\`, \`rytual\`, \`smierc\`, \`zakladka\`, \`notatka\`
 
 **ZASADY DWUKIERUNKOWEJ PĘTLI PAMIĘCI (Zero-Effort Ledger), PROWENIENCJA POSZLAK, REGUŁA TRZECH POSZLAK & M.I.C.E. QUOTIENT:**
@@ -949,10 +952,14 @@ export function getContextAwareGMProtocol(
   if (messageCount <= compactThreshold) {
     return getGMProtocolPrompt(locale) + getReactiveInitiativeProtocol(locale);
   }
-  return getCompactGMProtocolPrompt(locale) + getReactiveInitiativeProtocol(locale);
+  return (
+    getCompactGMProtocolPrompt(locale) + getReactiveInitiativeProtocol(locale)
+  );
 }
 
-export function getReactiveInitiativeProtocol(locale: 'pl' | 'en' = 'pl'): string {
+export function getReactiveInitiativeProtocol(
+  locale: 'pl' | 'en' = 'pl'
+): string {
   if (locale === 'en') {
     return getReactiveInitiativeProtocolEN();
   }
@@ -964,3 +971,5 @@ Tag [PRZEJŚCIE_AKTU: Akt N] jest ukrytym sygnałem stanu. Emituj go tylko dla n
 The hidden act-transition tag is permitted only for the next act after the current act's two revealed Core clues unlock the gate. Never reveal gates or counters to the player. In one-shots, the same gate prevents the final confrontation and entry into the monster's lair.
 `;
 }
+
+export const LIGHTING_CUE_PROTOCOL = `For the active adventure, use only supplied scene IDs in [SCENA:id] and authored lighting cues in [CUE:id]. Never invent IDs, light parameters or mechanical events. These are hidden direction tags, never spoken.`;

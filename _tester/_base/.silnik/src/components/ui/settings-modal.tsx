@@ -180,6 +180,7 @@ export function SettingsModal({
             </Button>
             <div className="flex items-center gap-1">
               <Button
+                data-testid="settings-reset-open"
                 onClick={m.handleReset}
                 variant="destructive"
                 className="px-6 font-display font-semibold uppercase tracking-[0.16em]"
@@ -233,6 +234,7 @@ export function SettingsModal({
             }}
           >
             <div
+              data-testid="settings-reset-confirm"
               className="mx-4 w-[90vw] max-w-[600px] rounded-lg border border-brass/40 bg-card p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >

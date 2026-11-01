@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import equal from 'fast-deep-equal';
 import {
   AISettings,
-  defaultAISettings,
   saveAISettings,
   loadAISettings,
   resetAISettings,
@@ -58,7 +57,7 @@ export function useSettingsInit(
 ): UseSettingsInitReturn {
   const { open, onClose, onOpenChange, onSettingsLoaded } = options;
 
-  const [settings, setSettings] = useState<AISettings>(defaultAISettings);
+  const [settings, setSettings] = useState<AISettings>(loadAISettings);
 
   // IND-33: drift detector - wykrywa silent drift (HIGH wybrane → temperature edytowane → label "HIGH" zostaje fałszywie).
   // useRef zapobiega nieskończonej pętli: jeśli settings nie zmienił się względem ostatniego sprawdzenia → return.

@@ -1,4 +1,6 @@
 'use client';
+import { immersion } from '@/lib/hardware/hue/immersion';
+import { StarterDossier } from '@/components/dialogs/StarterDossier';
 
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
@@ -10,6 +12,10 @@ import {
   withVoiceEnabled,
   initializeDefaultPrompt,
 } from '@/lib/ai-settings';
+import {
+  QUICK_SETUP_SHOWCASE_PROFILE,
+  prabutyShowcaseSettings,
+} from '@/components/ui/quick-setup-showcase-profile';
 import type { AISettings } from '@/lib/ai-settings/types';
 import { settingsEmitter } from '@/lib/settings-event-emitter';
 import { appendRollToJournal } from '@/lib/journal/build-roll-entry';
@@ -24,8 +30,8 @@ import { usePathname, useRouter } from '@/i18n/routing';
 import { CharacterWizardV2 } from '@/components/ui/character-wizard';
 import { persistCharacters } from '@/lib/character-cloud-sync';
 
-
 import { useTTS } from '@/hooks/useTTS';
+import { resetActiveAdventure } from '@/lib/new-adventure-reset';
 import { usePdfMemory } from '@/hooks/usePdfMemory';
 import { useCharacterManagement } from '@/hooks/useCharacterManagement';
 import { useFullSave } from '@/hooks/useFullSave';
@@ -35,6 +41,12 @@ import { useCutscene } from '@/hooks/useCutscene';
 import { useSceneSummary } from '@/hooks/useSceneSummary';
 import { useGameStart } from '@/hooks/useGameStart';
 import { useHealthCheck } from '@/hooks/useHealthCheck';
+import { useLocalPlaytestTransport } from '@/hooks/useLocalPlaytestTransport';
+import { sanitizeHistoryForApi } from '@/lib/chat-history-sanitizer';
+import {
+  hasLocalPlaytestTransport,
+  hasLocalPlaytestRules,
+} from '@/lib/local-playtest-transport';
 import { getApiKeyHeaders, hasRequiredKeys } from '@/lib/api-keys-service';
 import { useRulesStatus } from '@/hooks/useRulesStatus';
 import { hydrateCharacterImages } from '@/lib/character-image-store';
@@ -68,7 +80,6 @@ import {
   resolveAdventureLocale,
   syncLocaleStorageAndCookie,
 } from '@/lib/i18n/session-locale';
-
 
 const ChatWindow = dynamic(
   () =>
@@ -167,19 +178,18 @@ const BetaFeedbackModal = dynamic(
   }
 );
 
-
 export default function Home() {
+  const localTransport = useLocalPlaytestTransport();
   const t = useTranslations('Page');
-  
+
   const locale = useLocale();
   const gameLocale: 'pl' | 'en' = locale === 'en' ? 'en' : 'pl';
   const router = useRouter();
   const pathname = usePathname();
-  
+
   const tts = useTTS(gameLocale);
   const charMgmt = useCharacterManagement();
 
-  
   const [adventureContext, setAdventureContext] =
     useState<AdventureContext | null>(() => {
       if (typeof window !== 'undefined') {
@@ -216,9 +226,6 @@ export default function Home() {
     adventureId: adventureContext?.id,
   });
 
-  
-  
-  
   const skillMarking = useSkillMarking(
     charMgmt.activeCharacter,
     charMgmt.handleUpdateCharacter,
@@ -229,7 +236,6 @@ export default function Home() {
   const [pendingDirectorEvent, setPendingDirectorEvent] =
     useState<RandomEvent | null>(null);
 
-  
   const [hasStartedGame, setHasStartedGame] = useState(false);
   const hotSeat = useHotSeat(charMgmt.characters);
 
@@ -258,7 +264,7 @@ export default function Home() {
     voiceEnabled: tts.voiceEnabled,
     isTTSEnabled: tts.isTTSEnabled,
     generateVoiceForMessage: tts.generateVoiceForMessage,
-    
+
     addToQueue: tts.addToQueue,
     stopCurrentAudio: tts.stopCurrentAudio,
     adventureContext,
@@ -275,20 +281,41 @@ export default function Home() {
 
   const save = useFullSave({
     setMessages: chat.setMessages,
+    setHasStartedGame,
     setCharacters: charMgmt.setCharacters,
     setActiveCharacter: charMgmt.setActiveCharacter,
     setCampaigns,
+    setAdventureContext,
     setPdfMemory: pdf.setPdfMemory,
     setActiveGameState: charMgmt.setActiveGameState,
     setAiSettings,
     stopCurrentAudio: tts.stopCurrentAudio,
     resetSessionEndState: chat.resetSessionEndState,
+    restoreHotSeatConfig: hotSeat.restoreConfig,
     currentLocale: gameLocale,
     router,
     pathname,
   });
 
-  
+  useEffect(() => {
+    const restoreAdventure = () => {
+      try {
+        const a = JSON.parse(
+          localStorage.getItem('adventure_context') || 'null'
+        );
+        if (a) setAdventureContext(a);
+      } catch {
+        /* Invalid legacy adventure is ignored. */
+      }
+    };
+    window.addEventListener('adventure-context-restored', restoreAdventure);
+    return () =>
+      window.removeEventListener(
+        'adventure-context-restored',
+        restoreAdventure
+      );
+  }, []);
+
   const [showGMTools, setShowGMTools] = useState(false);
   const [activeGMTool, setActiveGMTool] = useState<string | null>(null);
   const [showHotSeatSetup, setShowHotSeatSetup] = useState(false);
@@ -298,8 +325,10 @@ export default function Home() {
   const [showBetaWelcomeModal, setShowBetaWelcomeModal] = useState(false);
   const [showBetaFeedbackModal, setShowBetaFeedbackModal] = useState(false);
   const rulesStatus = useRulesStatus();
-  
-  const [languageSelectionRequired, setLanguageSelectionRequired] = useState<boolean | null>(null);
+
+  const [languageSelectionRequired, setLanguageSelectionRequired] = useState<
+    boolean | null
+  >(null);
 
   // Beta Welcome Modal: auto-open na starcie po przejściu bramek (Język -> Klucz API -> Podręcznik),
   // jeśli gracz nie zaznaczył "Nie pokazuj ponownie"
@@ -307,7 +336,7 @@ export default function Home() {
     if (
       typeof window !== 'undefined' &&
       languageSelectionRequired === false &&
-      hasRequiredKeys() &&
+      (hasRequiredKeys() || hasLocalPlaytestTransport()) &&
       !rulesStatus.loading &&
       rulesStatus.hasRules &&
       !showApiKeysModal &&
@@ -325,20 +354,15 @@ export default function Home() {
     showApiKeysModal,
     showRulebookModal,
   ]);
-  const [rulesOnboardingCompleted, setRulesOnboardingCompleted] = useState<boolean | null>(null);
-  
+  const [rulesOnboardingCompleted, setRulesOnboardingCompleted] = useState<
+    boolean | null
+  >(null);
+
   const [pendingNewAdventure, setPendingNewAdventure] = useState(false);
 
-  
   const openSessionZeroRef = useRef<(() => void) | null>(null);
   const openAdventureSelectorRef = useRef<(() => void) | null>(null);
 
-  
-  
-  
-  
-  
-  
   const [sessionZeroCompleted, setSessionZeroCompleted] = useState(false);
   const [pendingGameStart, setPendingGameStart] = useState(false);
 
@@ -350,10 +374,8 @@ export default function Home() {
       })
     : null;
   const cutsceneManager = useCutscene();
-  
-  const fullReset = useFullReset();
 
-  
+  const fullReset = useFullReset();
 
   const { handleSummarizeScene, isSummarizingScene } = useSceneSummary({
     messages: chat.messages,
@@ -364,9 +386,6 @@ export default function Home() {
     characters: sessionCharacters,
   });
 
-  
-  
-  
   const handleInvalidKey = useCallback(() => {
     if (
       languageSelectionRequired === false &&
@@ -395,7 +414,9 @@ export default function Home() {
     setActiveCharacter: charMgmt.setActiveCharacter,
     setCharacters: charMgmt.setCharacters,
     pdfMemory: pdf.pdfMemory,
+    activateDossierForSession: pdf.activateDossierForSession,
     adventureContext,
+    setAdventureContext,
     hotSeatConfig: hotSeat.config,
     setMessages: chat.setMessages,
     tts: {
@@ -413,13 +434,10 @@ export default function Home() {
     locale: gameLocale,
   });
 
-  
-  
-  
-  
-  
   const [showCharacterWizard, setShowCharacterWizard] = useState(false);
-  const [duetCreatingPlayerName, setDuetCreatingPlayerName] = useState<string | null>(null);
+  const [duetCreatingPlayerName, setDuetCreatingPlayerName] = useState<
+    string | null
+  >(null);
 
   const stampDuetTargetPlayer = useCallback(
     (explicitPlayerName?: string) => {
@@ -478,8 +496,15 @@ export default function Home() {
       }
       setDuetCreatingPlayerName(null);
 
-      const updated = charMgmt.characters.map((c) => ({ ...c, isActive: false }));
-      const newChar: Character = { ...character, isActive: true, lastUsed: new Date() };
+      const updated = charMgmt.characters.map((c) => ({
+        ...c,
+        isActive: false,
+      }));
+      const newChar: Character = {
+        ...character,
+        isActive: true,
+        lastUsed: new Date(),
+      };
       const updatedList = [...updated, newChar];
 
       charMgmt.setCharacters(updatedList);
@@ -523,7 +548,6 @@ export default function Home() {
       charMgmt.setCharacters(existingCharacters);
       charMgmt.setActiveCharacter(stamped);
 
-      
       void import('@/lib/character-cloud-sync').then(({ persistCharacters }) =>
         persistCharacters(existingCharacters)
       );
@@ -533,17 +557,12 @@ export default function Home() {
     [charMgmt]
   );
 
-  
-  
-  
-  
-  
   const handleStartGameGuarded = useCallback(() => {
-    if (!hasRequiredKeys()) {
+    if (!(hasRequiredKeys() || hasLocalPlaytestTransport())) {
       setShowApiKeysModal(true);
       return;
     }
-    if (!rulesStatus.hasRules) {
+    if (!rulesStatus.hasRules && !hasLocalPlaytestRules()) {
       setShowRulebookModal(true);
       return;
     }
@@ -561,7 +580,6 @@ export default function Home() {
     if (hotSeat.config.enabled) {
       const players = hotSeat.config.players;
 
-      
       const boundIds = players.map((p) => {
         const own = charMgmt.characters.find((c) => c.playerName === p.name);
         return own?.id;
@@ -580,12 +598,11 @@ export default function Home() {
         toast({
           title: t('hotSeatNotReady'),
           description,
-        variant: 'destructive',
-      });
-      return;
-    }
+          variant: 'destructive',
+        });
+        return;
+      }
 
-      
       hotSeat.bindCharactersByPlayerName(charMgmt.characters);
     } else {
       if (!charMgmt.activeCharacter) {
@@ -601,10 +618,17 @@ export default function Home() {
       }
     }
     handleStartGame();
-  }, [hotSeat, charMgmt.characters, charMgmt.activeCharacter, handleStartGame, t, rulesStatus.hasRules, adventureContext, locale]);
+  }, [
+    hotSeat,
+    charMgmt.characters,
+    charMgmt.activeCharacter,
+    handleStartGame,
+    t,
+    rulesStatus.hasRules,
+    adventureContext,
+    locale,
+  ]);
 
-  
-  
   const handleSwitchPlayer = useCallback(
     (index: number) => {
       hotSeat.switchPlayer(index);
@@ -636,26 +660,16 @@ export default function Home() {
     [hotSeat.config, handleSwitchPlayer, charMgmt]
   );
 
-  
-  
-  
-
-  
   useEffect(() => {
     initializeDefaultPrompt(gameLocale).then((initialized) => {
       if (initialized) console.log('✅ Default GM prompt initialized');
     });
   }, [gameLocale]);
 
-  
-  
   useEffect(() => {
     if (languageSelectionRequired === false) runHealthCheck();
   }, [languageSelectionRequired, runHealthCheck]);
 
-  
-  
-  
   useEffect(() => {
     fetch('/api/pricing/refresh', { headers: getApiKeyHeaders() }).catch(
       () => {}
@@ -677,19 +691,29 @@ export default function Home() {
       mode?: 'solo' | 'hot-seat',
       player2CharacterId?: string
     ) => {
-      if (!hasRequiredKeys()) {
+      if (!(hasRequiredKeys() || hasLocalPlaytestTransport())) {
         setShowApiKeysModal(true);
         return;
       }
-      
+
+      if (
+        QUICK_SETUP_SHOWCASE_PROFILE.enabled &&
+        locale === 'pl' &&
+        adventureId === 'cien-nad-prabutami'
+      ) {
+        const measuredSettings = prabutyShowcaseSettings(loadAISettings());
+        saveAISettings(measuredSettings);
+        setAiSettings(measuredSettings);
+      }
       let adv = getAdventureById(adventureId);
       if (adv?.isStrefa11) {
         adv = localizeStrefa11Adventure(adv, locale);
       }
 
-      const allCharacters = adv?.isStrefa11 || adv?.isAmericanColdCase
-        ? getStrefa11CharactersForAdventure(adv.id)
-        : PREDEFINED_CHARACTERS;
+      const allCharacters =
+        adv?.isStrefa11 || adv?.isAmericanColdCase
+          ? getStrefa11CharactersForAdventure(adv.id)
+          : PREDEFINED_CHARACTERS;
       const foundPreset = allCharacters.find((c) => c.id === characterId);
       const preset = foundPreset
         ? localizeStrefa11Character(foundPreset, locale)
@@ -727,12 +751,12 @@ export default function Home() {
         }
         // Deduplikacja: zastąp wcześniejszy klon tego samego presetu zamiast mnożyć wpisy
         const withoutPreset1 = charMgmt.characters.filter(
-          (c) => c.sourcePresetId !== foundPreset?.id && c.id !== foundPreset?.id
+          (c) =>
+            c.sourcePresetId !== foundPreset?.id && c.id !== foundPreset?.id
         );
         const updatedList = [...withoutPreset1, stamped];
 
         if (mode === 'hot-seat') {
-          
           let preset2 = player2CharacterId
             ? allCharacters.find((c) => c.id === player2CharacterId)
             : undefined;
@@ -747,7 +771,12 @@ export default function Home() {
             const stamped2: Character = {
               ...localizedPreset2,
               ...(targetEra
-                ? { equipment: buildPredefinedEquipment(localizedPreset2, targetEra) }
+                ? {
+                    equipment: buildPredefinedEquipment(
+                      localizedPreset2,
+                      targetEra
+                    ),
+                  }
                 : {}),
               id: `char_${Date.now() + 1}_${Math.random().toString(36).substr(2, 4)}`,
               sourcePresetId: preset2.id,
@@ -804,11 +833,10 @@ export default function Home() {
         }
 
         try {
-          const { persistCharacters } = await import('@/lib/character-cloud-sync');
+          const { persistCharacters } =
+            await import('@/lib/character-cloud-sync');
           persistCharacters(updatedList);
-        } catch {
-          
-        }
+        } catch {}
       }
       setPendingQuickStart(true);
     },
@@ -818,8 +846,11 @@ export default function Home() {
   const handleApiKeysChange = useCallback(
     (open: boolean) => {
       setShowApiKeysModal(open);
-      if (!open && hasRequiredKeys()) {
-        if (rulesOnboardingCompleted === false || !rulesStatus.hasRules) {
+      if (!open && (hasRequiredKeys() || hasLocalPlaytestTransport())) {
+        if (
+          !hasLocalPlaytestRules() &&
+          (rulesOnboardingCompleted === false || !rulesStatus.hasRules)
+        ) {
           setShowRulebookModal(true);
         }
       }
@@ -851,12 +882,13 @@ export default function Home() {
 
   // Sekwencja pierwszego startu: Język -> Klucz API -> Podręcznik Zasad CoC 7e -> Ekran Główny
   useEffect(() => {
-    if (languageSelectionRequired === false) {
-      if (!hasRequiredKeys()) {
+    if (languageSelectionRequired === false && !localTransport.loading) {
+      if (!(hasRequiredKeys() || hasLocalPlaytestTransport())) {
         setShowApiKeysModal(true);
       } else if (
-        rulesOnboardingCompleted === false ||
-        (!rulesStatus.loading && !rulesStatus.hasRules)
+        !hasLocalPlaytestRules() &&
+        (rulesOnboardingCompleted === false ||
+          (!rulesStatus.loading && !rulesStatus.hasRules))
       ) {
         setShowRulebookModal(true);
       }
@@ -866,6 +898,9 @@ export default function Home() {
     rulesOnboardingCompleted,
     rulesStatus.loading,
     rulesStatus.hasRules,
+    localTransport.loading,
+    localTransport.serverConfigured,
+    localTransport.serverHasBaseRules,
   ]);
 
   useEffect(() => {
@@ -937,17 +972,21 @@ export default function Home() {
       }
     };
 
-    window.addEventListener('custom-adventures-changed', handleCustomAdventuresChanged);
+    window.addEventListener(
+      'custom-adventures-changed',
+      handleCustomAdventuresChanged
+    );
     return () => {
-      window.removeEventListener('custom-adventures-changed', handleCustomAdventuresChanged);
+      window.removeEventListener(
+        'custom-adventures-changed',
+        handleCustomAdventuresChanged
+      );
     };
   }, [adventureContext?.id]);
 
-  
-  
-  
   useEffect(() => {
     if (localStorage.getItem('has_started_game') === 'true') {
+      void immersion.start(adventureContext?.id ?? '').catch(() => {});
       setHasStartedGame(true);
     }
     if (localStorage.getItem('session_zero_completed') === 'true') {
@@ -955,12 +994,6 @@ export default function Home() {
     }
   }, []);
 
-  
-  
-  
-  
-  
-  
   useEffect(() => {
     if (!hotSeat.config.enabled) return;
     const player = hotSeat.config.players[hotSeat.config.activePlayerIndex];
@@ -969,7 +1002,6 @@ export default function Home() {
     if (target && target.id !== charMgmt.activeCharacter?.id) {
       charMgmt.setActiveCharacter(target);
     }
-    
   }, [
     hotSeat.config,
     charMgmt.characters,
@@ -977,9 +1009,12 @@ export default function Home() {
     charMgmt.setActiveCharacter,
   ]);
 
-  
   useEffect(() => {
-    const savedChat = localStorage.getItem('chat-messages');
+    // useChat owns the complete history. Legacy is a fallback only, never an overwrite.
+    const savedChat =
+      localStorage.getItem('zew_chat_messages') === null
+        ? localStorage.getItem('chat-messages')
+        : null;
     if (savedChat) {
       try {
         const loadedMessages = (
@@ -992,7 +1027,7 @@ export default function Home() {
           .filter(
             (msg) => !msg.content.match(/^!\[[^\]]*\]\(\[IMG_BASE64\]\)$/)
           );
-        chat.setMessages(loadedMessages);
+        chat.setMessages(sanitizeHistoryForApi(loadedMessages));
       } catch (e) {
         console.error('Error loading chat:', e);
       }
@@ -1041,18 +1076,16 @@ export default function Home() {
     }
   }, []);
 
-  
   useEffect(() => {
     const settings = loadAISettings();
     setAiSettings(settings);
     setVoiceFeatureAvailable(true);
-    
+
     const ttsEnabled = settings.voiceSettings?.enabled !== false;
     tts.setVoiceEnabled(ttsEnabled);
     tts.setIsTTSEnabled(ttsEnabled);
   }, []);
 
-  
   useEffect(() => {
     const unsubscribeSettings = settingsEmitter.subscribe((newSettings) => {
       setAiSettings(newSettings);
@@ -1068,37 +1101,23 @@ export default function Home() {
 
   useEffect(() => {
     if (chat.messages.length > 0) {
-      const messagesToSave = chat.messages.slice(-500).map((msg) => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content.replace(
-          /!\[([^\]]*)\]\(data:image\/[^)]+\)/g,
-          '![obraz]([IMG_BASE64])'
-        ),
-        timestamp: msg.timestamp,
-        mechanicsContext: msg.mechanicsContext,
-      }));
+      const messagesToSave = sanitizeHistoryForApi(chat.messages.slice(-500));
       localStorage.setItem('chat-messages', JSON.stringify(messagesToSave));
     }
   }, [chat.messages]);
 
-  
-  
-  
   const handleToggleNarrator = (enabled: boolean) => {
     saveAISettings(withVoiceEnabled(aiSettings ?? loadAISettings(), enabled));
   };
 
-  
-  
-  
   const handleNewAdventure = () => {
+    chat.stopGeneration();
     chat.setMessages([]);
     chat.setActiveChaseState(null);
     chat.resetSessionEndState();
     localStorage.removeItem('chat-messages');
     tts.stopCurrentAudio();
-    
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('zew:stop-music'));
     }
@@ -1108,18 +1127,20 @@ export default function Home() {
       session: null,
       players: [],
     });
+    void immersion.end('reset-' + Date.now()).catch(() => {});
     setHasStartedGame(false);
     localStorage.setItem('has_started_game', 'false');
     setSessionZeroCompleted(false);
     localStorage.setItem('session_zero_completed', 'false');
     setAdventureContext(null);
     localStorage.removeItem('adventure_context');
-    
+
     hotSeat.disableHotSeat();
+    resetActiveAdventure(localStorage);
+    // Reload disposes every hook/ref, pending voice queue and old campaign callback.
+    window.location.reload();
   };
 
-  
-  
   const handleChooseSolo = useCallback(
     (player1Name: string) => {
       hotSeat.disableHotSeat();
@@ -1136,6 +1157,15 @@ export default function Home() {
       sidebar={
         <CthulhuSidebar
           adventureContext={adventureContext}
+          messages={chat.messages}
+          dossierHandoutBinding={
+            adventureContext?.id && pdf.pdfMemory.adventureDossierFingerprint
+              ? {
+                  adventureId: adventureContext.id,
+                  editionFingerprint: pdf.pdfMemory.adventureDossierFingerprint,
+                }
+              : undefined
+          }
           hideSidebarPanel={!hasStartedGame}
           onOpenHelp={() => setShowHelpModal(true)}
           onOpenBetaStatus={() => setShowBetaWelcomeModal(true)}
@@ -1164,8 +1194,6 @@ export default function Home() {
             save.setShowFullSaveModal(true);
           }}
           onOpenGameSession={() => {
-            
-            
             save.setSaveModalMode('load');
             save.setShowFullSaveModal(true);
           }}
@@ -1200,7 +1228,6 @@ export default function Home() {
           loadingStatusAdventure={customAdventures.loadingStatus}
           uploadErrorAdventure={customAdventures.uploadError}
           onClearUploadErrorAdventure={customAdventures.clearUploadError}
-
           hotSeatConfig={hotSeat.config}
           onSwitchPlayer={handleSwitchPlayer}
           onDisableHotSeat={hotSeat.disableHotSeat}
@@ -1219,7 +1246,7 @@ export default function Home() {
               isOpen={save.showFullSaveModal}
               onClose={() => {
                 save.setShowFullSaveModal(false);
-                
+
                 setPendingNewAdventure(false);
               }}
               onSaved={() => {
@@ -1232,17 +1259,22 @@ export default function Home() {
                       messages: chat.messages,
                       locale: gameLocale,
                       aiSettings: aiSettings || loadAISettings(),
-                      equipmentVisualEra: resolveEraVisualProfile(resolvedEraContext || '1920s'),
+                      equipmentVisualEra: resolveEraVisualProfile(
+                        resolvedEraContext || '1920s'
+                      ),
                       characters: charMgmt.characters,
                       activeCharacterId: charMgmt.activeCharacter?.id,
                       hotSeatConfig: hotSeat.config,
-                      investigatorBoard: charMgmt.activeCharacter?.investigatorBoard,
+                      investigatorBoard:
+                        charMgmt.activeCharacter?.investigatorBoard,
                       campaigns: campaigns,
                       activeCampaignId: charMgmt.activeGameState.campaign?.id,
                       npcs: (() => {
                         if (typeof window === 'undefined') return [];
                         try {
-                          return JSON.parse(localStorage.getItem('gm_npcs') || '[]');
+                          return JSON.parse(
+                            localStorage.getItem('gm_npcs') || '[]'
+                          );
                         } catch {
                           return [];
                         }
@@ -1250,7 +1282,9 @@ export default function Home() {
                       locations: (() => {
                         if (typeof window === 'undefined') return [];
                         try {
-                          return JSON.parse(localStorage.getItem('gm_locations') || '[]');
+                          return JSON.parse(
+                            localStorage.getItem('gm_locations') || '[]'
+                          );
                         } catch {
                           return [];
                         }
@@ -1448,7 +1482,11 @@ export default function Home() {
             save.setShowFullSaveModal(true);
           }}
           onColdStart={fullReset.handleFullReset}
-          hasRules={rulesStatus.hasRules}
+          hasRules={
+            rulesStatus.hasRules ||
+            (localTransport.serverConfigured &&
+              localTransport.serverHasBaseRules)
+          }
           hasSessionZero={sessionZeroCompleted}
           hasStartedGame={hasStartedGame}
           onOpenApiKeys={() => setShowApiKeysModal(true)}
@@ -1468,6 +1506,9 @@ export default function Home() {
           sessionEndStatus={chat.sessionEndStatus}
           sessionSaveStatus={chat.sessionSaveStatus}
           onRetrySessionSave={chat.retrySessionSave}
+          dossierProtocolFailure={chat.dossierProtocolFailure}
+          pendingDossierSkillRollRetry={chat.pendingDossierSkillRollRetry}
+          retryDossierSkillRoll={chat.retryDossierSkillRoll}
           onConfirmAcquiredItem={chat.confirmAcquiredItem}
           onDismissAcquiredItem={chat.dismissAcquiredItem}
           onCharacterUpdate={charMgmt.handleUpdateCharacter}
@@ -1492,6 +1533,12 @@ export default function Home() {
           onChaseStateChange={chat.setActiveChaseState}
         />
       )}
+      <StarterDossier
+        adventure={adventureContext}
+        activeCharacter={charMgmt.activeCharacter}
+        characters={sessionCharacters}
+        send={chat.handleSendMessage}
+      />
       {showPredefinedSelector && (
         <PredefinedCharactersSelector
           isOpen={showPredefinedSelector}
@@ -1499,16 +1546,24 @@ export default function Home() {
           onSelectCharacter={handleSelectPredefinedCharacter}
           characters={
             adventureContext?.id &&
-            (STREFA_11_ADVENTURES.some((adventure) => adventure.id === adventureContext.id) ||
-              AMERICAN_COLD_CASES_ADVENTURES.some((adventure) => adventure.id === adventureContext.id))
+            (STREFA_11_ADVENTURES.some(
+              (adventure) => adventure.id === adventureContext.id
+            ) ||
+              AMERICAN_COLD_CASES_ADVENTURES.some(
+                (adventure) => adventure.id === adventureContext.id
+              ))
               ? getStrefa11CharactersForAdventure(adventureContext.id)
               : PREDEFINED_CHARACTERS
           }
           currentEra={adventureContext?.era || 'classic'}
           filterByEra={
             !adventureContext?.id ||
-            (!STREFA_11_ADVENTURES.some((adventure) => adventure.id === adventureContext.id) &&
-              !AMERICAN_COLD_CASES_ADVENTURES.some((adventure) => adventure.id === adventureContext.id))
+            (!STREFA_11_ADVENTURES.some(
+              (adventure) => adventure.id === adventureContext.id
+            ) &&
+              !AMERICAN_COLD_CASES_ADVENTURES.some(
+                (adventure) => adventure.id === adventureContext.id
+              ))
           }
           eraContext={resolvedEraContext}
         />

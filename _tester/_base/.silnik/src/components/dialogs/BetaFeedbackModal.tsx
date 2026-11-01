@@ -249,6 +249,7 @@ ${diag.userDescription || '*(Brak dodatkowego opisu)*'}
               {categories.map((cat) => (
                 <button
                   key={cat.id}
+                  data-testid={`feedback-category-${cat.id}`}
                   type="button"
                   onClick={() => setCategory(cat.id)}
                   className={`text-left text-xs p-2.5 rounded border transition-colors ${
@@ -353,18 +354,18 @@ ${diag.userDescription || '*(Brak dodatkowego opisu)*'}
           </div>
         </div>
 
-        <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-brass/20">
-          <div className="flex items-center gap-2 w-full sm:w-auto order-2 sm:order-1">
+        <DialogFooter className="flex flex-col items-stretch gap-3 pt-3 border-t border-brass/20 lg:grid lg:grid-cols-1">
+          <div className="grid min-w-0 grid-cols-2 gap-2 order-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handleCopyReport}
-              className="flex-1 sm:flex-none text-xs border-brass/30 text-brass hover:bg-brass/10"
+              className="min-w-0 whitespace-normal px-3 py-2 flex-1 text-sm border-brass/30 text-brass hover:bg-brass/10"
             >
               {copied ? (
                 <>
                   <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-300" />
-                  Skopiowano!
+                  {t('copiedNotice')}
                 </>
               ) : (
                 <>
@@ -378,23 +379,23 @@ ${diag.userDescription || '*(Brak dodatkowego opisu)*'}
               variant="outline"
               size="sm"
               onClick={handleDownloadDiagnostics}
-              className="flex-1 sm:flex-none text-xs border-brass/30 text-muted-foreground hover:text-foreground hover:bg-brass/10"
+              className="min-w-0 whitespace-normal px-3 py-2 flex-1 text-sm border-brass/30 text-muted-foreground hover:text-foreground hover:bg-brass/10"
             >
               <Download className="w-3.5 h-3.5 mr-1.5" />
               {t('downloadButton')}
             </Button>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto order-1 sm:order-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 order-1">
             <Button
               size="sm"
               onClick={handleSendEmail}
-              className="flex-1 sm:flex-none font-display uppercase tracking-wider text-xs bg-primary text-primary-foreground hover:brightness-110 shadow-sm"
+              className="min-w-0 whitespace-normal px-3 py-2 flex-1 font-display uppercase tracking-wider text-xs bg-primary text-primary-foreground hover:brightness-110 shadow-sm"
             >
               {sentEmail ? (
                 <>
                   <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-300" />
-                  Wysłano!
+                  {t('sentNotice')}
                 </>
               ) : (
                 <>

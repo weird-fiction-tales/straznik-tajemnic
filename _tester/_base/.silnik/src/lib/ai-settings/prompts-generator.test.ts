@@ -1,3 +1,4 @@
+import { applyPreset } from '../ai-presets/apply';
 import { getGameMasterPrompt, loadDefaultPrompt } from './prompts-generator';
 import { getGMProtocolPrompt, getCompactGMProtocolPrompt } from '../prompts/gm-protocol';
 import { defaultAISettings } from './defaults';
@@ -83,8 +84,8 @@ describe('System Prompt - Wymogi jakości językowej [LNG-01] & [LNG-02]', () =>
       expect(fullProtocol).toMatch(/ABSOLUTNY ZAKAZ GRANIA ZA GRACZA/i);
       expect(fullProtocol).toMatch(/nie pisz wypowiedzi.*postaci gracza/i);
       expect(compactProtocol).toMatch(/SPRAWCZOŚĆ GRACZA \(absolutny zakaz\)/i);
-      expect(prompt).toMatch(/postacią gracza steruje/i);
-      expect(prompt).toMatch(/ABSOLUTNY ZAKAZ GRANIA ZA GRACZA/i);
+      expect(prompt).toMatch(/nie opisuj myśli, decyzji, słów/i);
+      expect(prompt).toMatch(/za gracza/i);
     });
 
     it('różnicuje Matrycę 4 Biegów Kadencji i eliminuje monotonię (anti-monotony)', () => {
@@ -181,4 +182,57 @@ describe('System Prompt - Wymogi jakości językowej [LNG-01] & [LNG-02]', () =>
       expect(styleEn).toMatch(/Psychological Dilemmas & NPC Trust Crises/i);
     });
   });
+});
+
+
+describe('default prompt assets are text, not a successful HTML fallback',()=>{
+ it.each(['content-type','body'] as const)('rejects a 200 application shell by %s without treating it as instructions',async kind=>{
+  const spy=jest.spyOn(global,'fetch').mockResolvedValue({ok:true,headers:new Headers({'content-type':kind==='content-type'?'text/html; charset=utf-8':'text/plain'}),text:async()=>kind==='body'?'<!DOCTYPE html><html><body>Not found</body></html>':'Not found'} as Response);
+  try{await expect(loadDefaultPrompt('pl')).resolves.toBe('');}finally{spy.mockRestore();}
+ });
+ it.each(['pl','en'] as const)('accepts the actual markdown shape in %s',async locale=>{
+  const spy=jest.spyOn(global,'fetch').mockResolvedValue({ok:true,headers:new Headers({'content-type':'text/markdown; charset=utf-8'}),text:async()=> '# Keeper instructions\nKeep player agency.'} as Response);
+  try{await expect(loadDefaultPrompt(locale)).resolves.toContain('Keeper instructions');}finally{spy.mockRestore();}
+ });
+});
+
+describe('preset-independent instructions sent to the narrator', () => {
+  it.each(['pl', 'en'] as const)(
+    'keeps the same rich and concise instructions across presets in %s',
+    (locale) => {
+      for (const responseLength of ['long', 'short'] as const) {
+        const settings = {
+          ...defaultAISettings,
+          gameMasterNarration: {
+            ...defaultAISettings.gameMasterNarration,
+            style: { responseLength, detailLevel: 'detailed' as const },
+            behavior: {
+              ...defaultAISettings.gameMasterNarration.behavior,
+              creativity: 'creative' as const,
+            },
+          },
+        };
+        const heading =
+          locale === 'pl' ? '## KALIBRACJA STYLU' : '## KEEPER NARRATION STYLE';
+        const baseline = getGameMasterPrompt(settings, locale).split(
+          heading
+        )[1];
+        expect(baseline).toBeTruthy();
+        expect(baseline).toContain(
+          responseLength === 'long'
+            ? locale === 'pl'
+              ? 'wieloakapitowe'
+              : 'multi-paragraph'
+            : '1-2'
+        );
+        for (const preset of ['low', 'mid', 'high', 'ultra'] as const) {
+          const prompt = getGameMasterPrompt(
+            applyPreset(preset, settings),
+            locale
+          );
+          expect(prompt.split(heading)[1]).toBe(baseline);
+        }
+      }
+    }
+  );
 });

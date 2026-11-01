@@ -1,8 +1,7 @@
 import { AISettings } from './types';
 import { isDocumentModelUseBlocked } from '../document-model-policy';
 import { loadAISettings, saveAISettings } from './storage';
-import { getLovecraftStylePrompt } from '../lovecraft-style-guide';
-import { getGMProtocolPrompt } from '../prompts/gm-protocol';
+import { getCompactKeeperInstructions } from '../prompts/compact-keeper';
 import {
   getCachedSections,
   detectGameContext,
@@ -10,7 +9,6 @@ import {
 } from '../prompt-section-parser';
 import { buildImageInstructions } from '../prompts/image-instructions';
 import { buildSessionZeroInstructions } from '../prompts/session-zero-instructions';
-import { SKILL_RESULT_INSTRUCTIONS } from '../prompts/skill-result-instructions';
 import { HANDOUT_INSTRUCTIONS } from '../prompts/handout-instructions';
 import { buildAdvancedNarrationInstructions } from '../prompts/advanced-narration-instructions';
 import { buildNarrativeStyleInstructions } from '../prompts/narrative-style-instructions';
@@ -49,17 +47,21 @@ export const getGameMasterPrompt = (
     ? '\n\n## COMPLETENESS RULE\nAlways finish responses with complete sentences. Never cut a sentence in half. If you approach the response limit, finish the thought and end with a period.'
     : '\n\n## ZASADA KOMPLETNOŚCI\nZAWSZE kończ swoje odpowiedzi pełnymi zdaniami zakończonymi kropką. NIE urywaj narracji w połowie zdania. Jeśli zbliżasz się do limitu długości, zakończ myśl i postaw kropkę.';
 
-  // === LOVECRAFT STYLE - Dodaj styl narracyjny Lovecrafta ===
+  // The compact contract includes narrative style and all mechanic/tag capabilities.
   const measurementSystem =
     (settings as unknown as { measurementSystem?: 'metric' | 'imperial' })
       ?.measurementSystem ||
     (typeof window !== 'undefined'
       ? (localStorage.getItem('measurement_system') as 'metric' | 'imperial') || 'metric'
       : 'metric');
-  prompt = prompt + '\n' + getLovecraftStylePrompt(locale, measurementSystem);
-
-  // === GM PROTOCOL - Tagi strukturalne dla integracji z aplikacją ===
-  prompt = prompt + '\n' + getGMProtocolPrompt(locale);
+  const narrativeMode = settings.sessionZero?.narrativeMode || 'full_rpg';
+  prompt += '\n' + getCompactKeeperInstructions(locale, {
+    mechanics: narrativeMode !== 'pure_narrative',
+    voice: settings.voiceSettings.enabled,
+  });
+  prompt += locale === 'pl'
+    ? '\nLNG-01: obowiązkowy system metryczny. LNG-02: poprawna polszczyzna, zero ponglish.\n'
+    : `\nUse ${measurementSystem === 'imperial' ? 'imperial' : 'metric'} measurements and natural English.\n`;
 
   // === SESSION ZERO - Kalibracja rozgrywki ===
   prompt = prompt + buildSessionZeroInstructions(settings.sessionZero, locale);
@@ -67,12 +69,7 @@ export const getGameMasterPrompt = (
   // === OPT-03: INSTRUKCJE OBRAZÓW (shared builder) ===
   prompt = prompt + buildImageInstructions(settings);
 
-  // === OPT-02: WARUNKOWE INSTRUKCJE TESTÓW UMIEJĘTNOŚCI ===
-  // Nie dołączaj w trybie pure_narrative - tam NIE MA mechanik, instrukcje byłyby sprzeczne.
-  const narrativeMode = settings.sessionZero?.narrativeMode || 'full_rpg';
-  if (narrativeMode !== 'pure_narrative') {
-    prompt = prompt + SKILL_RESULT_INSTRUCTIONS;
-  }
+  // Test-result formats are already in the compact contract; do not repeat them.
 
   // === KALIBRACJA STYLU I DŁUGOŚCI NARRACJI (Issue #279) ===
   prompt =
@@ -151,6 +148,11 @@ export const loadDefaultPrompt = async (locale: 'pl' | 'en' = 'pl'): Promise<str
       return '';
     }
     const content = await response.text();
+    // Locale rewrites can return a 200 application shell for a missing asset.
+    if (response.headers?.get('content-type')?.toLowerCase().includes('html') || /^\s*(?:<!doctype\s+html\b|<html\b)/i.test(content)) {
+      console.error('❌ Default prompt asset returned HTML instead of instructions');
+      return '';
+    }
     console.log('✅ Default prompt loaded:', content.length, 'characters');
     return content;
   } catch (error) {

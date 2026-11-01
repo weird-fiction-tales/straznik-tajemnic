@@ -1,5 +1,7 @@
 'use client';
 
+import './deco-window.css';
+import { useTranslations } from 'next-intl';
 import { SafeImage } from '@/components/ui/safe-image';
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -30,6 +32,7 @@ export function ImageLightbox({
   onClose,
   alt = 'Powiększony obraz',
 }: ImageLightboxProps) {
+  const t = useTranslations('ImageLightbox');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [zoom, setZoom] = useState(1);
   // Portal do <body>: lightbox musi nakryć CAŁY ekran (w tym prawy sidebar).
@@ -151,7 +154,7 @@ export function ImageLightbox({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#050608]/[0.92] backdrop-blur-sm"
+      className="deco-window fixed inset-0 z-[100] flex items-center justify-center bg-[#050608]/[0.92] backdrop-blur-sm"
       onClick={onClose}
     >
       {/* Toolbar - pozycjonowany na dole dla ekranów mobilnych w bezpiecznej strefie, u góry na desktopie */}
@@ -163,7 +166,7 @@ export function ImageLightbox({
             handleZoomOut();
           }}
           className="p-2 border border-brass/35 bg-brass/[0.04] text-brass hover:bg-brass/10 hover:border-brass/60 transition-colors"
-          title="Pomniejsz (-)"
+          title={t('zoomOut')}
         >
           <ZoomOut className="w-5 h-5" />
         </button>
@@ -176,7 +179,7 @@ export function ImageLightbox({
             handleZoomIn();
           }}
           className="p-2 border border-brass/35 bg-brass/[0.04] text-brass hover:bg-brass/10 hover:border-brass/60 transition-colors"
-          title="Powiększ (+)"
+          title={t('zoomIn')}
         >
           <ZoomIn className="w-5 h-5" />
         </button>
@@ -188,7 +191,7 @@ export function ImageLightbox({
             handleDownload();
           }}
           className="p-2 border border-brass/35 bg-brass/[0.04] text-brass hover:bg-brass/10 hover:border-brass/60 transition-colors ml-2"
-          title="Pobierz obraz"
+          title={t('download')}
         >
           <Download className="w-5 h-5" />
         </button>
@@ -197,7 +200,7 @@ export function ImageLightbox({
         <button
           onClick={onClose}
           className="p-2 border border-brass/45 bg-brass/[0.04] text-brass hover:bg-destructive/40 hover:border-destructive/60 hover:text-foreground transition-colors ml-2"
-          title="Zamknij (Esc)"
+          title={t('close')}
         >
           <X className="w-5 h-5" />
         </button>
@@ -212,7 +215,7 @@ export function ImageLightbox({
               goPrev();
             }}
             className="absolute left-8 max-sm:left-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-12 h-16 max-sm:w-10 max-sm:h-14 border border-brass/35 bg-brass/[0.04] text-brass hover:bg-brass/10 hover:border-brass/60 transition-colors z-10"
-            title="Poprzedni (←)"
+            title={t('previous')}
           >
             <ChevronLeft className="w-8 h-8" />
           </button>
@@ -222,7 +225,7 @@ export function ImageLightbox({
               goNext();
             }}
             className="absolute right-8 max-sm:right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-12 h-16 max-sm:w-10 max-sm:h-14 border border-brass/35 bg-brass/[0.04] text-brass hover:bg-brass/10 hover:border-brass/60 transition-colors z-10"
-            title="Następny (→)"
+            title={t('next')}
           >
             <ChevronRight className="w-8 h-8" />
           </button>

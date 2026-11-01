@@ -1,5 +1,6 @@
 'use client';
 
+import './deco-window.css';
 import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from './button';
@@ -127,7 +128,7 @@ export function SessionList({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-brass/30 rounded-lg p-6 w-[80vw] h-[78vh] max-h-[85vh] overflow-y-auto text-foreground shadow-2xl">
+      <div className="deco-window bg-card border border-brass/30 rounded-lg p-6 w-[80vw] h-[78vh] max-h-[85vh] overflow-y-auto text-foreground shadow-2xl">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-display uppercase tracking-widest text-brass text-center flex-1">
             {t('title')}
@@ -172,13 +173,13 @@ export function SessionList({
                 <div className="flex gap-2 ml-4">
                   <Button
                     onClick={() => handleLoadSession(session.sessionId)}
-                    className="px-4 py-2 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-foreground font-medium rounded-lg transition-all duration-300 hover:scale-105"
+                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-all duration-300 hover:scale-105"
                   >
                     {t('loadButton')}
                   </Button>
                   <Button
                     onClick={() => handleDeleteSession(session.sessionId)}
-                    className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-foreground font-medium rounded-lg transition-all duration-300 hover:scale-105"
+                    className="px-4 py-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground font-medium rounded-lg transition-all duration-300 hover:scale-105"
                   >
                     {t('deleteButton')}
                   </Button>

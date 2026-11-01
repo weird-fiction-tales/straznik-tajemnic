@@ -22,6 +22,7 @@ import { BottomLinks } from './components/bottom-links';
 import { FullGameSaveManager } from '@/lib/full-game-save-manager';
 import { timeManager } from '@/lib/time-manager';
 import { hasRequiredKeys } from '@/lib/api-keys-service';
+import { useLocalPlaytestTransport } from '@/hooks/useLocalPlaytestTransport';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
@@ -151,9 +152,11 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
     if (typeof window === 'undefined') return true;
     return hasRequiredKeys();
   });
+  const localTransport = useLocalPlaytestTransport();
+  const canUseModel = hasKey || localTransport.serverConfigured;
   const [isManualMode, setIsManualMode] = useState<boolean>(false);
 
-  const isQuoteVisible = Boolean(quoteActive && hasKey && !isManualMode);
+  const isQuoteVisible = Boolean(quoteActive && canUseModel && !isManualMode);
   const { displayedText, isTyping } = useTypewriterSound(
     quote.greeting,
     isQuoteVisible
@@ -320,7 +323,7 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
               : 'grid grid-cols-1 md:grid-cols-2 items-stretch max-w-5xl'
           )}
         >
-          {!hasKey ? (
+          {!canUseModel ? (
             <div className="bg-black/60 border border-brass/50 p-6 rounded-md shadow-[0_0_40px_rgba(201,162,39,0.1)] max-w-lg w-full relative z-30">
               <div className="mb-4 text-center font-display uppercase tracking-[0.2em] text-primary text-sm">
                 {t('authorizationRequired')}

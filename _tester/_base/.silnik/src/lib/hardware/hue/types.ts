@@ -6,6 +6,7 @@
 export interface HueLightResource {
   id: string;
   id_v1?: string;
+  owner?: { rid: string; rtype: string };
   metadata: {
     name: string;
     archetype?: string;
@@ -17,6 +18,8 @@ export interface HueLightResource {
     brightness: number; // 0.0 - 100.0
   };
   color_temperature?: {
+    mirek_valid?: boolean;
+    mirek_schema?: { mirek_minimum: number; mirek_maximum: number };
     mirek: number | null; // 153 (zimna) - 500 (bardzo ciepła)
   };
   color?: {
@@ -40,6 +43,12 @@ export interface HueBridgeConfig {
   bridgeIp: string;
   appKey: string;
   selectedLightIds: string[];
+  paired?: boolean;
+  bridgeId?: string;
+  mode?: 'basic' | 'entertainment';
+  areaId?: string;
+  intensity?: number;
+  flashesEnabled?: boolean;
 }
 
 export interface HueBridgeDiscoveryResult {
@@ -83,3 +92,40 @@ export type SceneLightingMood =
   | 'speakeasy_jazz'
   | 'prl_fluorescent'
   | 'investigator_study';
+
+export type HuePhase =
+  | 'off'
+  | 'basic'
+  | 'entertainment'
+  | 'paused'
+  | 'emergency'
+  | 'unavailable'
+  | 'busy';
+export interface HueArea {
+  id: string;
+  metadata: { name: string };
+  status: 'active' | 'inactive';
+  channels: Array<{
+    channel_id: number;
+    members: Array<{ service: { rid: string; rtype: string } }>;
+  }>;
+  lightIds?: string[];
+}
+export interface HueStatus {
+  config: HueBridgeConfig;
+  phase: HuePhase;
+  paired: boolean;
+  hasClientKey: boolean;
+  lights: HueLightResource[];
+  areas: HueArea[];
+  error?: string;
+}
+export const DEFAULT_HUE_CONFIG: HueBridgeConfig = {
+  enabled: false,
+  bridgeIp: '',
+  appKey: '',
+  selectedLightIds: [],
+  mode: 'basic',
+  intensity: 1,
+  flashesEnabled: false,
+};

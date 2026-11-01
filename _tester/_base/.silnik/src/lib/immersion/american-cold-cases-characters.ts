@@ -28,11 +28,11 @@ const BASE_AMERICAN_COLD_CASES_CHARACTERS: PredefinedCharacter[] = [
     ideology: 'Every lie leaves a physical ledger; follow the paper and the bones will speak.',
     significantPerson: 'Carrie Pitezel, the distraught mother who entrusted him with finding her three children.',
     meaningfulLocation: 'Englewood Police Precinct telegraph room, where the trail of Holmes converges.',
-    treasuredPossession: 'A stack of unmailed letters written by young Alice Pitezel to her mother.',
+    treasuredPossession: 'Carrie Pitezel’s written request to find her children, kept with the insurance case papers.',
     traits: ['Methodical', 'Compassionate', 'Unflinching'],
     description: 'Heavy wool overcoat, neat mustache, carrying a leather satchel of hotel registers and railway timetables.',
     backstory:
-      'Frank Geyer has spent twenty years walking the cobblestone alleys of Philadelphia, but nothing prepared him for the cold, smiling void of Herman Webster Mudgett, known to the world as Dr. H.H. Holmes. After uncovering the staged laboratory explosion of Benjamin Pitezel, Geyer realized that Holmes had taken three of the Pitezel children - Alice, Nellie, and little Howard - northward toward the Great Lakes. Armed with a stack of the children’s unmailed letters that Holmes callously kept in a tin box, Geyer has arrived in Chicago on a freezing November evening in 1894. Starting at the Englewood Police Precinct, he intends to force open the doors of Holmes’s notorious three-story building at 63rd and Wallace Street before the doctor’s unseen accomplices can set a match to the evidence.',
+      'Frank Geyer has spent twenty years walking the cobblestone alleys of Philadelphia, but nothing prepared him for the cold, smiling void of Herman Webster Mudgett, known to the world as Dr. H.H. Holmes. After uncovering the staged laboratory explosion of Benjamin Pitezel, Geyer realized that Holmes had taken three of the Pitezel children - Alice, Nellie, and little Howard - northward toward the Great Lakes. Armed with the Pitezel insurance dossier and statements from the children’s mother, Geyer has arrived in Chicago on a freezing November evening in 1894. Starting at the Englewood Police Precinct, he intends to force open the doors of Holmes’s notorious three-story building at 63rd and Wallace Street before the doctor’s unseen accomplices can set a match to the evidence.',
     playerName: '',
     isActive: false,
     lastUsed: new Date(),

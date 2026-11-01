@@ -1,3 +1,4 @@
+import { formatChatTurn } from './context-budget';
 /**
  * GeminiChatProvider - wrapper nad Google Generative AI SDK
  * Przenosi logikę z chat/route.ts do reużywalnej klasy
@@ -63,6 +64,39 @@ const THINKING_BUDGET_GEMINI_25 = 0;
 /** IND-199: budżet myślenia dla retry po pustej odpowiedzi - 0 wyłącza myślenie (flash). */
 const THINKING_BUDGET_RETRY = 0;
 
+const MODEL_ATTEMPT_TIMEOUT_MS = 15_000;
+const PROVIDER_TIMEOUT_MS = 60_000;
+
+function isTransportFailure(error: unknown): boolean {
+  return error instanceof Error && (error.name === 'TimeoutError' ||
+    (error instanceof TypeError && /fetch failed|network/i.test(error.message)));
+}
+
+/** Keep the deadline alive through stream consumption, including an SDK that ignores abort. */
+function geminiRequestGuard(timeoutMs: number, parent?: AbortSignal) {
+  const controller = new AbortController();
+  const timeout = new Error('GEMINI_REQUEST_TIMEOUT');
+  timeout.name = 'TimeoutError';
+  let rejectAbort: (reason: unknown) => void = () => {};
+  const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+  void aborted.catch(() => {});
+  const stop = (reason: unknown) => { controller.abort(reason); rejectAbort(reason); };
+  const cancel = () => stop(parent?.reason ?? new DOMException('Request cancelled', 'AbortError'));
+  const timer = setTimeout(() => stop(timeout), Math.max(0, timeoutMs));
+  if (typeof timer === 'object' && 'unref' in timer) timer.unref();
+  parent?.addEventListener('abort', cancel, {once:true});
+  if (parent?.aborted) cancel();
+  if (timeoutMs <= 0) stop(timeout);
+  return {
+    signal: controller.signal,
+    stop,
+    wait<T>(promise: Promise<T>): Promise<T> {
+      return controller.signal.aborted ? Promise.reject(controller.signal.reason) : Promise.race([promise, aborted]);
+    },
+    dispose() { clearTimeout(timer); parent?.removeEventListener('abort', cancel); },
+  };
+}
+
 /**
  * IND-199: in-character fallback gdy model zwraca pustkę nawet po retry. Zamiast
  * cichego pustego dymka - jawny komunikat, by gracz wiedział że ma powtórzyć akcję.
@@ -91,6 +125,7 @@ export function isModernGeminiModel(modelId: string): boolean {
   return (
     modelId.includes('gemini-3') ||
     modelId.includes('flash-latest') ||
+    modelId.includes('flash-lite-latest') ||
     modelId.includes('pro-latest')
   );
 }
@@ -112,8 +147,13 @@ export function resolveRetryThinkingConfig(modelId: string): Record<string, unkn
  * - 429 Too Many Requests / RESOURCE_EXHAUSTED / Quota exceeded
  * - 502 Bad Gateway / 503 Service Unavailable / 504 Gateway Timeout / UNAVAILABLE / high demand
  */
+function isDailyQuotaError(err:unknown):boolean {
+  const message=err instanceof Error?err.message:String(err);
+  return /429|RESOURCE_EXHAUSTED/i.test(message)&&/RequestsPerDay|per[_ -]?day|daily quota/i.test(message);
+}
+
 export function isRetryableGeminiError(err: unknown): boolean {
-  if (!err) return false;
+  if (!err || isDailyQuotaError(err)) return false;
   const errMsg = err instanceof Error ? err.message : String(err);
   return (
     errMsg.includes('429') ||
@@ -173,7 +213,7 @@ export class GeminiChatProvider implements IChatProvider {
     this.modelId = modelId || DEFAULT_GEMINI_MODEL;
   }
 
-  private buildRequestPayload(request: ChatCompletionRequest): {
+  private buildRequestPayload(request: ChatCompletionRequest, modelId = this.modelId): {
     config: Record<string, unknown>;
     contents: Content[];
   } {
@@ -185,7 +225,7 @@ export class GeminiChatProvider implements IChatProvider {
     const additionalContext =
       opts?.additionalContext ?? request.additionalContext;
 
-    const isModern = isModernGeminiModel(this.modelId);
+    const isModern = isModernGeminiModel(modelId);
 
     // === config - wszystkie pola generacji bezpośrednio (IND-19: nie ma sub-obiektu generationConfig) ===
     const config: Record<string, unknown> = {
@@ -231,7 +271,7 @@ export class GeminiChatProvider implements IChatProvider {
       }
     } else {
       // gemini-2.5-* (flash/pro): myślenie domyślnie wyłączone (budget 0), chyba że jawnie podano inny budżet.
-      if (this.modelId.includes('gemini-2.5')) {
+      if (modelId.includes('gemini-2.5')) {
         config.thinkingConfig = {
           thinkingBudget: explicitBudget !== undefined ? explicitBudget : THINKING_BUDGET_GEMINI_25,
         };
@@ -295,7 +335,7 @@ export class GeminiChatProvider implements IChatProvider {
     // resolvedCachedContent jest obiektem CachedContent z getOrCreateGeminiCache() w route.ts.
     // Gdy ustawiony: cachedContent w config = cache.name (systemPrompt jest już w cache).
     const resolvedCache: CachedContent | undefined =
-      opts?.resolvedCachedContent;
+      modelId === this.modelId ? opts?.resolvedCachedContent : undefined;
     const hasCachedContent = !!resolvedCache;
 
     if (hasCachedContent) {
@@ -328,13 +368,7 @@ export class GeminiChatProvider implements IChatProvider {
     }
 
     // Historia + aktualna wiadomość
-    const historyText = request.messages
-      .map((msg) => `${msg.role === 'user' ? 'G' : 'MG'}: ${msg.content}`)
-      .join('\n');
-    const secureMessage = `\n<user_input>\n${request.userMessage}\n</user_input>`;
-    userParts.push({
-      text: `\nHISTORIA:\n${historyText}\n\nAKTUALNA WIADOMOŚĆ:${secureMessage}\n\nODPOWIEDŹ:`,
-    });
+    userParts.push({ text: formatChatTurn(request) });
 
     const contents: Content[] = [{ role: 'user', parts: userParts }];
 
@@ -344,14 +378,48 @@ export class GeminiChatProvider implements IChatProvider {
   async streamChat(
     request: ChatCompletionRequest
   ): Promise<StreamingChatResult> {
-    const { config, contents } = this.buildRequestPayload(request);
+    const { contents } = this.buildRequestPayload(request);
 
     // === Wywołanie SDK (IND-19: ai.models.generateContentStream zamiast model.generateContentStream) ===
     // Capture `ai`/`model` do zmiennych - generator (async function*) nie ma dostępu do `this`.
     const ai = this.ai;
     let activeModel = this.modelId;
-    const streamOnce = (modelToUse: string, cfg: Record<string, unknown>) =>
-      ai.models.generateContentStream({ model: modelToUse, contents, config: cfg });
+    const deadlineAt = Date.now() + (request.timeoutMs ?? PROVIDER_TIMEOUT_MS);
+    const configForModel = (model: string) => this.buildRequestPayload(request, model).config;
+    const streamOnce = async (modelToUse: string, cfg = configForModel(modelToUse)) => {
+      const guard = geminiRequestGuard(Math.min(MODEL_ATTEMPT_TIMEOUT_MS, deadlineAt - Date.now()), request.signal);
+      try {
+        if (guard.signal.aborted) throw guard.signal.reason;
+        const response = await guard.wait(ai.models.generateContentStream({model:modelToUse,contents,
+          config:{...cfg,abortSignal:guard.signal,httpOptions:{timeout:MODEL_ATTEMPT_TIMEOUT_MS}}}));
+        const iterator = response[Symbol.asyncIterator]();
+        let completed = false;
+        // Wait for the first chunk inside the model cascade, before any prose is published.
+        let first: IteratorResult<GenerateContentResponse>;
+        try { first = await guard.wait(iterator.next()); }
+        catch (error) {
+          guard.stop(error);
+          void Promise.resolve(iterator.return?.(undefined)).catch(() => {});
+          throw error;
+        }
+        return (async function* () {
+          try {
+            let next = first;
+            while (!next.done) {
+              yield next.value;
+              next = await guard.wait(iterator.next());
+            }
+            completed = true;
+          } finally {
+            if (!completed) {
+              guard.stop(new DOMException('Stream consumer closed', 'AbortError'));
+              void Promise.resolve(iterator.return?.(undefined)).catch(() => {});
+            }
+            guard.dispose();
+          }
+        })();
+      } catch (error) { guard.dispose(); throw error; }
+    };
 
     // Capture usage + finishReason z ostatniego chunku (dostępne po zakończeniu streamu)
     let lastUsage: GenerateContentResponse['usageMetadata'] = undefined;
@@ -419,13 +487,18 @@ export class GeminiChatProvider implements IChatProvider {
         }
         activeModel = candidate;
         firstResponse = await executeWithRetry(
-          () => streamOnce(activeModel, config),
+          () => streamOnce(activeModel),
           activeModel
         );
         break;
       } catch (err: unknown) {
         lastError = err;
+        if (request.signal?.aborted || Date.now() >= deadlineAt) throw err;
         const errMsg = err instanceof Error ? err.message : String(err);
+        if (/Incomplete JSON segment at the end/i.test(errMsg)) {
+          firstResponse = (async function* () { throw err; })();
+          break;
+        }
         const isRateLimit =
           errMsg.includes('429') ||
           errMsg.includes('RESOURCE_EXHAUSTED') ||
@@ -439,13 +512,15 @@ export class GeminiChatProvider implements IChatProvider {
           errMsg.includes('503') ||
           errMsg.includes('high demand') ||
           errMsg.includes('UNAVAILABLE') ||
-          isRateLimit;
+          isRateLimit || isTransportFailure(err);
 
         if (!isUnavailable) {
           throw err;
         }
 
-        if (isRateLimit) {
+        if (isDailyQuotaError(err)) {
+          console.warn(`Daily quota exhausted for ${candidate}; trying the next configured fallback without retry.`);
+        } else if (isRateLimit) {
           console.warn(
             `⚠️ Model "${candidate}" wyczerpał ponowienia rate-limit 429 (${errMsg}). Oczekiwanie 1500ms i próba alternatywnego modelu w kaskadzie...`
           );
@@ -495,7 +570,7 @@ export class GeminiChatProvider implements IChatProvider {
           data: { model: activeModel, finishReason: lastFinishReason ?? 'unknown' },
         });
         const retryConfig = {
-          ...config,
+          ...configForModel(activeModel),
           thinkingConfig: resolveRetryThinkingConfig(activeModel),
         };
         try {
@@ -504,6 +579,8 @@ export class GeminiChatProvider implements IChatProvider {
             yield { text };
           }
         } catch (retryErr: unknown) {
+          if (request.signal?.aborted || isTransportFailure(retryErr) ||
+              (retryErr instanceof Error && retryErr.name === 'AbortError') || emitted) throw retryErr;
           console.warn('⚠️ Gemini stream retry error:', retryErr);
         }
 
@@ -547,9 +624,10 @@ export class GeminiChatProvider implements IChatProvider {
   }
 
   async chat(request: ChatCompletionRequest): Promise<ChatResult> {
-    const { config, contents } = this.buildRequestPayload(request);
+    const { contents } = this.buildRequestPayload(request);
     const ai = this.ai;
     let activeModel = this.modelId;
+    const deadlineAt = Date.now() + (request.timeoutMs ?? PROVIDER_TIMEOUT_MS);
 
     const fallbackChain = Array.from(
       new Set([
@@ -572,17 +650,24 @@ export class GeminiChatProvider implements IChatProvider {
         }
         activeModel = candidate;
         response = await executeWithRetry(
-          () =>
-            ai.models.generateContent({
+          async () => {
+            const guard = geminiRequestGuard(Math.min(MODEL_ATTEMPT_TIMEOUT_MS, deadlineAt - Date.now()), request.signal);
+            try {
+              if (guard.signal.aborted) throw guard.signal.reason;
+              return await guard.wait(ai.models.generateContent({
               model: activeModel,
               contents,
-              config,
-            }),
+              config: {...this.buildRequestPayload(request, activeModel).config,abortSignal:guard.signal,
+                httpOptions:{timeout:MODEL_ATTEMPT_TIMEOUT_MS}},
+              }));
+            } finally { guard.dispose(); }
+          },
           activeModel
         );
         break;
       } catch (err: unknown) {
         lastError = err;
+        if (request.signal?.aborted || Date.now() >= deadlineAt) throw err;
         const errMsg = err instanceof Error ? err.message : String(err);
         const isRateLimit =
           errMsg.includes('429') ||
@@ -597,13 +682,15 @@ export class GeminiChatProvider implements IChatProvider {
           errMsg.includes('503') ||
           errMsg.includes('high demand') ||
           errMsg.includes('UNAVAILABLE') ||
-          isRateLimit;
+          isRateLimit || isTransportFailure(err);
 
         if (!isUnavailable) {
           throw err;
         }
 
-        if (isRateLimit) {
+        if (isDailyQuotaError(err)) {
+          console.warn(`Daily quota exhausted for ${candidate}; trying the next configured fallback without retry.`);
+        } else if (isRateLimit) {
           console.warn(
             `⚠️ Model "${candidate}" wyczerpał ponowienia rate-limit 429 (${errMsg}). Oczekiwanie 1500ms i próba alternatywnego modelu w kaskadzie...`
           );

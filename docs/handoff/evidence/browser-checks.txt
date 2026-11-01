@@ -1,0 +1,23 @@
+[WebServer] (node:82268) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+[WebServer]  We detected multiple lockfiles and selected the directory of <repo>/package-lock.json as the root directory.
+[WebServer]  To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+[WebServer]    See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+[WebServer]  Detected additional lockfiles: 
+[WebServer]    * <repo>/_tester/_base/.silnik/package-lock.json
+[WebServer] 
+
+Running 5 tests using 1 worker
+
+(node:82269) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:82269) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/e2e/narrative-formatting.spec.ts:4:7 › narrative formatting cards render in pl (1.8s)
+  ✓  2 [chromium] › tests/e2e/narrative-formatting.spec.ts:4:7 › narrative formatting cards render in en (1.7s)
+  ✓  3 [chromium] › tests/e2e/showcase-runtime.spec.ts:5:5 › both local adventure dossiers and the update lock are active (493ms)
+  ✓  4 [chromium] › tests/e2e/showcase-start.spec.ts:3:6 › one prepared Quick Start adventure in pl (2.6s)
+  ✓  5 [chromium] › tests/e2e/showcase-start.spec.ts:3:6 › one prepared Quick Start adventure in en (3.0s)
+
+  5 passed (11.9s)

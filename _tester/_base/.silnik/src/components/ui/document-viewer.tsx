@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import type OpenSeadragon from 'openseadragon';
 import {
@@ -36,6 +37,7 @@ interface DocumentViewerProps {
   docTypeLabel?: string;
   className?: string;
   initialFilter?: PaperAgingFilter;
+  preserveOriginal?: boolean;
   onFactDiscovered?: (factSummary: string) => void;
   evidenceFact?: string;
 }
@@ -46,17 +48,34 @@ export function DocumentViewer({
   docTypeLabel,
   className = '',
   initialFilter = 'vintage-1920',
+  preserveOriginal = false,
   onFactDiscovered,
   evidenceFact,
 }: DocumentViewerProps) {
   const t = useTranslations('DocumentViewer');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
+  const fullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
+  const wasFullscreen = useRef(false);
 
   const [filter, setFilter] = useState<PaperAgingFilter>(initialFilter);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [factLogged, setFactLogged] = useState(false);
+
+  useEffect(() => {
+    if (!isFullscreen && wasFullscreen.current) fullscreenButtonRef.current?.focus();
+    wasFullscreen.current = isFullscreen;
+    if (!isFullscreen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setIsFullscreen(false);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isFullscreen]);
 
   // Inicjalizacja OpenSeadragon
   useEffect(() => {
@@ -122,7 +141,7 @@ export function DocumentViewer({
       }
       viewerRef.current = null;
     };
-  }, [imageUrl, evidenceFact, onFactDiscovered, factLogged]);
+  }, [imageUrl, evidenceFact, onFactDiscovered, factLogged, isFullscreen]);
 
   // Kontrolki nawigacji
   const handleZoomIn = useCallback(() => {
@@ -151,7 +170,7 @@ export function DocumentViewer({
 
   // Klasy filtrów starzenia papieru CSS
   const getFilterStyle = (): React.CSSProperties => {
-    switch (filter) {
+    switch (preserveOriginal ? 'none' : filter) {
       case 'vintage-1920':
         return {
           filter: 'sepia(0.55) contrast(1.15) brightness(0.92) saturate(1.1)',
@@ -166,10 +185,10 @@ export function DocumentViewer({
     }
   };
 
-  return (
+  const documentView = (
     <div
-      className={`relative flex flex-col border border-brass/35 bg-[#120f0c] shadow-2xl rounded-sm overflow-hidden select-none ${
-        isFullscreen ? 'fixed inset-0 z-50 p-4 bg-black/95' : className
+      className={`flex flex-col border border-brass/35 bg-[#120f0c] shadow-2xl rounded-sm overflow-hidden select-none ${
+        isFullscreen ? 'fixed inset-0 z-50 p-4 bg-black/95' : `relative ${className}`
       }`}
     >
       {/* Pasek nagłówka dokumentu */}
@@ -187,7 +206,7 @@ export function DocumentViewer({
         </div>
 
         {/* Przełącznik filtru starzenia papieru */}
-        <div className="flex items-center gap-1 text-[11px] font-mono">
+        {!preserveOriginal && <div className="flex items-center gap-1 text-[11px] font-mono">
           <span className="text-muted-foreground mr-1 hidden sm:inline-flex items-center gap-1">
             <Sliders className="h-3 w-3 text-primary/80" />
             {t('filterLabel')}:
@@ -228,7 +247,7 @@ export function DocumentViewer({
           >
             {t('filterPrl')}
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* Kontener podglądu OpenSeadragon */}
@@ -240,8 +259,9 @@ export function DocumentViewer({
         )}
         <div
           ref={containerRef}
-          style={getFilterStyle()}
-          className="w-full h-full min-h-[360px] cursor-grab active:cursor-grabbing transition-[filter] duration-300"
+          // OSD creates 100%-height children; min-height alone leaves their viewport at zero.
+          style={{ ...getFilterStyle(), height: isFullscreen ? 'calc(100vh - 120px)' : 360 }}
+          className="w-full min-h-[360px] cursor-grab active:cursor-grabbing transition-[filter] duration-300"
         />
 
         {/* Diegetyczny pasek narzędzi (Lupka & Rotacja) w rogu widoku */}
@@ -285,6 +305,7 @@ export function DocumentViewer({
           <div className="h-4 w-px bg-primary/30 my-auto" />
           <button
             type="button"
+            ref={fullscreenButtonRef}
             onClick={() => setIsFullscreen((prev) => !prev)}
             className={`p-1.5 rounded transition-colors ${
               isFullscreen
@@ -310,6 +331,9 @@ export function DocumentViewer({
       </div>
     </div>
   );
+
+  // Escape transformed and clipped chat ancestors while keeping the real OSD viewer.
+  return isFullscreen ? createPortal(documentView, document.body) : documentView;
 }
 
 export default DocumentViewer;

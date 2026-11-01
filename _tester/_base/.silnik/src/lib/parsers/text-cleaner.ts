@@ -336,8 +336,14 @@ export function extractAudioDirectionAndClean(text: string): {
 /** Removes blocks that are never allowed to enter campaign memory. */
 export function stripHiddenMemoryContent(text: string): string {
   return text
-    .replace(/\[(?:OBSERWACJA|OBSERVATION)(?::[^\]]*)?\][\s\S]*?\[\/(?:OBSERWACJA|OBSERVATION)\]/gi, '')
-    .replace(/\[(?:SEKRETY_MG|KEEPER_SECRETS)(?::[^\]]*)?\][\s\S]*?\[\/(?:SEKRETY_MG|KEEPER_SECRETS)\]/gi, '');
+    .replace(
+      /\[(?:OBSERWACJA|OBSERVATION)(?::[^\]]*)?\][\s\S]*?\[\/(?:OBSERWACJA|OBSERVATION)\]/gi,
+      ''
+    )
+    .replace(
+      /\[(?:SEKRETY_MG|KEEPER_SECRETS)(?::[^\]]*)?\][\s\S]*?\[\/(?:SEKRETY_MG|KEEPER_SECRETS)\]/gi,
+      ''
+    );
 }
 
 export interface DiegeticProseOptions {
@@ -358,55 +364,129 @@ export const FORM_HEADER_REGEX =
  */
 export function sanitizeMechanicalTags(text: string): string {
   if (!text) return '';
-  return text
-    // Dziennik bloki z zawartością i pojedyncze tagi
-    .replace(/\[\s*(?:DZIENNIK|JOURNAL):[^\]]*\][\s\S]*?\[\s*\/\s*(?:DZIENNIK|JOURNAL)[^\]]*\]/gi, '')
-    .replace(/\[\s*(?:DZIENNIK|JOURNAL)\s*:[^\]]*\]/gi, '')
-    .replace(/\[\s*\/\s*(?:DZIENNIK|JOURNAL)[^\]]*\]/gi, '')
-    // Sceny i Karta Akt (Issue #402)
-    .replace(/\[\s*(?:KARTA_SCENY|SCENE_CARD):?[^\]]*\][\s\S]*?\[\s*\/\s*(?:KARTA_SCENY|SCENE_CARD)[^\]]*\]/gi, '')
-    .replace(/\[\s*(?:ZMIANA_SCENY|SCENE_CHANGE)\s*:[^\]]*\]/gi, '')
-    .replace(/\[\s*\/\s*(?:KARTA_SCENY|SCENE_CARD)[^\]]*\]/gi, '')
-    // Bloki obserwacji i sekretów MG
-    .replace(/\[\s*(?:OBSERWACJA|OBSERVATION)(?::[^\]]*)?\][\s\S]*?\[\s*\/\s*(?:OBSERWACJA|OBSERVATION)[^\]]*\]/gi, '')
-    .replace(/\[\s*(?:SEKRETY_MG|KEEPER_SECRETS)(?::[^\]]*)?\][\s\S]*?\[\s*\/\s*(?:SEKRETY_MG|KEEPER_SECRETS)[^\]]*\]/gi, '')
-    .replace(/\[\s*(?:OBSERWACJA|OBSERVATION)(?::[^\]]*)?\]/gi, '')
-    .replace(/\[\s*(?:SEKRETY_MG|KEEPER_SECRETS)(?::[^\]]*)?\]/gi, '')
-    .replace(/\[\s*\/\s*(?:OBSERWACJA|OBSERVATION|SEKRETY_MG|KEEPER_SECRETS)[^\]]*\]/gi, '')
-    // Testy kości i wyników oraz stawki testów (Issue #737)
-    .replace(/\[\s*(?:TEST|WYNIK|KOŚĆ|KOSC|DICE|ROLL|STAWKA|STAKE)\s*:[^\]]*\]/gi, '')
-    .replace(/\[🎲[^\]]*\]/gi, '')
-    .replace(/test:\s*[^\]]*\]/gi, '')
-    .replace(/\[Test:[^\]]*\]/gi, '')
-    .replace(/Wynik:\s*\d+\s*→[^.!\n]*/gi, '')
-    .replace(/Progi:[^\n]*/gi, '')
-    .replace(/\(Rzut\s+(?:ręczny|automatyczny)\)/gi, '')
-    // Postacie, relacje, obecność NPC
-    .replace(/\[\s*(?:NPC|OBECNI_NPC|PRESENT_NPCS|POSTAĆ|POSTAC|CHARACTER|RELACJA)\s*:[^\]]*\]/gi, '')
-    // Lokacje i sceny
-    .replace(/\[\s*(?:LOKACJA|LOCATION|MIEJSCE|SCENA|SCENE)\s*:[^\]]*\]/gi, '')
-    // Przedmioty i ekwipunek
-    .replace(/\[\s*(?:PRZEDMIOT|ITEM|ZDOBYTY_PRZEDMIOT|EKWIPUNEK|EQUIPMENT)\s*:[^\]]*\]/gi, '')
-    // Mechanika stanu, ran, guardrails i cech
-    .replace(/\[\s*(?:STAN|STAN_POSTACI|HP|MP|SANITY|SAN|POCZYTALNOŚĆ|POCZYTALNOSC|UTRATA_SAN|OBRAŻENIA|OBRAZENIA|RANY|SZCZĘŚCIE|SZCZESCIE|LUCK|GAME_OVER|KONIEC_GRY|WETO_SEDZIEGO|WETO|REFEREE_VETO|GUARDRAIL_LEVEL|GUARDRAIL)\s*:[^\]]*\]/gi, '')
-    // Walka, obrona, pościgi, magia, tomy, sny i wizje
-    .replace(/\[\s*(?:WALKA|WALKA_ATAK|OBRONA_WALKA|ATAK_WALKA|COMBAT|ATAK_WRĘCZ|ATAK_WRECZ|MELEE_ATTACK|OPPOSED_MELEE|MELEE_DEFENSE|DIVE_FOR_COVER|RZUT_ZA_OSŁONĘ|RZUT_ZA_OSLONE|OBRONA|DEFENSE|POŚCIG|POSCIG|CHASE|KONIEC_POŚCIGU|KONIEC_POSCIGU|CHASE_END|ZAGROŻENIE|ZAGROZENIE|HAZARD|CZAR|SPELL|MAGIA|TOM|TOME|KSIĘGA|KSIEGA|STUDIUM|OBRONA_MAGIA|MAGIA_OBRONA|OPPOSED_MAGIC|MAGIA_SPONTANICZNA|SPONTANEOUS_MAGIC|SEN|SENNE_WEZWANIE|DREAM|DREAM_VISION)\s*:[^\]]*\]/gi, '')
-    .replace(/\[\s*(?:WYNIK_WALKI|COMBAT_RESULT|WYNIK_CZARU|SPELL_RESULT|WYNIK_OBRONY_MAGII|OPPOSED_MAGIC_RESULT|WYNIK_TOMU|TOME_RESULT|WYNIK_POŚCIGU|WYNIK_POSCIGU|CHASE_RESULT|WYNIK_ZAGROŻENIA|WYNIK_ZAGROZENIA|HAZARD_RESULT)\s*:[^\]]*\]/gi, '')
-    // GM thoughts, mood, narrative goal, scene director, techniques, act report
-    .replace(new RegExp(`\\[\\s*(?:MYŚLI_MG|MYSLI_MG|THOUGHTS|NASTRÓJ|NASTROJ|MOOD|CEL_NARRACYJNY|NARRATIVE_GOAL|REŻYSER_SCENY|SCENE_DIRECTOR|TECHNIKA_MG|MG_TECHNIQUE|RAPORT_AKTU|ACT_REPORT)\\s*:${NESTED_TAG_BODY}\\]`, 'gi'), '')
-    // Depth Injection / Pacing / Author's Note tags (SillyTavern Adaptation - bloki multiline, bloki unclosed z liniami dyrektyw oraz tagi pojedyncze)
-    .replace(/\[\s*(?:PRZYPOMNIENIE DLA MG|GM DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA)[^\]]*\][\s\S]*?\[\s*\/\s*(?:PRZYPOMNIENIE DLA MG|PRZYPOMNIENIE|GM DIRECTIVE|DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PACING)[^\]]*\]/gi, '')
-    .replace(/\[\s*(?:PRZYPOMNIENIE DLA MG|GM DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA)[^\]]*\](?:\s*\n\s*(?:Atmosfera(?: sceny)?|Atmosphere|Cel narracyjny|Scene Goal|Pacing(?: i kadencja| & Cadence)?|Ton|Tone|Rygor CoC 7e RAW|CoC 7e RAW|RAW|BIEG|GEAR|Dynamic Cadence|Zmienna kadencja)\s*:[^\n]*)+/gi, '')
-    .replace(/\[\s*(?:DYNAMIC SCENE & PACING INJECTION|DYNAMIC SCENE|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PRZYPOMNIENIE DLA MG|GM DIRECTIVE|PACING)[^\]]*\]/gi, '')
-    .replace(/\[\s*\/\s*(?:DYNAMIC SCENE & PACING INJECTION|DYNAMIC SCENE|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PRZYPOMNIENIE DLA MG|GM DIRECTIVE|PACING|DIRECTIVE|PRZYPOMNIENIE)[^\]]*\]/gi, '')
-    // Tagi multimedialne i ilustracje
-    .replace(/\[\s*(?:ILUSTRACJA|OBRAZ|GRAFIKA|RYSUNEK|ZDJĘCIE|ZDJECIE|PORTRET|WIZUALIZACJA|IMAGE|PICTURE|ILLUSTRATION|SHOW|VISUALIZE|PORTRAIT|SFX|DŹWIĘK|DZWIEK|AUDIO|NAGRANIE|PROMPT)[^\]]*\]/gi, '')
-    // Czas i pogoda
-    .replace(new RegExp(`\\[\\s*(?:POGODA|WEATHER|AKTUALNY CZAS|AKTUALNY_CZAS|CURRENT TIME|CURRENT_TIME|TIME|KONIEC_SESJI|END_SESSION)\\s*:${NESTED_TAG_BODY}\\]`, 'gi'), '')
-    // Catch-all dla halucynowanych wielkich tagów z dwukropkiem lub kreską (np. [ZAGROZENIE_RAW: ...])
-    .replace(new RegExp(`\\[[A-ZŁŚŻŹĆŃ_]{2,}\\s*(?::|\\|)${NESTED_TAG_BODY}\\]`, 'gi'), '')
-    // Niedomknięty tag techniczny na końcu uciętego streamu
-    .replace(/\[[A-ZŁŚŻŹĆŃ_]{2,}(?::[^\]]*)?$/g, '');
+  return (
+    text
+      // Dziennik bloki z zawartością i pojedyncze tagi
+      .replace(
+        /\[\s*(?:DZIENNIK|JOURNAL):[^\]]*\][\s\S]*?\[\s*\/\s*(?:DZIENNIK|JOURNAL)[^\]]*\]/gi,
+        ''
+      )
+      .replace(/\[\s*(?:DZIENNIK|JOURNAL)\s*:[^\]]*\]/gi, '')
+      .replace(/\[\s*\/\s*(?:DZIENNIK|JOURNAL)[^\]]*\]/gi, '')
+      // Sceny i Karta Akt (Issue #402)
+      .replace(
+        /\[\s*(?:KARTA_SCENY|SCENE_CARD):?[^\]]*\][\s\S]*?\[\s*\/\s*(?:KARTA_SCENY|SCENE_CARD)[^\]]*\]/gi,
+        ''
+      )
+      .replace(
+        /\[\s*(?:ZMIANA_SCENY|SCENE_CHANGE|SCENA|SCENE|CUE)\s*:[^\]]*\]/gi,
+        ''
+      )
+      .replace(/\[\s*\/\s*(?:KARTA_SCENY|SCENE_CARD)[^\]]*\]/gi, '')
+      // Bloki obserwacji i sekretów MG
+      .replace(
+        /\[\s*(?:OBSERWACJA|OBSERVATION)(?::[^\]]*)?\][\s\S]*?\[\s*\/\s*(?:OBSERWACJA|OBSERVATION)[^\]]*\]/gi,
+        ''
+      )
+      .replace(
+        /\[\s*(?:SEKRETY_MG|KEEPER_SECRETS)(?::[^\]]*)?\][\s\S]*?\[\s*\/\s*(?:SEKRETY_MG|KEEPER_SECRETS)[^\]]*\]/gi,
+        ''
+      )
+      .replace(/\[\s*(?:OBSERWACJA|OBSERVATION)(?::[^\]]*)?\]/gi, '')
+      .replace(/\[\s*(?:SEKRETY_MG|KEEPER_SECRETS)(?::[^\]]*)?\]/gi, '')
+      .replace(
+        /\[\s*\/\s*(?:OBSERWACJA|OBSERVATION|SEKRETY_MG|KEEPER_SECRETS)[^\]]*\]/gi,
+        ''
+      )
+      // Testy kości i wyników oraz stawki testów (Issue #737)
+      .replace(
+        /\[\s*(?:TEST|WYNIK|KOŚĆ|KOSC|DICE|ROLL|STAWKA|STAKE)\s*:[^\]]*\]/gi,
+        ''
+      )
+      .replace(/\[🎲[^\]]*\]/gi, '')
+      .replace(/test:\s*[^\]]*\]/gi, '')
+      .replace(/\[Test:[^\]]*\]/gi, '')
+      .replace(/Wynik:\s*\d+\s*→[^.!\n]*/gi, '')
+      .replace(/Progi:[^\n]*/gi, '')
+      .replace(/\(Rzut\s+(?:ręczny|automatyczny)\)/gi, '')
+      // Postacie, relacje, obecność NPC
+      .replace(
+        /\[\s*(?:NPC|OBECNI_NPC|PRESENT_NPCS|POSTAĆ|POSTAC|CHARACTER|RELACJA)\s*:[^\]]*\]/gi,
+        ''
+      )
+      // Lokacje i sceny
+      .replace(
+        /\[\s*(?:LOKACJA|LOCATION|MIEJSCE|SCENA|SCENE)\s*:[^\]]*\]/gi,
+        ''
+      )
+      // Przedmioty i ekwipunek
+      .replace(
+        /\[\s*(?:PRZEDMIOT|ITEM|ZDOBYTY_PRZEDMIOT|EKWIPUNEK|EQUIPMENT)\s*:[^\]]*\]/gi,
+        ''
+      )
+      // Mechanika stanu, ran, guardrails i cech
+      .replace(
+        /\[\s*(?:STAN|STAN_POSTACI|HP|MP|SANITY|SAN|POCZYTALNOŚĆ|POCZYTALNOSC|UTRATA_SAN|OBRAŻENIA|OBRAZENIA|RANY|SZCZĘŚCIE|SZCZESCIE|LUCK|GAME_OVER|KONIEC_GRY|WETO_SEDZIEGO|WETO|REFEREE_VETO|GUARDRAIL_LEVEL|GUARDRAIL)\s*:[^\]]*\]/gi,
+        ''
+      )
+      // Walka, obrona, pościgi, magia, tomy, sny i wizje
+      .replace(
+        /\[\s*(?:WALKA|WALKA_ATAK|OBRONA_WALKA|ATAK_WALKA|COMBAT|ATAK_WRĘCZ|ATAK_WRECZ|MELEE_ATTACK|OPPOSED_MELEE|MELEE_DEFENSE|DIVE_FOR_COVER|RZUT_ZA_OSŁONĘ|RZUT_ZA_OSLONE|OBRONA|DEFENSE|POŚCIG|POSCIG|CHASE|KONIEC_POŚCIGU|KONIEC_POSCIGU|CHASE_END|ZAGROŻENIE|ZAGROZENIE|HAZARD|CZAR|SPELL|MAGIA|TOM|TOME|KSIĘGA|KSIEGA|STUDIUM|OBRONA_MAGIA|MAGIA_OBRONA|OPPOSED_MAGIC|MAGIA_SPONTANICZNA|SPONTANEOUS_MAGIC|SEN|SENNE_WEZWANIE|DREAM|DREAM_VISION)\s*:[^\]]*\]/gi,
+        ''
+      )
+      .replace(
+        /\[\s*(?:WYNIK_WALKI|COMBAT_RESULT|WYNIK_CZARU|SPELL_RESULT|WYNIK_OBRONY_MAGII|OPPOSED_MAGIC_RESULT|WYNIK_TOMU|TOME_RESULT|WYNIK_POŚCIGU|WYNIK_POSCIGU|CHASE_RESULT|WYNIK_ZAGROŻENIA|WYNIK_ZAGROZENIA|HAZARD_RESULT)\s*:[^\]]*\]/gi,
+        ''
+      )
+      // GM thoughts, mood, narrative goal, scene director, techniques, act report
+      .replace(
+        new RegExp(
+          `\\[\\s*(?:MYŚLI_MG|MYSLI_MG|THOUGHTS|NASTRÓJ|NASTROJ|MOOD|CEL_NARRACYJNY|NARRATIVE_GOAL|REŻYSER_SCENY|SCENE_DIRECTOR|TECHNIKA_MG|MG_TECHNIQUE|RAPORT_AKTU|ACT_REPORT)\\s*:${NESTED_TAG_BODY}\\]`,
+          'gi'
+        ),
+        ''
+      )
+      // Depth Injection / Pacing / Author's Note tags (SillyTavern Adaptation - bloki multiline, bloki unclosed z liniami dyrektyw oraz tagi pojedyncze)
+      .replace(
+        /\[\s*(?:PRZYPOMNIENIE DLA MG|GM DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA)[^\]]*\][\s\S]*?\[\s*\/\s*(?:PRZYPOMNIENIE DLA MG|PRZYPOMNIENIE|GM DIRECTIVE|DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PACING)[^\]]*\]/gi,
+        ''
+      )
+      .replace(
+        /\[\s*(?:PRZYPOMNIENIE DLA MG|GM DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA)[^\]]*\](?:\s*\n\s*(?:Atmosfera(?: sceny)?|Atmosphere|Cel narracyjny|Scene Goal|Pacing(?: i kadencja| & Cadence)?|Ton|Tone|Rygor CoC 7e RAW|CoC 7e RAW|RAW|BIEG|GEAR|Dynamic Cadence|Zmienna kadencja)\s*:[^\n]*)+/gi,
+        ''
+      )
+      .replace(
+        /\[\s*(?:DYNAMIC SCENE & PACING INJECTION|DYNAMIC SCENE|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PRZYPOMNIENIE DLA MG|GM DIRECTIVE|PACING)[^\]]*\]/gi,
+        ''
+      )
+      .replace(
+        /\[\s*\/\s*(?:DYNAMIC SCENE & PACING INJECTION|DYNAMIC SCENE|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PRZYPOMNIENIE DLA MG|GM DIRECTIVE|PACING|DIRECTIVE|PRZYPOMNIENIE)[^\]]*\]/gi,
+        ''
+      )
+      // Tagi multimedialne i ilustracje
+      .replace(
+        /\[\s*(?:ILUSTRACJA|OBRAZ|GRAFIKA|RYSUNEK|ZDJĘCIE|ZDJECIE|PORTRET|WIZUALIZACJA|IMAGE|PICTURE|ILLUSTRATION|SHOW|VISUALIZE|PORTRAIT|SFX|DŹWIĘK|DZWIEK|AUDIO|NAGRANIE|PROMPT)[^\]]*\]/gi,
+        ''
+      )
+      // Czas i pogoda
+      .replace(
+        new RegExp(
+          `\\[\\s*(?:POGODA|WEATHER|AKTUALNY CZAS|AKTUALNY_CZAS|CURRENT TIME|CURRENT_TIME|TIME|KONIEC_SESJI|END_SESSION)\\s*:${NESTED_TAG_BODY}\\]`,
+          'gi'
+        ),
+        ''
+      )
+      // Catch-all dla halucynowanych wielkich tagów z dwukropkiem lub kreską (np. [ZAGROZENIE_RAW: ...])
+      .replace(
+        new RegExp(
+          `\\[[A-ZŁŚŻŹĆŃ_]{2,}\\s*(?::|\\|)${NESTED_TAG_BODY}\\]`,
+          'gi'
+        ),
+        ''
+      )
+      // Niedomknięty tag techniczny na końcu uciętego streamu
+      .replace(/\[[A-ZŁŚŻŹĆŃ_]{2,}(?::[^\]]*)?$/g, '')
+  );
 }
 
 /**
@@ -431,7 +511,10 @@ export function sanitizeDiegeticProse(
 
   // Usuwanie prefiksów asystenta/MG
   cleaned = cleaned
-    .replace(/^(?:MG|GM|AI|Assistant|Mistrz Gry|Game Master):\s*(?:Assistant:\s*)?/gim, '')
+    .replace(
+      /^(?:MG|GM|AI|Assistant|Mistrz Gry|Game Master):\s*(?:Assistant:\s*)?/gim,
+      ''
+    )
     .replace(/^Assistant:\s*/gim, '')
     .trim();
 
@@ -468,7 +551,10 @@ export function sanitizeDiegeticProse(
       '- $1 - $2'
     );
     // Normalizacja dialogów rozpoczynających się od cudzysłowu na początku linii (samodzielna kwestia)
-    cleaned = cleaned.replace(/^[ \t]*["„»“”‘]([^"”«“”’\n]+)["”«“”’][ \t]*$/gm, '- $1');
+    cleaned = cleaned.replace(
+      /^[ \t]*["„»“”‘]([^"”«“”’\n]+)["”«“”’][ \t]*$/gm,
+      '- $1'
+    );
   }
 
   // Usuwanie podwójnych spacji
@@ -483,6 +569,7 @@ export function sanitizeDiegeticProse(
  * Czyści tekst odpowiedzi AI z artefaktów technicznych, przygotowując go do TTS
  */
 export function cleanResponseText(text: string): string {
+  text = text.replace(/\[(?:SCENA|SCENE|CUE):[^\]]*\]/gi, '');
   if (!text) return '';
 
   // Wyciszenie komunikatów technicznych Guardraila przed syntezą mowy TTS (Issue #528)
@@ -496,7 +583,9 @@ export function cleanResponseText(text: string): string {
     return '';
   }
 
-  const diegeticClean = sanitizeDiegeticProse(text, { normalizeDialogues: false });
+  const diegeticClean = sanitizeDiegeticProse(text, {
+    normalizeDialogues: false,
+  });
 
   return (
     diegeticClean
@@ -547,17 +636,29 @@ export function cleanResponseText(text: string): string {
       .replace(/\[(?:OBRONA|DEFENSE):[^\]]*\]/gi, '')
       .replace(/\[(?:COMBAT):[^\]]*\]/gi, '')
       .replace(/\[(?:ZAGROŻENIE|ZAGROZENIE|HAZARD):[^\]]*\]/gi, '')
-      .replace(/\[(?:CZAR|SPELL|MAGIA|OBRONA_MAGIA|MAGIA_OBRONA|OPPOSED_MAGIC|MAGIA_SPONTANICZNA|SPONTANEOUS_MAGIC):[^\]]*\]/gi, '')
-      .replace(/\[(?:WYNIK_CZARU|SPELL_RESULT|WYNIK_OBRONY_MAGII|OPPOSED_MAGIC_RESULT):[^\]]*\]/gi, '')
+      .replace(
+        /\[(?:CZAR|SPELL|MAGIA|OBRONA_MAGIA|MAGIA_OBRONA|OPPOSED_MAGIC|MAGIA_SPONTANICZNA|SPONTANEOUS_MAGIC):[^\]]*\]/gi,
+        ''
+      )
+      .replace(
+        /\[(?:WYNIK_CZARU|SPELL_RESULT|WYNIK_OBRONY_MAGII|OPPOSED_MAGIC_RESULT):[^\]]*\]/gi,
+        ''
+      )
       .replace(/\[(?:TOM|TOME|KSIĘGA|KSIEGA|STUDIUM):[^\]]*\]/gi, '')
       .replace(/\[(?:WYNIK_TOMU|TOME_RESULT):[^\]]*\]/gi, '')
       .replace(/\[(?:POŚCIG|POSCIG|CHASE):[^\]]*\]/gi, '')
       .replace(/\[(?:WYNIK_POŚCIGU|WYNIK_POSCIGU|CHASE_RESULT):[^\]]*\]/gi, '')
-      .replace(/\[(?:WYNIK_ZAGROŻENIA|WYNIK_ZAGROZENIA|HAZARD_RESULT):[^\]]*\]/gi, '')
+      .replace(
+        /\[(?:WYNIK_ZAGROŻENIA|WYNIK_ZAGROZENIA|HAZARD_RESULT):[^\]]*\]/gi,
+        ''
+      )
       .replace(/\[SANITY:[^\]]*\]/gi, '')
       .replace(/\[(?:OBSERWACJA|OBSERVATION):[^\]]*\]/gi, '')
       .replace(/\[(?:SEKRETY_MG|KEEPER_SECRETS):[^\]]*\]/gi, '')
-      .replace(/\[\/(?:OBSERWACJA|OBSERVATION|SEKRETY_MG|KEEPER_SECRETS)\]/gi, '')
+      .replace(
+        /\[\/(?:OBSERWACJA|OBSERVATION|SEKRETY_MG|KEEPER_SECRETS)\]/gi,
+        ''
+      )
       .replace(/\[(?:DZIENNIK|JOURNAL):[^\]]*\]/gi, '')
       .replace(/\[\/(?:DZIENNIK|JOURNAL)\]/gi, '')
       .replace(/\[EKSPOZYCJA:[^\]]*\]/gi, '')
@@ -616,12 +717,24 @@ export function stripMultilineArtifacts(
   if (!text) return '';
   let intermediate = text
     .replace(/```(?:json|javascript|typescript)?\s*[\s\S]*?(?:```|$)/gi, '') // code fences
-    .replace(/\[(?:DZIENNIK|JOURNAL):[^\]]*\][\s\S]*?(?:\[\/(?:DZIENNIK|JOURNAL)\]|$)/gi, '') // blok dziennika z treścią
-    .replace(/\[(?:KARTA_SCENY|SCENE_CARD):?[^\]]*\][\s\S]*?(?:\[\/(?:KARTA_SCENY|SCENE_CARD)\]|$)/gi, '') // blok karty sceny
-    .replace(/\[(?:ZMIANA_SCENY|SCENE_CHANGE):[^\]]*\]/gi, '') // tag zmiany sceny
+    .replace(
+      /\[(?:DZIENNIK|JOURNAL):[^\]]*\][\s\S]*?(?:\[\/(?:DZIENNIK|JOURNAL)\]|$)/gi,
+      ''
+    ) // blok dziennika z treścią
+    .replace(
+      /\[(?:KARTA_SCENY|SCENE_CARD):?[^\]]*\][\s\S]*?(?:\[\/(?:KARTA_SCENY|SCENE_CARD)\]|$)/gi,
+      ''
+    ) // blok karty sceny
+    .replace(/\[(?:ZMIANA_SCENY|SCENE_CHANGE|SCENA|SCENE|CUE):[^\]]*\]/gi, '') // tag zmiany sceny
     // Zamknięte bloki OBSERWACJA i SEKRETY_MG (z opcjonalnym nagłówkiem po dwukropku)
-    .replace(/\[(?:OBSERWACJA|OBSERVATION)(?::[^\]]*)?\][\s\S]*?\[\/(?:OBSERWACJA|OBSERVATION)\]/gi, '')
-    .replace(/\[(?:SEKRETY_MG|KEEPER_SECRETS)(?::[^\]]*)?\][\s\S]*?\[\/(?:SEKRETY_MG|KEEPER_SECRETS)\]/gi, '')
+    .replace(
+      /\[(?:OBSERWACJA|OBSERVATION)(?::[^\]]*)?\][\s\S]*?\[\/(?:OBSERWACJA|OBSERVATION)\]/gi,
+      ''
+    )
+    .replace(
+      /\[(?:SEKRETY_MG|KEEPER_SECRETS)(?::[^\]]*)?\][\s\S]*?\[\/(?:SEKRETY_MG|KEEPER_SECRETS)\]/gi,
+      ''
+    )
     // Niezamknięte bloki OBSERWACJA i SEKRETY_MG podczas streamingu (|$ na końcu)
     .replace(/\[(?:OBSERWACJA|OBSERVATION)\][\s\S]*$/gi, '')
     .replace(/\[(?:SEKRETY_MG|KEEPER_SECRETS)\][\s\S]*$/gi, '')
@@ -639,14 +752,29 @@ export function stripMultilineArtifacts(
       ''
     )
     // Zamknięte bloki Depth Injection / Pacing Directive
-    .replace(/\[\s*(?:PRZYPOMNIENIE DLA MG|GM DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA)[^\]]*\][\s\S]*?\[\s*\/\s*(?:PRZYPOMNIENIE DLA MG|PRZYPOMNIENIE|GM DIRECTIVE|DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PACING)[^\]]*\]/gi, '')
+    .replace(
+      /\[\s*(?:PRZYPOMNIENIE DLA MG|GM DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA)[^\]]*\][\s\S]*?\[\s*\/\s*(?:PRZYPOMNIENIE DLA MG|PRZYPOMNIENIE|GM DIRECTIVE|DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PACING)[^\]]*\]/gi,
+      ''
+    )
     // Niezamknięte bloki z liniami dyrektyw (nie połykają dalszej narracji fabularnej)
-    .replace(/\[\s*(?:PRZYPOMNIENIE DLA MG|GM DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA)[^\]]*\](?:\s*\n\s*(?:Atmosfera(?: sceny)?|Atmosphere|Cel narracyjny|Scene Goal|Pacing(?: i kadencja| & Cadence)?|Ton|Tone|Rygor CoC 7e RAW|CoC 7e RAW|RAW|BIEG|GEAR|Dynamic Cadence|Zmienna kadencja)\s*:[^\n]*)+/gi, '')
+    .replace(
+      /\[\s*(?:PRZYPOMNIENIE DLA MG|GM DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA)[^\]]*\](?:\s*\n\s*(?:Atmosfera(?: sceny)?|Atmosphere|Cel narracyjny|Scene Goal|Pacing(?: i kadencja| & Cadence)?|Ton|Tone|Rygor CoC 7e RAW|CoC 7e RAW|RAW|BIEG|GEAR|Dynamic Cadence|Zmienna kadencja)\s*:[^\n]*)+/gi,
+      ''
+    )
     // Niezamknięte bloki Depth Injection podczas streamingu na samym końcu tekstu (|$ na końcu)
-    .replace(/\[\s*(?:PRZYPOMNIENIE DLA MG|GM DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA)[^\]]*\][\s\S]*$/gi, '')
+    .replace(
+      /\[\s*(?:PRZYPOMNIENIE DLA MG|GM DIRECTIVE|DYNAMIC SCENE|DYNAMIC SCENE & PACING INJECTION|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA)[^\]]*\][\s\S]*$/gi,
+      ''
+    )
     // Pojedyncze tagi dyrektyw
-    .replace(/\[\s*(?:DYNAMIC SCENE & PACING INJECTION|DYNAMIC SCENE|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PRZYPOMNIENIE DLA MG|GM DIRECTIVE|PACING)[^\]]*\]/gi, '')
-    .replace(/\[\s*\/\s*(?:DYNAMIC SCENE & PACING INJECTION|DYNAMIC SCENE|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PRZYPOMNIENIE DLA MG|GM DIRECTIVE|PACING|DIRECTIVE|PRZYPOMNIENIE)[^\]]*\]/gi, '');
+    .replace(
+      /\[\s*(?:DYNAMIC SCENE & PACING INJECTION|DYNAMIC SCENE|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PRZYPOMNIENIE DLA MG|GM DIRECTIVE|PACING)[^\]]*\]/gi,
+      ''
+    )
+    .replace(
+      /\[\s*\/\s*(?:DYNAMIC SCENE & PACING INJECTION|DYNAMIC SCENE|PACING INJECTION|AUTHOR'?S? NOTE|NOTATKA AUTORA|PRZYPOMNIENIE DLA MG|GM DIRECTIVE|PACING|DIRECTIVE|PRZYPOMNIENIE)[^\]]*\]/gi,
+      ''
+    );
 
   if (options?.preserveEmotionTags) {
     intermediate = intermediate
@@ -740,4 +868,13 @@ export function isCommonWord(word: string): boolean {
     'zaraz',
   ];
   return commonWords.includes(word.toLowerCase());
+}
+
+/** A missing private close makes all later prose uncertain. Recover protocol only for validation. */
+export function stripIncompletePrivateMarkers(text: string): string {
+  const names='(?:MYŚLI(?:_MG)?|MYSLI(?:_MG)?|THOUGHTS|NASTRÓJ|NASTROJ|MOOD|CEL_NARRACYJNY|NARRATIVE_GOAL)';
+  const complete=`\\[${names}\\s*:${NESTED_TAG_BODY}\\]`;
+  const incomplete=`\\[${names}(?=\\s|:|\\[|$)[\\s\\S]*`;
+  return text.replace(new RegExp(`(${complete})|${incomplete}`, 'g'), (tag, completeTag: string | undefined)=>
+    completeTag?tag:(tag.match(/\[(?:LOKACJA|LOCATION|AKTUALNY CZAS|CURRENT TIME|EKWIPUNEK|TECZKA_STANU|TEST)\s*:[^\[\]]*\]/g)??[]).join('\n'));
 }

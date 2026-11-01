@@ -12,12 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  CheckCircle2,
-  Hammer,
-  Sparkles,
-  Bug,
-} from 'lucide-react';
+import { CheckCircle2, Hammer, Sparkles, Bug } from 'lucide-react';
 
 export const BETA_WELCOME_STORAGE_KEY = 'straznik_beta_welcome_dismissed';
 
@@ -197,6 +192,17 @@ export function BetaWelcomeModal({
                     </span>
                   </div>
                 </li>
+                <li data-testid="beta-opening-node" className="flex items-start gap-2.5">
+                  <span className="text-emerald-400 font-bold mt-0.5">✓</span>
+                  <div>
+                    <strong className="text-foreground font-semibold text-sm md:text-base block mb-0.5">
+                      {t('openingNodeTitle')}
+                    </strong>
+                    <span className="text-muted-foreground text-xs md:text-sm leading-relaxed block">
+                      {t('openingNodeDesc')}
+                    </span>
+                  </div>
+                </li>
               </ul>
             </div>
 
@@ -233,6 +239,18 @@ export function BetaWelcomeModal({
                       {t('inProgressItem2Desc')}
                     </span>
                   </div>
+                  <div className="border border-brass/20 p-3 bg-card/50">
+                    <h4 className="font-display text-brass text-sm">
+                      {t('inProgressItem3Title')}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {t('inProgressItem3Desc')}
+                    </p>
+                  </div>
+                </li>
+                <li className="space-y-1">
+                  <strong className="block text-foreground">{t('ambilightTitle')}</strong>
+                  <span className="block text-muted-foreground text-xs md:text-sm">{t('ambilightDesc')}</span>
                 </li>
               </ul>
             </div>

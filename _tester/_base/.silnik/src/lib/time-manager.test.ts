@@ -125,3 +125,46 @@ describe('timeManager.resetForAdventure - dynamic start dates and weather', () =
   });
 });
 
+
+test('previews a pushed time cost across a year boundary without changing the campaign', () => {
+  timeManager.setTime({year:1925,month:11,day:31,hour:23,minute:50});
+  const before=timeManager.getSnapshot();
+  const stored=localStorage.getItem('coc7_game_time');
+  expect(timeManager.previewAdvanceTime(20)).toEqual({year:1926,month:0,day:1,hour:0,minute:10});
+  expect(timeManager.getSnapshot()).toEqual(before);
+  expect(localStorage.getItem('coc7_game_time')).toBe(stored);
+  expect(timeManager.advanceTime(20)).toEqual({year:1926,month:0,day:1,hour:0,minute:10});
+});
+
+
+test('restores deadline and weather after reload while retaining English date formatting', () => {
+  const snapshot = {
+    time: { year: 1973, month: 9, day: 18, hour: 19, minute: 30 },
+    weather: 'Cold rain',
+    deadline: { year: 1973, month: 9, day: 19, hour: 19, minute: 30 },
+    deadlineTotalHours: 24,
+  };
+  timeManager.restoreSnapshot(snapshot);
+  jest.isolateModules(() => {
+    const reloaded = jest.requireActual<typeof import('./time-manager')>('./time-manager').timeManager;
+    expect(reloaded.getSnapshot()).toEqual(snapshot);
+    expect(reloaded.formatDate('en')).toBe('October 18, 1973');
+    expect(reloaded.formatForPrompt('en')).toContain('[CURRENT TIME: October 18, 1973, 19:30, Thursday');
+    expect(reloaded.formatDate('pl')).toBe('18 Października 1973');
+  });
+});
+
+test('resetting an English adventure clears a restored deadline and keeps localized fallback weather', () => {
+  timeManager.restoreSnapshot({
+    time: { year: 1973, month: 9, day: 18, hour: 19, minute: 30 },
+    weather: 'Old weather',
+    deadline: { year: 1973, month: 9, day: 19, hour: 19, minute: 30 },
+    deadlineTotalHours: 24,
+  });
+  timeManager.resetForAdventure({
+    id: 'synthetic', startDate: '1893-12-01T10:00',
+  }, 'en');
+  expect(timeManager.getDeadline()).toBeNull();
+  expect(timeManager.getWeather()).toBe('Bitter frost, grey snow and freezing wind');
+  expect(timeManager.formatDate('en')).toBe('December 1, 1893');
+});

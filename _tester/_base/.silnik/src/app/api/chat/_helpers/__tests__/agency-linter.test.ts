@@ -667,3 +667,67 @@ describe('Agency Linter & Detector (CoC 7e RAW)', () => {
     });
   });
 });
+
+describe('declared entry regression from Prabuty player session',()=>{
+ const names=['Tomasz Nowicki'];
+ const options={locale:'pl' as const,declaredAction:{characterName:names[0],text:'Gaszę latarkę i wchodzę do sieni za zaproszeniem, zamykając cicho drzwi.'}};
+ it('allows the exact entry and destination explicitly declared by this investigator',()=>{
+  expect(lintAgencyViolations('Tomasz wchodzi do sieni. Tadeusz pokazuje dokument.',names,options).hasViolation).toBe(false);
+  expect(lintAgencyViolations('Wchodzisz do sieni. Tadeusz pokazuje dokument.',names,options).hasViolation).toBe(false);
+ });
+ it('keeps other destinations and other investigators protected',()=>{
+  expect(lintAgencyViolations('Tomasz wchodzi do krypty.',names,options).hasViolation).toBe(true);
+  expect(lintAgencyViolations('Helena wchodzi do sieni.',[...names,'Helena Krawczyk'],options).hasViolation).toBe(true);
+ });
+ it.each(['Nie wchodzę do sieni.','Jeśli wchodzę do sieni, czy mogę zobaczyć dokument?','Mówię: „Wchodzę do sieni”.'])('does not authorize a negation, hypothetical, or dialogue: %s',text=>{
+  expect(lintAgencyViolations('Tomasz wchodzi do sieni.',names,{...options,declaredAction:{characterName:names[0],text}}).hasViolation).toBe(true);
+ });
+ it('preserves unauthorized inventory protection even during an authorized entry',()=>{
+  expect(lintAgencyViolations('Tomasz wchodzi do sieni. Tomasz wyciąga rewolwer.',names,options).violations.some(v=>v.type==='inventory')).toBe(true);
+ });
+ it('supports equivalent explicit EN entry without granting another destination',()=>{
+  const en={locale:'en' as const,declaredAction:{characterName:'Frank Miller',text:'I enter the pharmacy.'}};
+  expect(lintAgencyViolations('Frank enters the pharmacy.',['Frank Miller'],en).hasViolation).toBe(false);
+  expect(lintAgencyViolations('You enter the basement.',['Frank Miller'],en).hasViolation).toBe(true);
+ });
+});
+
+it.each([
+ ['pl','Wchodzę do starej apteki.','Tomasz wchodzi do starej kaplicy.'],
+ ['en','I enter the red pharmacy.','Tomasz enters the red chapel.'],
+ ['pl','Jeżeli Helena zaprosi, wchodzę do sieni.','Tomasz wchodzi do sieni.'],
+ ['pl','Wchodzę do sieni, jeśli Helena zaprosi.','Tomasz wchodzi do sieni.'],
+ ['en','I enter the pharmacy if Helena invites me.','Tomasz enters the pharmacy.'],
+] as const)('keeps ambiguous or conditional entry protected: %s %s',(locale,text,response)=>{
+ expect(lintAgencyViolations(response,['Tomasz Nowicki'],{locale,declaredAction:{characterName:'Tomasz Nowicki',text}}).hasViolation).toBe(true);
+});
+
+it.each([
+ ['pl',"Mówię: 'Wchodzę do sieni.'",'Tomasz wchodzi do sieni.'],
+ ['en',"I say: 'I enter the pharmacy.'",'Tomasz enters the pharmacy.'],
+ ['en','Do you think I enter the pharmacy?','Tomasz enters the pharmacy.'],
+] as const)('does not treat quoted or interrogative entry as a physical declaration: %s %s',(locale,text,response)=>{
+ expect(lintAgencyViolations(response,['Tomasz Nowicki'],{locale,declaredAction:{characterName:'Tomasz Nowicki',text}}).hasViolation).toBe(true);
+});
+
+describe('trailing location protocol parity after agency sanitization', () => {
+  const blockedProse = 'Deszcz bębni o dach. Constance zeskakuje z kozła, wyciąga apteczkę i bada rany woźnicy.';
+  it.each(['loc-prabuty-krypta', 'OFF_GRAPH | Telefon przy szosie'])('preserves exact PL and EN location tags: %s', reference => {
+    for (const tagName of ['LOKACJA', 'LOCATION']) {
+      const tag = `[${tagName}: ${reference}]`;
+      const raw = `${blockedProse}\n\n${tag}\n[AKTUALNY CZAS: 19 Października 1973, 03:00]`;
+      expect(lintAgencyViolations(raw, ['Constance'], {locale:'pl'}).hasViolation).toBe(true);
+      const sanitized = sanitizeAgencyViolations(raw, ['Constance'], {locale:'pl'});
+      expect(sanitized).not.toContain('zeskakuje z kozła');
+      expect(sanitized).toContain(tag);
+      expect(sanitized.split(tag)).toHaveLength(2);
+      expect(sanitized).toContain('[AKTUALNY CZAS: 19 Października 1973, 03:00]');
+    }
+  });
+
+  it('does not invent either location tag when the raw narration has none', () => {
+    const sanitized = sanitizeAgencyViolations(blockedProse, ['Constance'], {locale:'pl'});
+    expect(sanitized).not.toContain('zeskakuje z kozła');
+    expect(sanitized).not.toMatch(/\[(?:LOKACJA|LOCATION):/i);
+  });
+});

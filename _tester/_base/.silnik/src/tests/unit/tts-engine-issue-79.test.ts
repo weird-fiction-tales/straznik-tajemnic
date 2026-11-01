@@ -347,6 +347,7 @@ describe('Issue #79 - Silnik TTS, Kolejkowanie i Web Audio API', () => {
     });
 
     it('bezpiecznik 15 RPM (Decyzja 2A): po 429 z Retry-After > 10s agreguje zdania do granic akapitu', async () => {
+      const now = jest.spyOn(Date, 'now').mockReturnValue(100000);
       // Symulacja błędu 429 z Retry-After = 12s
       let callCount = 0;
       global.fetch = jest.fn().mockImplementation(() => {
@@ -406,7 +407,14 @@ describe('Issue #79 - Silnik TTS, Kolejkowanie i Web Audio API', () => {
         );
       });
 
+      expect(global.fetch).not.toHaveBeenCalled();
+      now.mockReturnValue(111999);
+      await act(async () => { result.current.addToQueue('Przed pełnym terminem blokady.', 'before-deadline', true); });
+      expect(global.fetch).not.toHaveBeenCalled();
+      now.mockReturnValue(112000);
+      await act(async () => { result.current.addToQueue('Po pełnym terminie blokady.', 'after-deadline', true); });
       expect(global.fetch).toHaveBeenCalledTimes(1);
+      now.mockRestore();
     });
 
     it('generationIdRef chroni przed odtworzeniem przerwanych zapytań (eliminacja zjawiska ducha lektora)', async () => {

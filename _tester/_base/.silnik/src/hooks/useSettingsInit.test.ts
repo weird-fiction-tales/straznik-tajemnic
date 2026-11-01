@@ -1,3 +1,6 @@
+import { waitFor } from '@testing-library/react';
+import { applyPreset } from '../lib/ai-presets/apply';
+import { defaultAISettings } from '../lib/ai-settings/defaults';
 import { renderHook, act, RenderHookResult } from '@testing-library/react';
 import { useSettingsInit, UseSettingsInitReturn, UseSettingsInitOptions } from './useSettingsInit';
 import * as aiSettingsModule from '@/lib/ai-settings';
@@ -98,5 +101,57 @@ describe('useSettingsInit', () => {
     });
     expect(aiSettingsModule.resetAISettings).toHaveBeenCalled();
     expect(hookResult.current.showResetConfirm).toBe(false);
+  });
+});
+
+describe('settings preset drift detection', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    const settings = applyPreset('mid', defaultAISettings);
+    settings.gameMasterNarration.prompts.mainPrompt =
+      'Synthetic test instructions';
+    localStorage.setItem('ai_settings', JSON.stringify(settings));
+    jest.mocked(aiSettingsModule.loadAISettings).mockReturnValue(
+      jest.requireActual<typeof aiSettingsModule>('@/lib/ai-settings').loadAISettings()
+    );
+  });
+
+  it('keeps MID after editing narration and sampling, but marks an edited model CUSTOM', async () => {
+    const { result } = renderHook(() =>
+      useSettingsInit({ open: true, onClose: jest.fn() })
+    );
+    await waitFor(() =>
+      expect(result.current.settings.qualityPreset).toBe('mid')
+    );
+    act(() =>
+      result.current.setSettings((current) => ({
+        ...current,
+        geminiSettings: { ...current.geminiSettings, temperature: 0.42 },
+        gameMasterNarration: {
+          ...current.gameMasterNarration,
+          style: { responseLength: 'short', detailLevel: 'minimal' },
+          behavior: {
+            ...current.gameMasterNarration.behavior,
+            creativity: 'creative',
+          },
+        },
+      }))
+    );
+    expect(result.current.settings.qualityPreset).toBe('mid');
+    expect(
+      result.current.settings.gameMasterNarration.style.responseLength
+    ).toBe('short');
+    act(() =>
+      result.current.setSettings((current) => ({
+        ...current,
+        geminiSettings: {
+          ...current.geminiSettings,
+          model: 'gemini-3.8-flash',
+        },
+      }))
+    );
+    await waitFor(() =>
+      expect(result.current.settings.qualityPreset).toBe('custom')
+    );
   });
 });

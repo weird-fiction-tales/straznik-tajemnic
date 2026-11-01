@@ -1,3 +1,4 @@
+import {getLocalizedSkillName} from '@/lib/data/character/skills';
 /**
  * Utility functions for Call of Cthulhu 7e dice rolling system
  */
@@ -138,8 +139,9 @@ const OUTCOME_LABELS: Record<
   fumble: { label: 'FUMBLE!', emoji: '💀', color: 'text-red-600' },
 };
 
-export function getOutcomeInfo(outcome: RollOutcome) {
-  return OUTCOME_LABELS[outcome];
+export function getOutcomeInfo(outcome: RollOutcome, locale: string = 'pl') {
+  const labels:Record<RollOutcome,string>={critical:'CRITICAL SUCCESS',extreme:'EXTREME SUCCESS',hard:'HARD SUCCESS',regular:'SUCCESS',fail:'FAILURE',fumble:'FUMBLE!'};
+  return locale==='en'?{...OUTCOME_LABELS[outcome],label:labels[outcome]}:OUTCOME_LABELS[outcome];
 }
 
 export function isSuccess(outcome: RollOutcome): boolean {
@@ -324,7 +326,19 @@ export function rollSkillCheck(
 /**
  * Format a dice roll for the chat message
  */
-export function formatRollForChat(roll: DiceRoll): string {
+export function formatRollForChat(roll: DiceRoll, locale: string = 'pl'): string {
+  if(locale==='en') {
+    if(roll.skillName && roll.targetValue!==undefined && roll.outcome){
+      const info=getOutcomeInfo(roll.outcome,'en');
+      const level=roll.requiredDifficulty?{regular:'Regular',hard:'Hard',extreme:'Extreme'}[roll.requiredDifficulty]:null;
+      const requirement=level&&roll.passedRequirement!==undefined?'\n'+level+' check: '+(roll.passedRequirement?'PASSED':'FAILED'):'';
+      const bonus=roll.bonusDice?' ['+Math.abs(roll.bonusDice)+(roll.bonusDice>0?' bonus dice]':' penalty dice]'):'';
+      return '[🎲 Test: '+getLocalizedSkillName(roll.skillName,'en')+' ('+roll.targetValue+'%)'+bonus+']\nResult: '+roll.total+' → '+info.emoji+' '+info.label+
+        '\nThresholds: Regular ≤'+roll.targetValue+' | Hard ≤'+Math.floor(roll.targetValue/2)+' | Extreme ≤'+Math.floor(roll.targetValue/5)+requirement+
+        '\n'+(roll.isManual?'(Manual roll)':'(Virtual roll)');
+    }
+    return '[🎲 Roll: '+(roll.diceFormula??roll.diceType)+'] Result: '+roll.total;
+  }
   if (roll.skillName && roll.targetValue !== undefined && roll.outcome) {
     const outcomeInfo = getOutcomeInfo(roll.outcome);
     const hardThreshold = Math.floor(roll.targetValue / 2);

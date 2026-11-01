@@ -2,6 +2,7 @@ import type { Character, EquipmentItem, EquipmentVisualEra } from '../types';
 import { extractEquipmentEvents } from '../parsers/equipment-parser';
 import { createEquipmentItem } from '../equipment-data';
 import { safeResolveVisualEra } from '../equipment-catalog';
+import type { EquipmentEvent } from '../parsers/types';
 
 export interface EquipmentNotification {
   type: 'use' | 'remove' | 'add';
@@ -52,14 +53,15 @@ export function applyEquipmentEventsToParty(
   activeCharacter: Character,
   rawText: string,
   onNotify?: (notification: EquipmentNotification) => void,
-  defaultEra: EquipmentVisualEra | string = '1920s'
+  defaultEra: EquipmentVisualEra | string = '1920s',
+  options?: { events?: EquipmentEvent[]; protectedItemIds?: Set<string> },
 ): {
   characters: Character[];
   activeCharacter: Character;
   changed: boolean;
   notifications: EquipmentNotification[];
 } {
-  const events = extractEquipmentEvents(rawText);
+  const events = options?.events ?? extractEquipmentEvents(rawText);
   if (events.length === 0) {
     return { characters, activeCharacter, changed: false, notifications: [] };
   }
@@ -87,9 +89,15 @@ export function applyEquipmentEventsToParty(
     if (!charInMap) continue;
 
     const currentEq = charInMap.equipment || [];
+    const itemIndex = () => {
+      if (event.itemId) return currentEq.findIndex(item => item.id === event.itemId);
+      const eligible = currentEq.filter(item => !options?.protectedItemIds?.has(item.id));
+      const index = findItemIndex(eligible, event.itemName);
+      return index < 0 ? -1 : currentEq.findIndex(item => item.id === eligible[index].id);
+    };
 
     if (event.action === 'use') {
-      const idx = findItemIndex(currentEq, event.itemName);
+      const idx = itemIndex();
       if (idx !== -1) {
         const item = currentEq[idx];
         const qtyToUse = event.quantity && event.quantity > 0 ? event.quantity : 1;
@@ -176,7 +184,7 @@ export function applyEquipmentEventsToParty(
         }
       }
     } else if (event.action === 'remove') {
-      const idx = findItemIndex(currentEq, event.itemName);
+      const idx = itemIndex();
       if (idx !== -1) {
         const item = currentEq[idx];
         charInMap.equipment = currentEq.filter((_, i) => i !== idx);

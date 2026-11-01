@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "supersededAssets": [
+    {
+      "file": "klin-report.png",
+      "sha256": "ff072826481fefa0c31e709fcf44a5d82c06421de37e1877a5808a27b946dc55",
+      "replacedBy": "klin-report-v2.png",
+      "reason": "The prior image contained text not present in the canonical handout."
+    },
+    {
+      "file": "recipe-152.png",
+      "sha256": "62de8150199483c3c7dd78c0cb0464b3639e6ed9d9061d99c243ac51db381f18",
+      "replacedBy": "recipe-152-v2.png",
+      "reason": "The prior image added unsupported effects and an altar-access requirement."
+    },
+    {
+      "file": "tape-zk140.png",
+      "sha256": "6c28d8f92b5fdc4aea081ceb72b91fdde5139f96632ef0b0364281f5eca073ef",
+      "replacedBy": "tape-zk140-v2.png",
+      "reason": "The prior cover is superseded by a period-accurate image without invented writing."
+    }
+  ]
+}

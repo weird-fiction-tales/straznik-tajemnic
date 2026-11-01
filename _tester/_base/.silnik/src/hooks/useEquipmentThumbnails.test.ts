@@ -104,6 +104,57 @@ describe('useEquipmentThumbnails', () => {
     });
   });
 
+  it.each([false, true])('naprawia obrazy PRL mimo pustego znacznika generated bez żądania API (generacja=%s)', async (enabled) => {
+    const savedCharacter = {
+      ...character,
+      equipment: [
+        { id: 'saved-flashlight', name: 'Latarka', category: 'tool', visualSource: 'generated' },
+        { id: 'saved-camera', name: 'Aparat fotograficzny', category: 'tool', visualSource: 'generated', imageUrl: '/equipment/predefined/tool.svg' },
+        { id: 'saved-compass', name: 'Kompas', category: 'tool', visualSource: 'fallback' },
+        { id: 'own-image', name: 'Latarka', category: 'tool', visualSource: 'generated', imageUrl: 'data:image/webp;base64,own' },
+      ],
+    } as Character;
+    let characters = [savedCharacter];
+    let activeCharacter: Character | null = savedCharacter;
+    const setCharacters = jest.fn((update) => { characters = update(characters); });
+    const setActiveCharacter = jest.fn((update) => { activeCharacter = update(activeCharacter); });
+    const { result } = renderHook(() => useEquipmentThumbnails({
+      activeCharacter: savedCharacter,
+      adventureContext: { yearRange: '1973-1974' } as AdventureContext,
+      imageGenerationEnabled: enabled,
+      setActiveCharacter,
+      setCharacters,
+    }));
+
+    await act(async () => { await result.current.generateThumbnailsInBackground(); });
+
+    expect(characters[0].equipment?.map(item => item.imageUrl)).toEqual([
+      '/equipment/catalog/police-flashlight-prl.webp',
+      '/equipment/catalog/camera-prl-1970s.webp',
+      '/equipment/catalog/compass-shared.webp',
+      'data:image/webp;base64,own',
+    ]);
+    expect(activeCharacter?.equipment).toEqual(characters[0].equipment);
+    expect(persistCharacters).toHaveBeenCalledWith(characters);
+    expect(fetchWithApiKeys).not.toHaveBeenCalled();
+  });
+
+  it('nie generuje zastępczego obrazu znanego materiału teczki bez ilustracji', async () => {
+    const dossierCharacter = {
+      ...character,
+      equipment: [{ id: 'dossier-photo', name: 'Fotografia', category: 'document', source: 'found',
+        dossierBinding: { adventureId: 'cien-nad-prabutami', editionFingerprint: 'sha256:edition', recordId: 'photo-item' } }],
+    } as Character;
+    const { result } = renderHook(() => useEquipmentThumbnails({
+      activeCharacter: dossierCharacter,
+      adventureContext: { yearRange: '1973-1974' } as AdventureContext,
+      imageGenerationEnabled: true,
+      setActiveCharacter: jest.fn(), setCharacters: jest.fn(),
+    }));
+    await act(async () => { await result.current.generateThumbnailsInBackground(); });
+    expect(fetchWithApiKeys).not.toHaveBeenCalled();
+  });
+
   it('wywołuje API generowania dla przedmiotu startowego bez lokalnego assetu w katalogu', async () => {
     const fallbackCharacter = {
       ...character,

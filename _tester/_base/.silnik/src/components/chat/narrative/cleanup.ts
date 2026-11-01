@@ -16,12 +16,17 @@
 // skrajne przypadki (samotny niezamknięty `[`).
 
 import { timeManager } from '@/lib/time-manager';
+import { stripIncompletePrivateMarkers } from '@/lib/parsers/text-cleaner';
+import { parseRevealedTags } from '@/core/memory/revealed-facts';
 
 export const NESTED_TAG_BODY = '(?:[^\\[\\]]|\\[[^\\]]*\\])*';
 
 export function cleanupContent(content: string): string {
   // Usuń prefiksy AI z początku tekstu (MG: Assistant:, GM:, itp.)
-  content = content.replace(/\[PRZEJŚCIE_AKTU\s*:[^\]]*(?:\]|$)/gi, '');
+  // Reuse the public-memory boundary before any private body can become a
+  // dialogue, handout or other visible section. Public protocol remains intact.
+  content = parseRevealedTags(stripIncompletePrivateMarkers(content)).text
+    .replace(/\[PRZEJŚCIE_AKTU\s*:[^\]]*(?:\]|$)/gi, '');
   let cleanContent = content
     .replace(
       /^(MG|GM|AI|Assistant|Mistrz Gry|Game Master):\s*(Assistant:\s*)?/gi,
@@ -50,9 +55,9 @@ export function cleanupContent(content: string): string {
     .replace(/\[TEST:[^\]]*\]/gi, '')
     .replace(/\[WYNIK:[^\]]*\]/gi, '')
     // GM Protocol tags - ukryte metadane, nie do wyświetlania.
-    // MYŚLI_MG/NASTRÓJ/CEL_NARRACYJNY niosą swobodny tekst, w który AI wplata
+    // (?:MYŚLI_MG|THOUGHTS)/NASTRÓJ/CEL_NARRACYJNY niosą swobodny tekst, w który AI wplata
     // audio-tagi - dlatego ciało odporne na zagnieżdżenie (NESTED_TAG_BODY).
-    .replace(new RegExp(`\\[MYŚLI_MG:${NESTED_TAG_BODY}\\]`, 'gi'), '')
+    .replace(new RegExp(`\\[(?:MYŚLI_MG|THOUGHTS):${NESTED_TAG_BODY}\\]`, 'gi'), '')
     .replace(new RegExp(`\\[NASTRÓJ:${NESTED_TAG_BODY}\\]`, 'gi'), '')
     .replace(new RegExp(`\\[CEL_NARRACYJNY:${NESTED_TAG_BODY}\\]`, 'gi'), '')
     .replace(/\[NPC:[^\]]*\]/gi, '')
@@ -117,7 +122,7 @@ export function cleanupContent(content: string): string {
     // PRASOWY"). Wymóg ':' tuż po słowie-kluczu chroni prozę ("Dziennik leżał na
     // biurku" - brak dwukropka - oraz tytuł gazety "Dziennik Polski" zostają).
     .replace(
-      /^\s*\[?(?:MYŚLI_MG|NASTRÓJ|CEL_NARRACYJNY|DZIENNIK|JOURNAL|MASKA_NPC|RETRO_ZIARNO|KORELACJA|ECHO_AKCJI|OBSERWACJA|OBSERVATION|SEKRETY_MG|KEEPER_SECRETS|LOKACJA|LOCATION|AKTUALNY CZAS|CURRENT TIME)\s*:[^\n]*$/gim,
+      /^\s*\[?(?:(?:MYŚLI_MG|THOUGHTS)|NASTRÓJ|CEL_NARRACYJNY|DZIENNIK|JOURNAL|MASKA_NPC|RETRO_ZIARNO|KORELACJA|ECHO_AKCJI|OBSERWACJA|OBSERVATION|SEKRETY_MG|KEEPER_SECRETS|LOKACJA|LOCATION|AKTUALNY CZAS|CURRENT TIME)\s*:[^\n]*$/gim,
       ''
     )
     // IND-165 - Audio tags TTS (Gemini Flash TTS): regex restrictive whitelist
@@ -125,9 +130,12 @@ export function cleanupContent(content: string): string {
     // NIE łapie legitimate `[Skill check: X]` ani `[handout: list]` bo nie pasują
     // do whitelisty pojedynczego lowercase słowa lub fraz typu "very fast".
     .replace(
-      /\[(?:whispers|trembling|panicked|serious|curious|sarcastic|tired|crying|amazed|excited|mischievously|sighs|gasp|giggles|laughs|shouting|very fast|very slow|sarcastically)\]/gi,
+      /\[\/?(?:whispers|trembling|panicked|serious|curious|sarcastic|tired|crying|amazed|excited|mischievously|sighs|gasp|giggles|laughs|shouting|very fast|very slow|sarcastically)\]/gi,
       ''
     )
+    // Pełny inline tag audio musi zniknąć przed wariantem bez nawiasów,
+    // który usuwa resztę linii i pozostawiał samotny `[` w narracji.
+    .replace(new RegExp(`\\[(?:SFX|DŹWIĘK|DZWIEK)\\s*:${NESTED_TAG_BODY}\\]`, 'gi'), '')
     // Usuń ukryte instrukcje MG i tagi techniczne (już wyciągnięte z {})
     .replace(
       /(?:INSTRUKCJA|GM|META|UKRYTE|HIDDEN|SFX|DŹWIĘK|DZWIEK|THINKING|SYSTEM|ACTION|AKCJA):[^\n]*/gi,
@@ -140,7 +148,7 @@ export function cleanupContent(content: string): string {
     // to domyka asymetrię display vs lektor. NESTED_TAG_BODY: też gdy halucynowany
     // tag ma w środku zagnieżdżony [...].
     .replace(
-      new RegExp(`\\[(?!(?:NOTATKA_BADACZA|STICKY_NOTE|INVESTIGATOR_NOTE|HANDOUT)\\b)[A-ZŁŚŻŹĆŃ_]{3,}\\s*:${NESTED_TAG_BODY}\\]`, 'g'),
+      new RegExp(`\\[(?!(?:NOTATKA_BADACZA|STICKY_NOTE|INVESTIGATOR_NOTE|HANDOUT|RZUT)\\b)[A-ZŁŚŻŹĆŃ_]{3,}\\s*:${NESTED_TAG_BODY}\\]`, 'g'),
       ''
     )
     .trim();

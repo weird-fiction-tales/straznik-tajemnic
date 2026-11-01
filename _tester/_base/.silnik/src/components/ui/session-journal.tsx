@@ -1,22 +1,42 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import '@/components/ui/deco-window.css';
+
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import {
+  ArrowLeft,
   BookOpen,
+  Clock,
   FileText,
   Home,
   MapPin,
-  Music,
+  Search,
   Users,
   X,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import type {
+  Character,
+  JournalEntry,
+  JournalEventType,
+  Message,
+} from '@/lib/types';
+import {
+  buildPublicJournal,
+  journalCardId,
+  markJournalCardRead,
+  type JournalCard,
+  type JournalCardKind,
+  type PublicJournal,
+} from '@/lib/journal/public-journal';
 import { cn } from '@/lib/utils';
-import { SafeImage } from '@/components/ui/safe-image';
-import type { JournalEntry, JournalEventType, Character, SceneCaseCard, ChronicleChapter } from '@/lib/types';
-import { normalizeEntityTitle } from '@/lib/journal/entity-visual-resolver';
-import { HAUNTING_HANDOUTS } from '@/lib/starter-haunting-data';
+import { SafeImage } from './safe-image';
+import { RuntimeDossierHandout } from '@/components/chat/narrative/runtime-dossier-handout';
+import type { DossierHandoutBinding } from '@/lib/adventure-dossier/local-handouts';
+import {
+  useJournalMaterialPreview,
+  useJournalPublishedImage,
+} from './journal-material-preview';
 
 export type JournalEntryType =
   | 'case'
@@ -28,7 +48,6 @@ export type JournalEntryType =
   | 'note'
   | 'scene'
   | 'act_report';
-
 export interface QuestObjective {
   id: string;
   description: string;
@@ -37,7 +56,6 @@ export interface QuestObjective {
   gameDay?: number;
   gameHour?: number;
 }
-
 export interface ExtendedJournalEntry extends Omit<
   JournalEntry,
   'type' | 'isBookmarked' | 'timestamp'
@@ -52,21 +70,6 @@ export interface ExtendedJournalEntry extends Omit<
   gameDay?: number;
   gameHour?: number;
 }
-
-export interface SessionJournalProps {
-  character: Character;
-  onUpdateCharacter?: (character: Character) => void;
-  onClose?: () => void;
-  currentInGameDate?: string;
-  sharedJournal?: JournalEntry[];
-  onUpdateSharedJournal?: (journal: JournalEntry[]) => void;
-  participantNames?: string[];
-  /** Callback cytowania poszlaki/tekstu do pola czatu (Quote-to-Input) */
-  onQuoteToInput?: (text: string) => void;
-  /** Szacunkowa całkowita liczba wskazówek w scenariuszu (Mechanika 1) */
-  totalCluesEstimated?: number;
-}
-
 export interface SealedScene {
   id: string;
   sceneNumber: number;
@@ -81,482 +84,682 @@ export interface SealedScene {
   chroniclePending?: boolean;
   nextStep?: string;
 }
-
-interface ReadingEntry {
-  chapter?: ChronicleChapter;
-  id: string;
-  title: string;
-  sceneNumber?: number;
-  location?: string;
-  inGameDate?: string;
-  timestamp?: string | Date;
-  people: string[];
-  findings: string[];
-  content: string;
-  pending: boolean;
-  legacy: boolean;
+export interface SessionJournalProps {
+  character: Character;
+  model?: PublicJournal;
+  onReadCard?: (card: JournalCard) => void;
+  onUpdateCharacter?: (character: Character) => void;
+  onClose?: () => void;
+  currentInGameDate?: string;
+  sharedJournal?: JournalEntry[];
+  onUpdateSharedJournal?: (journal: JournalEntry[]) => void;
+  participantNames?: string[];
+  messages?: Message[];
+  dossierHandoutBinding?: DossierHandoutBinding;
+  onQuoteToInput?: (text: string) => void;
+  totalCluesEstimated?: number;
 }
-
-type JournalSectionId = 'overview' | 'chronicle' | 'people' | 'places' | 'materials' | 'audio';
-
-function ArchiveHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
-  return <>
-    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{eyebrow} <span className="px-1 text-brass">／</span></p>
-    <h2 className="deco-separator mt-2 font-display-decorative text-2xl font-black uppercase tracking-[0.1em] text-foreground md:text-3xl">{title}</h2>
-    <p className="mb-6 mt-3 max-w-3xl font-serif text-lg leading-7 text-muted-foreground">{description}</p>
-  </>;
+type Section = 'scene' | JournalCardKind;
+interface ReaderPage {
+  section: Section;
+  cardId?: string;
+  sourceIndex?: number;
+  scrollTop?: number;
+  returnFocus?: string;
+  query?: string;
 }
+const icons = {
+  scene: Home,
+  person: Users,
+  place: MapPin,
+  event: Clock,
+  finding: BookOpen,
+  material: FileText,
+};
+const sectionKeys = {
+  scene: 'currentScene',
+  person: 'sectionPeople',
+  place: 'sectionPlaces',
+  event: 'sectionEvents',
+  finding: 'sectionFindings',
+  material: 'sectionMaterials',
+} as const;
+const fold = (text: string) =>
+  text
+    .toLocaleLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ł/g, 'l');
+const focusClass =
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
+const actionClass = `min-h-11 border border-brass/40 px-4 py-2 text-left text-base text-foreground hover:bg-brass/10 ${focusClass}`;
 
-function ArchiveEmpty({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
-  return <div className="flex min-h-52 flex-col items-center justify-center border border-dashed border-brass/30 bg-[#16130f]/70 p-8 text-center">
-    <Icon aria-hidden="true" className="mb-4 h-8 w-8 text-brass/60" />
-    <p className="max-w-md font-serif text-base leading-6 text-muted-foreground">{text}</p>
-  </div>;
+function CardArt({
+  card,
+  large = false,
+}: {
+  card: JournalCard;
+  large?: boolean;
+}) {
+  const materialImage = useJournalMaterialPreview(card.material);
+  const publishedImage = useJournalPublishedImage(card.imageCacheKey);
+  const Icon = icons[card.kind];
+  const image = card.imageUrl || publishedImage || materialImage;
+  if (!image) return (
+    <div data-testid="journal-card-symbol" aria-hidden="true" className={cn('flex items-center px-5 pt-5 text-brass/70', large && 'px-0 pt-0')}>
+      <Icon className="h-8 w-8" />
+    </div>
+  );
+  return (
+    <div
+      data-testid="journal-card-art"
+      className={cn(
+        'flex aspect-[4/3] w-full items-center justify-center overflow-hidden border-b border-brass/30 bg-brass/5',
+        large && 'max-h-80 border border-brass/30'
+      )}
+    >
+      <SafeImage src={image} alt={card.title} className="h-full w-full object-contain" />
+    </div>
+  );
 }
 
 export function SessionJournal({
   character,
+  model: suppliedModel,
+  onReadCard,
+  onUpdateCharacter,
   onClose,
-  currentInGameDate,
-  sharedJournal,
-  participantNames = [],
+  messages = [],
+  dossierHandoutBinding,
 }: SessionJournalProps) {
   const t = useTranslations('SessionJournal');
   const locale = useLocale() === 'en' ? 'en' : 'pl';
+  const model = useMemo(
+    () =>
+      suppliedModel ??
+      buildPublicJournal({
+        characters: [character],
+        chapter: character.chronicleSession,
+        binding: dossierHandoutBinding,
+        messages,
+        locale,
+      }),
+    [suppliedModel, character, dossierHandoutBinding, messages, locale]
+  );
+  const [page, setPage] = useState<ReaderPage>({ section: 'scene' });
+  const [history, setHistory] = useState<ReaderPage[]>([]);
+  const [query, setQuery] = useState('');
+  const [localReads, setLocalReads] = useState<Record<string, string>>({});
   const dialogRef = useRef<HTMLDivElement>(null);
+  const readerRef = useRef<HTMLElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(
+    typeof document === 'undefined'
+      ? null
+      : (document.activeElement as HTMLElement)
+  );
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  const readerRef = useRef<HTMLElement>(null);
-  const articleRefs = useRef(new Map<string, HTMLElement>());
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<JournalSectionId>('overview');
-
-  const entries = useMemo<ReadingEntry[]>(() => {
-    const map = new Map<string, ReadingEntry>();
-    const addScene = (scene: SceneCaseCard) => {
-      if (scene.isSealed === false) return;
-      const summary = scene.chronicleSummaryByLocale?.[locale];
-      const content = typeof summary === 'string' ? summary.trim() : '';
-      const existing = map.get(scene.id);
-      if (existing) {
-        if (!content) return;
-        if (!existing.pending && !existing.legacy) {
-          const existingTime = existing.timestamp ? new Date(existing.timestamp).getTime() : NaN;
-          const candidateTime = new Date(scene.timestamp).getTime();
-          if (!Number.isFinite(candidateTime) || !Number.isFinite(existingTime) || candidateTime <= existingTime) return;
+  const go = (next: ReaderPage) => {
+    setHistory((previous) => [
+      ...previous,
+      {
+        ...page,
+        query,
+        scrollTop: readerRef.current?.scrollTop ?? 0,
+        returnFocus: (document.activeElement as HTMLElement | null)?.dataset
+          .navId,
+      },
+    ]);
+    setPage(next);
+  };
+  const back = () => {
+    const previous = history.at(-1);
+    if (previous) {
+      setHistory(history.slice(0, -1));
+      setQuery(previous.query ?? '');
+      setPage(previous);
+    }
+  };
+  const navigationRef = useRef({ back, history, page });
+  navigationRef.current = { back, history, page };
+  useEffect(() => {
+    const trigger = triggerRef.current;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialogRef.current?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        document.activeElement?.closest('[role="dialog"]') !== dialogRef.current
+      )
+        return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (
+          navigationRef.current.page.cardId &&
+          navigationRef.current.history.length
+        )
+          navigationRef.current.back();
+        else closeRef.current?.();
+      }
+      if (event.key === 'Tab') {
+        const targets = [
+          ...(dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input, a[href], audio[controls], [tabindex="0"]'
+          ) ?? []),
+        ];
+        const first = targets[0];
+        const last = targets.at(-1);
+        const outsideTabOrder = !targets.includes(
+          document.activeElement as HTMLElement
+        );
+        if (
+          event.shiftKey &&
+          (document.activeElement === first || outsideTabOrder)
+        ) {
+          event.preventDefault();
+          last?.focus();
+        } else if (
+          !event.shiftKey &&
+          (document.activeElement === last || outsideTabOrder)
+        ) {
+          event.preventDefault();
+          first?.focus();
         }
       }
-      const pending = Boolean(scene.endMessageId) && scene.chronicleBoundaryKnown !== false && !content;
-      map.set(scene.id, {
-        chapter: scene.chronicleChapter,
-        id: scene.id,
-        title: scene.title || scene.location || t('sceneNumber', { number: scene.sceneNumber }),
-        sceneNumber: scene.sceneNumber,
-        location: scene.location,
-        inGameDate: scene.inGameDate,
-        timestamp: scene.timestamp,
-        people: Array.isArray(scene.people) ? scene.people : [],
-        findings: !pending && !content && Array.isArray(scene.findings) ? scene.findings : [],
-        content: content || (!pending && Array.isArray(scene.keyTakeaways) ? scene.keyTakeaways.join('\n') : ''),
-        pending,
-        legacy: !content && !pending,
-      });
     };
-    // Shared entries may contain a later recap than a character's snapshot.
-    const journal = sharedJournal ?? character.journal ?? [];
-    journal.forEach((entry) => { if (entry.sceneData) addScene(entry.sceneData); });
-    (character.sceneCards ?? []).forEach(addScene);
-    journal.forEach((entry) => {
-      if (entry.sceneData || entry.type === 'act_report' || map.has(entry.id)) return;
-      const content = entry.type === 'location'
-        ? (entry.content ?? '').split(/(?<=[.!?])\s+|\n+/).filter((fragment) => !/^\s*(?:subjective first-person camera POV|first-person camera POV|archival noir photography|35mm film photograph|octane render|unreal engine render|cinematic lighting)\b/i.test(fragment)).join('\n\n').trim()
-        : entry.content?.trim();
-      if (!content) return;
-      map.set(entry.id, {
-        chapter: entry.chronicleChapter,
-        id: entry.id, title: entry.title, inGameDate: entry.inGameDate,
-        timestamp: entry.timestamp,
-        location: entry.metadata?.locationName,
-        people: entry.metadata?.npcName ? [entry.metadata.npcName] : [],
-        findings: [], content, pending: false, legacy: true,
-      });
-    });
-    return Array.from(map.values()).sort((a, b) => {
-      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : NaN;
-      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : NaN;
-      if (Number.isFinite(timeA) && Number.isFinite(timeB) && timeA !== timeB) return timeB - timeA;
-      return (b.sceneNumber ?? 0) - (a.sceneNumber ?? 0);
-    });
-  }, [character.sceneCards, character.journal, sharedJournal, locale, t]);
-
-  const sections = useMemo(() => {
-    const result: Array<{ key: string; chapter?: ChronicleChapter; entries: ReadingEntry[] }> = [];
-    for (const entry of entries) {
-      const chapter = entry.chapter;
-      const key = chapter ? `${chapter.playthroughId}:${chapter.adventureId}:${chapter.sessionId}` : 'legacy';
-      const last = result[result.length - 1];
-      if (last?.key === key) last.entries.push(entry);
-      else result.push({ key, chapter, entries: [entry] });
-    }
-    return result;
-  }, [entries]);
-
-  const dossier = character.investigatorDossier;
-  const knownClues = (dossier?.clues ?? []).filter((clue) => clue.discoveryStatus !== 'unrevealed' && clue.epistemicLayer !== 'keeper_truth');
-  const equipment = character.equipment ?? [];
-  const currentAdventure = sections.find((section) => section.chapter?.adventureTitle)?.chapter?.adventureTitle;
-  const hauntingContext = /haunting|nawiedzon|corbitt|case-s11-01/i.test(
-    [dossier?.adventureId, ...sections.map((section) => `${section.chapter?.adventureId ?? ''} ${section.chapter?.adventureTitle ?? ''}`)].join(' ')
-  );
-  const clueImage = (clueId: string, imageUrl?: string) => {
-    if (imageUrl) return imageUrl;
-    if (!hauntingContext) return undefined;
-    return HAUNTING_HANDOUTS.find((handout) => handout.slug.toLowerCase() === clueId.toLowerCase())?.image;
-  };
-  // Prepared scenario casts are not proof that the party has met someone.
-  const knownPeople = (dossier?.npcs ?? []).filter((person) => Boolean(
-    person.sourceJournalEntryId || person.timestamp || entries.some((entry) =>
-      entry.people.some((name) => normalizeEntityTitle(name) === normalizeEntityTitle(person.name)))
-  ));
-  const knownPlaces = (dossier?.locations ?? []).filter((place) => place.searchStatus !== 'unvisited');
-  const foundItems = equipment.filter((item) => (item.isStoryItem || item.source === 'found' || item.acquiredFrom === 'found') &&
-    !knownClues.some((clue) => clue.id === item.id || normalizeEntityTitle(clue.title) === normalizeEntityTitle(item.name)));
-  const materials = [
-    ...knownClues.map((clue) => {
-      const item = equipment.find((candidate) => candidate.id === clue.id ||
-        normalizeEntityTitle(candidate.name) === normalizeEntityTitle(clue.title));
-      return {
-        id: clue.id,
-        title: clue.title,
-        description: item?.readableContent || clue.description,
-        kind: clue.category,
-        source: [clue.sourceNpc, clue.foundLocation].filter(Boolean).join(' · ') || undefined,
-        imageUrl: clueImage(clue.id, clue.imageUrl) || item?.imageUrl,
-      };
-    }),
-    ...foundItems.map((item) => ({
-      id: item.id,
-      title: item.name,
-      description: item.readableContent || item.description || '',
-      kind: item.category,
-      source: item.acquiredFrom === 'found' || item.source === 'found' ? t('foundAtLocation') : undefined,
-      imageUrl: item.imageUrl,
-    })),
-  ];
-  const recordingsFromEquipment = equipment.filter((item) => Boolean(item.audioUrl)).map((item) => ({
-    id: item.id,
-    title: item.name,
-    description: item.readableContent || item.description || '',
-    audioUrl: item.audioUrl!,
-    imageUrl: item.imageUrl,
-    source: item.acquiredFrom === 'found' || item.source === 'found' ? t('foundAtLocation') : undefined,
-  }));
-  const recordings = recordingsFromEquipment;
-
-  const locationImage = (locationId: string, imageUrl?: string) => {
-    if (imageUrl) return imageUrl;
-    const location = knownPlaces.find((place) => place.id === locationId);
-    if (!location) return undefined;
-    const relatedClues = knownClues.filter((clue) =>
-      location.discoveredClueIds?.includes(clue.id) ||
-      clue.foundLocationId === location.id ||
-      (clue.foundLocation && clue.foundLocation.toLocaleLowerCase() === location.name.toLocaleLowerCase())
-    );
-    const clueArt = relatedClues.map((clue) => clueImage(clue.id, clue.imageUrl)).find(Boolean);
-    if (clueArt) return clueArt;
-    const relatedPerson = knownPeople.find((person) => person.avatarUrl && (location.npcIds?.includes(person.id) || person.locationId === location.id));
-    if (relatedPerson?.avatarUrl) return relatedPerson.avatarUrl;
-    return undefined;
-  };
-
-  const archiveHasContent = entries.length > 0 || knownPeople.length > 0 || knownPlaces.length > 0 || materials.length > 0 || recordings.length > 0;
-
-  const latestId = entries[0]?.id;
-  useEffect(() => { readerRef.current?.scrollTo?.({ top: 0 }); }, [activeSection]);
-  useEffect(() => {
-    if (activeSection !== 'chronicle' || !selectedId) return;
-    const article = articleRefs.current.get(selectedId);
-    article?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-    article?.focus({ preventScroll: true });
-  }, [activeSection, selectedId]);
-
-  useEffect(() => {
-    const previouslyFocused = document.activeElement;
-    dialogRef.current?.focus({ preventScroll: true });
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeRef.current?.();
-      if (event.key !== 'Tab') return;
-      const buttons = dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), summary, audio[controls], a[href], [tabindex="0"]');
-      if (!buttons?.length) return;
-      const first = buttons[0];
-      const last = buttons[buttons.length - 1];
-      const active = document.activeElement;
-      if (event.shiftKey && (active === first || active === dialogRef.current || active?.tagName === 'ARTICLE')) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || active?.tagName === 'ARTICLE')) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('keydown', keydown);
     return () => {
-      window.removeEventListener('keydown', closeOnEscape);
-      if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus({ preventScroll: true });
+      document.removeEventListener('keydown', keydown);
+      document.body.style.overflow = overflow;
+      trigger?.focus({ preventScroll: true });
     };
   }, []);
-
-  const navigate = (id: string) => {
-    setSelectedId(id);
-    setActiveSection('chronicle');
-    articleRefs.current.get(id)?.focus({ preventScroll: true });
+  useLayoutEffect(() => {
+    if (readerRef.current) readerRef.current.scrollTop = page.scrollTop ?? 0;
+    const target =
+      page.returnFocus &&
+      [
+        ...(dialogRef.current?.querySelectorAll<HTMLElement>('[data-nav-id]') ??
+          []),
+      ].find((el) => el.dataset.navId === page.returnFocus);
+    if (target) target.focus({ preventScroll: true });
+    else titleRef.current?.focus({ preventScroll: true });
+  }, [page]);
+  const card = model.cards.find((item) => item.id === page.cardId);
+  const source =
+    page.sourceIndex !== undefined
+      ? card?.sources[page.sourceIndex]
+      : undefined;
+  const sourceMaterial = source?.materialId
+    ? model.cards.find((item) => item.material?.recordId === source.materialId)
+    : undefined;
+  const name = (item: JournalCard) => item.title || t('untitledMaterial');
+  const sourceName = (item: JournalCard, index: number) => {
+    const origin = item.sources[index];
+    const material = origin?.materialId && model.cards.find(candidate => candidate.material?.recordId === origin.materialId);
+    return origin?.witness || (material ? name(material) : undefined) ||
+      (item.learnedIn ? t('sourceFromScene', { name: item.learnedIn }) : t('playSource'));
   };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-0 backdrop-blur-sm md:p-6">
-    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="journal-reader-title"
-      data-testid="session-journal"
-      className="deco-corners relative flex h-full w-full flex-col overflow-hidden border border-brass/40 bg-gradient-to-br from-[#14110c] to-[#0a0c0f] font-sans text-foreground shadow-[0_30px_90px_rgba(0,0,0,.6)] md:h-[92vh] md:max-h-[1100px] md:max-w-[1360px]">
-      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-brass/30 bg-brass/5 px-5 py-4 text-foreground md:px-7 md:py-5">
-        <div className="min-w-0">
-          <p className="mb-1 font-special-elite text-xs font-semibold uppercase tracking-[0.18em] text-brass">{currentAdventure || t('caseFolderHeading')}</p>
-          <h1 id="journal-reader-title" className="deco-separator flex items-center gap-3 font-display-decorative text-xl font-black uppercase tracking-[0.12em] md:text-2xl">
-            <span aria-hidden="true" className="h-2 w-2 shrink-0 rotate-45 border border-brass bg-brass/40" />{t('caseFileTitle')}<span aria-hidden="true" className="h-2 w-2 shrink-0 rotate-45 border border-brass bg-brass/40" />
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {sharedJournal !== undefined && participantNames.length > 0
-              ? t('readerParty', { names: participantNames.join(', ') })
-              : t('readerInvestigator', { name: character.name })}
-            {currentInGameDate ? <span className="ml-3">{currentInGameDate}</span> : null}
-          </p>
-        </div>
-        {onClose && <button type="button" onClick={onClose} aria-label={t('closeAriaLabel')}
-          className="flex h-10 w-10 shrink-0 items-center justify-center border border-brass/40 text-foreground hover:bg-brass/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
-          <X aria-hidden="true" className="h-5 w-5" />
-        </button>}
-      </header>
-
-      {!archiveHasContent ? (
-        <main className="flex flex-1 items-center justify-center overflow-auto p-8">
-          <div className="max-w-lg text-center">
-            <BookOpen aria-hidden="true" className="mx-auto mb-5 h-10 w-10 text-brass/60" />
-            <h2 className="text-xl font-semibold">{t('readerEmptyTitle')}</h2>
-            <p className="mt-4 text-lg leading-8 text-muted-foreground">{t('readerEmptyDescription')}</p>
-            {character.activeScene?.location && <p className="mt-6 font-serif text-sm">{t('readerCurrentLocation', { location: character.activeScene.location })}</p>}
-          </div>
-        </main>
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          <nav aria-label={t('readerContents')} data-testid="journal-contents"
-            className="min-w-0 shrink-0 border-b border-brass/30 bg-[#16130f] md:w-60 md:overflow-y-auto md:border-b-0 md:border-r lg:w-64">
-            <div className="hidden border-b border-brass/30 px-5 py-5 md:block">
-              <p className="font-special-elite text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t('caseFolderHeading')}</p>
-              <h2 className="mt-2 font-display text-xl font-semibold text-foreground">{currentAdventure || t('caseFileDefault')}</h2>
-              {currentInGameDate && <p className="mt-1 text-xs text-muted-foreground">{currentInGameDate}</p>}
-            </div>
-            <div className="flex gap-1 overflow-x-auto p-2 md:flex-col md:gap-1 md:p-3">
-              {([
-                ['overview', Home, t('sectionOverview'), null],
-                ['chronicle', BookOpen, t('readerTitle'), entries.length],
-                ['people', Users, t('sectionPeople'), knownPeople.length],
-                ['places', MapPin, t('sectionPlaces'), knownPlaces.length],
-                ['materials', FileText, t('sectionMaterials'), materials.length],
-                ['audio', Music, t('sectionAudio'), recordings.length],
-              ] as const).map(([id, Icon, label, count]) => (
-                <button key={id} type="button" onClick={() => setActiveSection(id)}
-                  aria-current={activeSection === id ? 'page' : undefined}
-                  className={cn('flex shrink-0 items-center gap-3 border border-transparent px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-brass/5 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary md:w-full',
-                    activeSection === id && 'border-primary/50 bg-primary/10 text-foreground border-l-2 border-l-primary')}>
-                  <Icon aria-hidden="true" className={cn("h-4 w-4 shrink-0 text-brass", activeSection === id && "text-primary")} />
-                  <span className="whitespace-nowrap">{label}</span>
-                  {count !== null && <span className="ml-auto hidden text-xs text-muted-foreground sm:inline md:inline">{String(count).padStart(2, '0')}</span>}
-                </button>
-              ))}
-            </div>
-            {activeSection === 'chronicle' && sections.length > 0 && (
-              <div className="max-h-28 overflow-y-auto border-t border-brass/30 px-3 py-3 md:max-h-none md:overflow-visible">
-                <p className="px-2 pb-2 font-special-elite text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t('readerContents')}</p>
-                <ol className="space-y-1">
-                  {sections.flatMap((section) => section.entries).map((entry) => (
-                    <li key={entry.id}>
-                      <button type="button" onClick={() => navigate(entry.id)}
-                        aria-current={(selectedId ?? latestId) === entry.id ? 'location' : undefined}
-                        className={cn('w-full border border-transparent px-3 py-2 text-left text-sm text-muted-foreground hover:bg-brass/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
-                          (selectedId ?? latestId) === entry.id && 'border-primary/50 bg-primary/10 text-foreground')}>
-                        <span className="block text-xs uppercase tracking-wider text-muted-foreground">{entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : t('readerEarlierEntry')}</span>
-                        <span className="mt-1 block leading-5">{entry.title}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-            <p className="hidden border-t border-brass/30 px-5 py-4 font-serif text-sm italic leading-5 text-muted-foreground md:block">{t('caseFileNote')}</p>
-          </nav>
-
-          <main ref={readerRef} data-testid="journal-reader" aria-label={t('readerTitle')}
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto scroll-smooth bg-transparent text-foreground">
-            <div className="mx-auto max-w-[1160px] px-5 py-6 md:px-8 md:py-8">
-              {activeSection === 'overview' && (
-                <section aria-labelledby="journal-overview-title" data-testid="journal-overview">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('caseFolderHeading')}</p>
-                  <h2 id="journal-overview-title" className="deco-separator mt-2 font-display-decorative text-2xl font-black uppercase tracking-[0.1em] text-foreground md:text-3xl">{currentAdventure || t('caseFileDefault')}</h2>
-                  <p className="mt-3 max-w-3xl font-serif text-lg leading-7 text-muted-foreground">{t('readerIntroduction')}</p>
-                  <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    {[
-                      [BookOpen, entries.length, t('readerTitle')],
-                      [Users, knownPeople.length, t('sectionPeople')],
-                      [MapPin, knownPlaces.length, t('sectionPlaces')],
-                      [FileText, materials.length, t('sectionMaterials')],
-                    ].map(([Icon, count, label], index) => {
-                      const CountIcon = Icon as typeof BookOpen;
-                      return <div key={String(index)} className="border border-brass/30 bg-[#16130f]/90 p-4">
-                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.13em] text-muted-foreground"><CountIcon aria-hidden="true" className="h-4 w-4 text-brass" />{String(label)}</div>
-                        <div className="mt-2 font-serif text-3xl text-brass">{String(count).padStart(2, '0')}</div>
-                      </div>;
-                    })}
-                  </div>
-                  {character.activeScene?.location && <div className="mt-6 border-l-2 border-primary bg-primary/5 px-5 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass">{t('readerCurrentLocation', { location: character.activeScene.location })}</p>
-                    <p className="mt-2 font-serif text-base leading-6 text-foreground">{t('readerCurrentDescription')}</p>
-                  </div>}
-                  <div className="mt-8 flex items-center justify-between border-b border-brass/30 pb-3">
-                    <h3 className="font-display text-sm font-semibold uppercase tracking-[0.1em] text-foreground">{t('recentChronicle')}</h3>
-                    {entries.length > 3 && <button type="button" onClick={() => setActiveSection('chronicle')} className="text-xs text-primary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{t('openChronicle')}</button>}
-                  </div>
-                  {entries.length > 0 ? <div className="mt-3 space-y-2">
-                    {entries.slice(0, 3).map((entry) => <button key={entry.id} type="button" onClick={() => { setActiveSection('chronicle'); navigate(entry.id); }} className="block w-full border border-brass/30 bg-[#16130f] px-4 py-3 text-left hover:border-brass/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
-                      <span className="block font-serif text-lg text-foreground">{entry.title}</span>
-                      <span className="mt-1 block line-clamp-2 text-sm leading-5 text-muted-foreground">{entry.content || (entry.pending ? t('chroniclePending') : t('readerNoRecord'))}</span>
-                    </button>)}
-                  </div> : <p className="mt-3 font-serif text-base text-muted-foreground">{t('emptyChronicle')}</p>}
-                </section>
-              )}
-
-              {activeSection === 'chronicle' && <section aria-label={t('readerTitle')}>
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('caseFolderHeading')} <span className="px-1 text-brass">／</span> {t('readerTitle')}</p>
-                <h2 className="deco-separator mt-2 font-display-decorative text-2xl font-black uppercase tracking-[0.1em] text-foreground md:text-3xl">{t('chronicleHeading')}</h2>
-                <p className="mb-8 mt-3 max-w-3xl font-serif text-lg leading-7 text-muted-foreground">{t('readerIntroduction')}</p>
-                {sections.length > 0 ? sections.map((section, sectionIndex) => (
-                  <section key={`${section.key}-${sectionIndex}`} data-testid="journal-chapter" className="mb-8">
-                    {(sectionIndex === 0 || section.chapter?.adventureId !== sections[sectionIndex - 1].chapter?.adventureId || section.chapter?.playthroughId !== sections[sectionIndex - 1].chapter?.playthroughId) &&
-                      <h3 className="mb-3 font-display text-2xl font-semibold leading-snug text-foreground">{section.chapter?.adventureTitle || (section.chapter ? t('readerAdventure') : t('readerEarlierEntry'))}</h3>}
-                    {section.chapter && <h4 data-testid="journal-session-header" className="mb-6 border-b border-brass/30 pb-3 text-sm font-semibold text-muted-foreground">{t('readerSession', { number: section.chapter.sessionNumber })}</h4>}
-                    {section.entries.map((entry) => (
-                      <article key={entry.id} tabIndex={-1} data-testid="journal-entry"
-                        ref={(element) => { if (element) articleRefs.current.set(entry.id, element); else articleRefs.current.delete(entry.id); }}
-                        aria-labelledby={`journal-entry-${encodeURIComponent(entry.id)}`}
-                        className="mb-7 scroll-mt-6 border-b border-brass/30 pb-7 outline-none last:mb-0 focus-visible:ring-1 focus-visible:ring-primary/40">
-                        {(entry.sceneNumber !== undefined || entry.inGameDate) && <p className="mb-2 text-sm font-medium text-muted-foreground">
-                          {entry.sceneNumber !== undefined ? t('sceneNumber', { number: entry.sceneNumber }) : null}
-                          {entry.inGameDate && <span className="ml-3 normal-case tracking-normal text-muted-foreground">{entry.inGameDate}</span>}
-                        </p>}
-                        <h4 id={`journal-entry-${encodeURIComponent(entry.id)}`} className="font-display text-2xl font-semibold leading-snug text-foreground">{entry.title}</h4>
-                        {entry.location && entry.location !== entry.title && <p className="mt-2 text-base text-muted-foreground">{entry.location}</p>}
-                        {entry.people.length > 0 && <p className="mt-3 text-base leading-7 text-muted-foreground">
-                          <span className="font-medium text-foreground">{t('readerPeople')}: </span>{entry.people.join(', ')}
-                        </p>}
-                        {entry.pending ? <p className="mt-4 font-serif text-lg italic leading-8 text-muted-foreground">{t('chroniclePending')}</p>
-                          : <div data-testid={entry.legacy ? 'journal-legacy-record' : 'scene-chronicle-summary'} className="mt-4 whitespace-pre-line font-serif text-lg leading-8 text-foreground">
-                            {entry.content || t('readerNoRecord')}
-                          </div>}
-                        {entry.findings.length > 0 && <p className="mt-4 text-base leading-7 text-muted-foreground">
-                          <span className="font-medium text-foreground">{t('readerFindings')}: </span>{entry.findings.join(', ')}
-                        </p>}
-                      </article>
-                    ))}
-                  </section>
-                )) : <p className="font-serif text-lg text-muted-foreground">{t('emptyChronicle')}</p>}
-                {character.activeScene?.location && <section data-testid="journal-current-scene" className="mt-7 border border-brass/30 bg-brass/5 p-5 text-base leading-7 text-muted-foreground">
-                  <h3 className="mb-2 font-display text-lg font-semibold text-foreground">{t('readerCurrentLocation', { location: character.activeScene.location })}</h3>
-                  <p>{t('readerCurrentDescription')}</p>
-                </section>}
-              </section>}
-
-              {activeSection === 'people' && <section aria-label={t('sectionPeople')}>
-                <ArchiveHeading eyebrow={t('caseFolderHeading')} title={t('sectionPeopleTitle')} description={t('peopleDescription')} />
-                {knownPeople.length > 0 ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {knownPeople.map((person) => {
-                    const portrait = person.avatarUrl;
-                    const source = (sharedJournal ?? character.journal ?? []).find((entry) => entry.id === person.sourceJournalEntryId)?.title;
-                    return <article key={person.id} className="overflow-hidden border border-brass/30 bg-[#16130f]">
-                      <div className="deco-corners relative flex h-40 justify-center overflow-hidden border-b border-brass/30 bg-gradient-to-b from-[#1a160f] to-[#0c0d0a] p-2">
-                        {portrait ? <SafeImage src={portrait} alt={t('portraitAlt', { name: person.name })} className="h-full w-auto max-w-full object-contain object-center sepia-[0.12]" /> : <Users aria-hidden="true" className="my-auto h-8 w-8 text-brass/50" />}
-                      </div>
-                      <div className="p-4">
-                        <p className="font-special-elite text-xs font-semibold uppercase tracking-[0.13em] text-brass">{person.occupation || t('sectionPeople')}</p>
-                        <h3 className="mt-1 font-display text-xl font-semibold text-foreground">{person.name}</h3>
-                        {[...new Set([person.firstImpression, person.keyInformation, person.notes].filter((text) =>
-                          text && !/\[SEKRET MG\]|Sekret MG:|Statystyki:/i.test(text) &&
-                          ![person.secret, person.psychologicalAgenda].some((secret) => secret && secret !== '[SEKRET MG]' && text.includes(secret))
-                        ))].map((text) => <p key={text} className="mt-2 whitespace-pre-line font-serif text-base leading-6 text-foreground">{text}</p>)}
-                        {source && <p className="mt-3 text-xs text-muted-foreground">{t('sourceLabel')}: {source}</p>}
-                      </div>
-                    </article>;
-                  })}
-                </div> : <ArchiveEmpty icon={Users} text={t('emptyPeople')} />}
-              </section>}
-
-              {activeSection === 'places' && <section aria-label={t('sectionPlaces')}>
-                <ArchiveHeading eyebrow={t('caseFolderHeading')} title={t('sectionPlacesTitle')} description={t('placesDescription')} />
-                {knownPlaces.length > 0 ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {knownPlaces.map((place) => {
-                    const artwork = locationImage(place.id, place.imageUrl);
-                    const relatedTitles = knownClues.filter((clue) => place.discoveredClueIds?.includes(clue.id) || clue.foundLocationId === place.id || clue.foundLocation?.toLocaleLowerCase() === place.name.toLocaleLowerCase()).map((clue) => clue.title);
-                    return <article key={place.id} className="overflow-hidden border border-brass/30 bg-[#16130f]">
-                      <div className="relative flex h-36 items-center justify-center overflow-hidden border-b border-brass/40 bg-gradient-to-b from-[#1a160f] to-[#0c0d0a]">
-                        {artwork ? <SafeImage src={artwork} alt={t('relatedPlaceImageAlt', { name: place.name })} className="h-full w-full object-cover sepia-[0.16]" /> : <MapPin aria-hidden="true" className="h-8 w-8 text-brass" />}
-                        <span className="absolute bottom-0 left-[5%] h-px w-[90%] bg-brass/40" />
-                      </div>
-                      <div className="p-4">
-                        <p className="font-special-elite text-xs font-semibold uppercase tracking-[0.13em] text-brass">{place.addressOrRegion || t('sectionPlaces')}</p>
-                        <h3 className="mt-1 font-display text-xl font-semibold text-foreground">{place.name}</h3>
-                        {place.description && <p className="mt-2 font-serif text-base leading-6 text-foreground">{place.description}</p>}
-                        {relatedTitles.length > 0 && <p className="mt-3 text-xs leading-5 text-muted-foreground">{t('relatedMaterials')}: {relatedTitles.join(' · ')}</p>}
-                      </div>
-                    </article>;
-                  })}
-                </div> : <ArchiveEmpty icon={MapPin} text={t('emptyPlaces')} />}
-              </section>}
-
-              {activeSection === 'materials' && <section aria-label={t('sectionMaterials')}>
-                <ArchiveHeading eyebrow={t('caseFolderHeading')} title={t('sectionMaterialsTitle')} description={t('materialsDescription')} />
-                {materials.length > 0 ? <div className="grid items-start gap-3 lg:grid-cols-2">
-                  {materials.map((material) => <article key={material.id} className="grid min-h-36 grid-cols-[96px_minmax(0,1fr)] overflow-hidden border border-brass/30 bg-[#16130f] sm:grid-cols-[120px_minmax(0,1fr)]">
-                    <div className="flex min-h-36 items-center justify-center overflow-hidden border-r border-brass/30 bg-brass/5">
-                      {material.imageUrl ? <SafeImage src={material.imageUrl} alt={t('materialImageAlt', { name: material.title })} className="h-36 w-full object-contain sepia-[0.16]" /> : <FileText aria-hidden="true" className="h-7 w-7 text-brass/70" />}
-                    </div>
-                    <div className="min-w-0 p-3 sm:p-4">
-                      <p className="font-special-elite text-xs font-semibold uppercase tracking-[0.13em] text-brass">{material.kind === 'document' ? t('materialKindDocument') : material.kind === 'testimony' ? t('materialKindTestimony') : material.kind === 'occult' ? t('materialKindOccult') : material.kind === 'forensic' ? t('materialKindForensic') : t('materialKindObject')}</p>
-                      <h3 className="mt-1 font-display text-lg font-semibold leading-6 text-foreground">{material.title}</h3>
-                      {material.source && <p className="mt-1 text-xs text-muted-foreground">{t('sourceLabel')}: {material.source}</p>}
-                      {material.description && <details className="group mt-2 text-sm leading-5 text-foreground">
-                        <summary className="cursor-pointer list-none text-xs font-medium text-primary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">{t('readDescription')} <span className="inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span></summary>
-                        <p className="mt-2 font-serif text-base leading-6 text-foreground">{material.description}</p>
-                      </details>}
-                    </div>
-                  </article>)}
-                </div> : <ArchiveEmpty icon={FileText} text={t('emptyMaterials')} />}
-              </section>}
-
-              {activeSection === 'audio' && <section aria-label={t('sectionAudio')}>
-                <ArchiveHeading eyebrow={t('caseFolderHeading')} title={t('sectionAudioTitle')} description={t('audioDescription')} />
-                {recordings.length > 0 ? <div className="grid gap-4 lg:grid-cols-2">
-                  {recordings.map((recording) => <article key={recording.id} className="overflow-hidden border border-brass/30 bg-[#16130f]">
-                    <div className="flex items-center gap-3 border-b border-brass/30 bg-brass/5 p-4">
-                      <Music aria-hidden="true" className="h-5 w-5 shrink-0 text-brass" />
-                      <div className="min-w-0"><h3 className="font-display text-lg font-semibold text-foreground">{recording.title}</h3>{recording.source && <p className="mt-1 text-xs text-muted-foreground">{t('sourceLabel')}: {recording.source}</p>}</div>
-                    </div>
-                    {recording.description && <p className="p-4 font-serif text-base leading-6 text-foreground">{recording.description}</p>}
-                    <div className="px-4 pb-4"><audio aria-label={recording.title} controls preload="metadata" className="w-full accent-primary"><source src={recording.audioUrl} type="audio/mpeg" />{t('audioUnsupported')}</audio></div>
-                  </article>)}
-                </div> : <ArchiveEmpty icon={Music} text={t('emptyAudio')} />}
-              </section>}
-            </div>
-          </main>
-        </div>
+  const unread = (item: JournalCard) =>
+    localReads[item.id] === item.revision ? undefined : item.unread;
+  const openCard = (item: JournalCard) => {
+    setLocalReads((previous) => ({ ...previous, [item.id]: item.revision }));
+    if (onReadCard) onReadCard(item);
+    else
+      onUpdateCharacter?.(markJournalCardRead(character, model.scopeKey, item));
+    go({ section: page.section, cardId: item.id });
+  };
+  const needle = fold(query.trim());
+  const visible = model.cards.filter((item) =>
+    needle
+      ? fold(
+          [
+            name(item),
+            item.publicDescription ?? '',
+            ...item.paragraphs.map((p) => p.text),
+            item.material?.text ?? '',
+            ...item.sources.flatMap((s) => [s.witness ?? '', s.excerpt]),
+          ].join(' ')
+        ).includes(needle)
+      : page.section === 'scene'
+        ? Boolean(model.scene?.relatedIds.includes(item.id))
+        : item.kind === page.section
+  );
+  if (page.section === 'scene' && !needle && model.scene) {
+    const scenePlaceId = model.cards.find(
+      (item) => item.kind === 'place' && item.id === journalCardId('place', model.scene!.location)
+    )?.id;
+    visible.sort(
+      (a, b) => Number(b.id === scenePlaceId) - Number(a.id === scenePlaceId)
+    );
+  }
+  const heading = card
+    ? name(card)
+    : needle
+      ? t('searchResults')
+      : page.section === 'scene'
+        ? model.scene?.title || t('currentScene')
+        : t(sectionKeys[page.section]);
+  const tile = (item: JournalCard) => (
+    <button
+      type="button"
+      key={item.id}
+      data-testid="journal-card"
+      data-card-kind={item.kind}
+      data-nav-id={item.id}
+      aria-label={t('openCard', { name: name(item) })}
+      onClick={() => openCard(item)}
+      className={cn(
+        'group min-w-0 overflow-hidden border border-brass/30 bg-card text-left shadow-deco transition-colors hover:border-brass',
+        focusClass
       )}
-    </div>
+    >
+      <CardArt card={item} />
+      <span className="block p-5">
+        <span className="flex flex-wrap items-center justify-between gap-2 text-sm text-brass">
+          <span>{t(sectionKeys[item.kind])}</span>
+          {unread(item) && (
+            <span
+              data-testid="journal-unread"
+              className="border border-primary/40 bg-primary/10 px-2 py-1 text-sm text-foreground"
+            >
+              {t(unread(item) === 'new' ? 'badgeNew' : 'badgeUpdated')}
+            </span>
+          )}
+        </span>
+        <span className="mt-3 block font-display text-xl font-semibold leading-snug text-foreground">
+          {name(item)}
+        </span>
+        {item.mentioned && (
+          <span className="mt-2 block text-sm italic text-muted-foreground">
+            {t('knownFromMention')}
+          </span>
+        )}
+        <span className="mt-3 block line-clamp-2 font-serif text-base leading-7 text-muted-foreground">
+        {item.publicDescription || item.paragraphs[0]?.text ||
+            t(
+              item.kind === 'material' ? 'materialCaption' : 'recordedKnowledge'
+            )}
+        </span>
+      </span>
+    </button>
+  );
+  return (
+    <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="journal-reader-title"
+        tabIndex={-1}
+        data-testid="session-journal"
+        className="deco-window deco-corners flex h-full min-h-0 flex-col border border-brass/40 bg-background text-foreground shadow-deco"
+      >
+        <header className="flex shrink-0 items-center justify-between gap-5 border-b border-brass/30 px-6 py-4">
+          <div>
+            <h1
+              id="journal-reader-title"
+              className="font-display-decorative text-xl font-bold uppercase tracking-wider text-brass"
+            >
+              {t('caseFileTitle')}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {model.title || t('caseFileDefault')}
+            </p>
+          </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t('closeAriaLabel')}
+              className={cn(
+                'flex h-11 w-11 shrink-0 items-center justify-center border border-brass/40 hover:bg-brass/10',
+                focusClass
+              )}
+            >
+              <X aria-hidden="true" className="h-5 w-5" />
+            </button>
+          )}
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          <nav
+            aria-label={t('readerContents')}
+            data-testid="journal-contents"
+            className="shrink-0 border-b border-brass/30 bg-card md:w-60 md:border-b-0 md:border-r"
+          >
+            <div className="flex gap-1 overflow-x-auto p-3 md:flex-col">
+              {(Object.keys(sectionKeys) as Section[]).map((section) => {
+                const Icon = icons[section];
+                const count = model.cards.filter(
+                  (item) => item.kind === section && unread(item)
+                ).length;
+                return (
+                  <button
+                    type="button"
+                    key={section}
+                    data-nav-id={`section-${section}`}
+                    aria-current={
+                      page.section === section && !needle ? 'page' : undefined
+                    }
+                    onClick={() => {
+                      setQuery('');
+                      go({ section });
+                    }}
+                    className={cn(
+                      'flex min-h-11 shrink-0 items-center gap-3 border border-transparent px-3 py-3 text-left text-base text-muted-foreground hover:bg-brass/5',
+                      focusClass,
+                      page.section === section &&
+                        !needle &&
+                        'border-primary/50 bg-primary/10 text-foreground'
+                    )}
+                  >
+                    <Icon
+                      aria-hidden="true"
+                      className="h-5 w-5 shrink-0 text-brass"
+                    />
+                    <span>{t(sectionKeys[section])}</span>
+                    {count > 0 && (
+                      <span className="ml-auto text-sm text-brass">
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="hidden border-t border-brass/30 px-6 py-5 font-serif text-base italic leading-7 text-muted-foreground md:block">
+              {t('caseFileNote')}
+            </p>
+          </nav>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex shrink-0 items-center gap-3 border-b border-brass/20 px-5 py-3 md:px-8">
+              <Search
+                aria-hidden="true"
+                className="h-5 w-5 shrink-0 text-brass"
+              />
+              <input
+                aria-label={t('searchLabel')}
+                placeholder={t('searchPlaceholder')}
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  if (page.cardId) go({ section: page.section });
+                }}
+                className={cn(
+                  'h-11 min-w-0 flex-1 border border-brass/30 bg-input px-3 text-base text-foreground placeholder:text-muted-foreground',
+                  focusClass
+                )}
+              />
+              {query && (
+                <button
+                  type="button"
+                  aria-label={t('clearSearch')}
+                  onClick={() => setQuery('')}
+                  className={cn(
+                    'flex h-11 w-11 shrink-0 items-center justify-center text-brass',
+                    focusClass
+                  )}
+                >
+                  <X aria-hidden="true" className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+            <main
+              ref={readerRef}
+              data-testid="journal-reader"
+              className="min-h-0 flex-1 overflow-y-auto"
+            >
+              <div className="mx-auto max-w-6xl px-5 py-6 md:px-8 md:py-8">
+                {history.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={back}
+                    className={cn(
+                      actionClass,
+                      'mb-5 flex items-center gap-2 text-brass'
+                    )}
+                  >
+                    <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+                    {t('back')}
+                  </button>
+                )}
+                <p className="text-sm uppercase tracking-wider text-brass">
+                  {source
+                    ? t('sourceExcerpt')
+                    : card
+                      ? t(sectionKeys[card.kind])
+                      : t('caseFolderHeading')}
+                </p>
+                <h2
+                  ref={titleRef}
+                  tabIndex={-1}
+                  className="deco-separator mb-6 mt-2 break-words font-display text-3xl font-semibold leading-tight text-foreground focus:outline-none"
+                >
+                  {heading}
+                </h2>
+                {card && source ? (
+                  <section data-testid="journal-source">
+                    {source.witness && (
+                      <p className="mb-4 text-base text-brass">
+                        {source.witness}
+                      </p>
+                    )}
+                    {source.excerpt ? (
+                      <blockquote className="whitespace-pre-wrap border-l-2 border-brass/50 pl-5 font-serif text-lg leading-8">
+                        {source.excerpt}
+                      </blockquote>
+                    ) : (
+                      <p className="font-serif text-lg leading-8 text-muted-foreground">
+                        {t('sourceUnavailable')}
+                      </p>
+                    )}
+                    {source.materialId && sourceMaterial?.material?.binding && (
+                      <RuntimeDossierHandout
+                        recordId={source.materialId}
+                        binding={sourceMaterial.material.binding}
+                        allowedIds={[source.materialId]}
+                      />
+                    )}
+                  </section>
+                ) : card ? (
+                  <article
+                    data-testid="journal-card-detail"
+                    className="space-y-7"
+                  >
+                    {card.kind !== 'material' && <CardArt card={card} large />}
+                    {card.publicDescription && (
+                      <section data-testid="journal-public-profile" aria-label={t('publicProfileHeading')}>
+                        <h3 className="mb-2 font-display text-lg text-brass">{t('publicProfileHeading')}</h3>
+                        <p className="font-serif text-lg leading-8">{card.publicDescription}</p>
+                      </section>
+                    )}
+                    {card.mentioned && (
+                      <p className="text-base italic text-muted-foreground">
+                        {t('knownFromMention')}
+                      </p>
+                    )}
+                    {card.kind === 'event' && (
+                      <p className="text-base text-muted-foreground">
+                        {t('eventDate')}: {card.occurredAt || t('dateUnknown')}
+                      </p>
+                    )}
+                    {card.kind === 'event' && (
+                      <p className="text-base text-muted-foreground">
+                        {t('learnedAt')}:{' '}
+                        {card.learnedAt || card.learnedIn || t('dateUnknown')}
+                      </p>
+                    )}
+                    <div className="space-y-5">
+                      {card.paragraphs.map((paragraph, index) => (
+                        <div key={`${index}:${paragraph.sourceIndex}`}>
+                          {paragraph.provenance && (
+                            <p className="mb-1 text-sm text-brass">
+                              {t(`provenance_${paragraph.provenance}`)}
+                            </p>
+                          )}
+                          <p className="whitespace-pre-line font-serif text-lg leading-8">
+                            {paragraph.text}
+                          </p>
+                          {card.sources[paragraph.sourceIndex] && (
+                            <button
+                              type="button"
+                              data-testid="journal-source-link"
+                              className={cn(actionClass, 'mt-2')}
+                              onClick={() =>
+                                go({
+                                  ...page,
+                                  sourceIndex: paragraph.sourceIndex,
+                                  scrollTop: 0,
+                                })
+                              }
+                            >
+                              {t('openSource', {
+                                name: sourceName(card, paragraph.sourceIndex),
+                              })}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {card.material?.recordId && card.material.binding ? (
+                      <div data-testid="journal-observed-handout">
+                        <RuntimeDossierHandout
+                          recordId={card.material.recordId}
+                          binding={card.material.binding}
+                          allowedIds={model.cards.flatMap((item) =>
+                            item.material?.recordId
+                              ? [item.material.recordId]
+                              : []
+                          )}
+                        />
+                      </div>
+                    ) : (
+                      card.material && (
+                        <div>
+                          {card.material.text &&
+                            !card.paragraphs.some(
+                              (p) => p.text === card.material?.text
+                            ) && (
+                              <p className="whitespace-pre-wrap font-serif text-lg leading-8">
+                                {card.material.text}
+                              </p>
+                            )}
+                          {card.material.audioUrl && (
+                            <audio
+                              aria-label={name(card)}
+                              controls
+                              preload="metadata"
+                              className="w-full"
+                            >
+                              <source
+                                src={card.material.audioUrl}
+                                type="audio/mpeg"
+                              />
+                              {t('audioUnsupported')}
+                            </audio>
+                          )}
+                        </div>
+                      )
+                    )}
+                    <section aria-label={t('sourcesHeading')}>
+                      <h3 className="mb-3 font-display text-xl text-brass">
+                        {t('sourcesHeading')}
+                      </h3>
+                      {card.sources.length ? (
+                        <div className="flex flex-wrap gap-3">
+                          {card.sources.map((item, index) => (
+                            <button
+                              type="button"
+                              key={`${item.messageId}:${index}`}
+                              data-testid="journal-source-link"
+                              data-nav-id={`source-${index}`}
+                              onClick={() =>
+                                go({
+                                  ...page,
+                                  sourceIndex: index,
+                                  scrollTop: 0,
+                                })
+                              }
+                              className={actionClass}
+                            >
+                              {t('openSource', {
+                                name: sourceName(card, index),
+                              })}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-base text-muted-foreground">
+                          {t('sourceUnavailable')}
+                        </p>
+                      )}
+                    </section>
+                    {card.relatedIds.length > 0 && (
+                      <section aria-label={t('relatedCards')}>
+                        <h3 className="mb-3 font-display text-xl text-brass">
+                          {t('relatedCards')}
+                        </h3>
+                        <div className="flex flex-wrap gap-3">
+                          {card.relatedIds
+                            .map((id) =>
+                              model.cards.find((item) => item.id === id)
+                            )
+                            .filter((item): item is JournalCard =>
+                              Boolean(item)
+                            )
+                            .map((item) => (
+                              <button
+                                type="button"
+                                key={item.id}
+                                data-nav-id={item.id}
+                                onClick={() => openCard(item)}
+                                className={actionClass}
+                              >
+                                {name(item)}
+                              </button>
+                            ))}
+                        </div>
+                      </section>
+                    )}
+                  </article>
+                ) : (
+                  <section
+                    data-testid={
+                      page.section === 'scene' && !needle
+                        ? 'journal-current-scene'
+                        : 'journal-gallery'
+                    }
+                  >
+                    {!needle && page.section === 'scene' && (
+                      <p className="mb-6 max-w-3xl font-serif text-lg leading-8 text-muted-foreground">
+                        {model.scene?.inGameDate || t('sceneIntroduction')}
+                      </p>
+                    )}
+                    {visible.length ? (
+                      <div className="grid items-start gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                        {visible.map(tile)}
+                      </div>
+                    ) : (
+                      <div className="border border-dashed border-brass/30 p-8 font-serif text-lg leading-8 text-muted-foreground">
+                        {t(
+                          needle
+                            ? 'noSearchResults'
+                            : page.section === 'scene'
+                              ? 'emptyCurrentScene'
+                              : 'emptyCategory'
+                        )}
+                      </div>
+                    )}
+                  </section>
+                )}
+              </div>
+            </main>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

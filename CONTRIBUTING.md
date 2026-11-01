@@ -1,12 +1,12 @@
-# 🛠️ Contributor & Developer Guide / Przewodnik dla Współtwórców (v0.9.5)
+# 🛠️ Contributor & Developer Guide / Przewodnik dla Współtwórców (v0.9.6)
 
-[🇵🇱 Wersja Polska](#-przewodnik-dla-współtwórców---strażnik-tajemnic-ai-v095) | [🇺🇸 English Version](#-contributor-guide---keeper-of-arcane-lore-ai-v095)
+[🇵🇱 Wersja Polska](#-przewodnik-dla-współtwórców---strażnik-tajemnic-ai-v096) | [🇺🇸 English Version](#-contributor-guide---keeper-of-arcane-lore-ai-v096)
 
 ---
 
-# 🇵🇱 Przewodnik dla Współtwórców - Strażnik Tajemnic AI (v0.9.5)
+# 🇵🇱 Przewodnik dla Współtwórców - Strażnik Tajemnic AI (v0.9.6)
 
-Dokument ten jest technicznym źródłem prawdy dla inżynierów i współtwórców rozwijających silnik **Strażnik Tajemnic AI (v0.9.5)**.
+Dokument ten jest technicznym źródłem prawdy dla inżynierów i współtwórców rozwijających silnik **Strażnik Tajemnic AI (v0.9.6)**.
 
 ## 🗺️ 1. Mental Model i Topologia Kodu
 
@@ -125,9 +125,9 @@ bash desktop/build-app.sh --rebuild
 
 ---
 
-# 🇺🇸 Contributor Guide - Keeper of Arcane Lore AI (v0.9.5)
+# 🇺🇸 Contributor Guide - Keeper of Arcane Lore AI (v0.9.6)
 
-This guide provides technical specifications and invariant standards for developers contributing to **Keeper of Arcane Lore AI (v0.9.5)**.
+This guide provides technical specifications and invariant standards for developers contributing to **Keeper of Arcane Lore AI (v0.9.6)**.
 
 ## 🗺️ 1. Mental Model & Code Topology
 

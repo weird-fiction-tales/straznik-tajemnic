@@ -180,21 +180,21 @@ export function SanityTherapyModal({
             <TabsList className="grid grid-cols-3 bg-[#181512] border border-brass/25 rounded-none p-1">
               <TabsTrigger
                 value="anchors"
-                className="font-display text-xs uppercase tracking-wider data-[state=active]:bg-brass/20 data-[state=active]:text-brass"
+                className="font-display text-xs uppercase tracking-wider data-[state=active]:bg-primary/10 data-[state=active]:text-foreground"
               >
                 <Heart className="w-3.5 h-3.5 mr-1.5" />
                 {t('tabAnchors')}
               </TabsTrigger>
               <TabsTrigger
                 value="self_help"
-                className="font-display text-xs uppercase tracking-wider data-[state=active]:bg-brass/20 data-[state=active]:text-brass"
+                className="font-display text-xs uppercase tracking-wider data-[state=active]:bg-primary/10 data-[state=active]:text-foreground"
               >
                 <Sparkles className="w-3.5 h-3.5 mr-1.5" />
                 {t('tabSelfHelp')}
               </TabsTrigger>
               <TabsTrigger
                 value="asylum"
-                className="font-display text-xs uppercase tracking-wider data-[state=active]:bg-brass/20 data-[state=active]:text-brass"
+                className="font-display text-xs uppercase tracking-wider data-[state=active]:bg-primary/10 data-[state=active]:text-foreground"
               >
                 <Building2 className="w-3.5 h-3.5 mr-1.5" />
                 {t('tabAsylum')}
@@ -224,12 +224,12 @@ export function SanityTherapyModal({
                             onClick={() => !isLost && setSelectedAnchorId(anchor.id)}
                             className={`p-3 border transition-colors flex items-center justify-between cursor-pointer ${
                               isSelected
-                                ? 'border-brass bg-brass/10'
+                                ? 'border-primary bg-primary/10'
                                 : 'border-brass/20 bg-[#16130f] hover:border-brass/40'
                             } ${isLost ? 'opacity-40 cursor-not-allowed' : ''}`}
                           >
                             <div className="min-w-0 pr-2">
-                              <div className="font-serif text-sm font-semibold truncate text-foreground flex items-center gap-1.5">
+                              <div className="font-serif text-sm font-semibold whitespace-normal break-words text-foreground flex items-start gap-1.5">
                                 <User className="w-3.5 h-3.5 text-brass/70 flex-shrink-0" />
                                 {anchor.name}
                               </div>
@@ -276,7 +276,7 @@ export function SanityTherapyModal({
                         onClick={() => setContactForm('visit')}
                         className={`p-2.5 border text-center font-serif text-xs transition-colors flex flex-col items-center gap-1 ${
                           contactForm === 'visit'
-                            ? 'border-brass bg-brass/15 text-brass'
+                            ? 'border-primary bg-primary/10 text-foreground'
                             : 'border-brass/20 bg-[#16130f] text-muted-foreground hover:border-brass/40'
                         }`}
                       >
@@ -288,7 +288,7 @@ export function SanityTherapyModal({
                         onClick={() => setContactForm('correspondence')}
                         className={`p-2.5 border text-center font-serif text-xs transition-colors flex flex-col items-center gap-1 ${
                           contactForm === 'correspondence'
-                            ? 'border-brass bg-brass/15 text-brass'
+                            ? 'border-primary bg-primary/10 text-foreground'
                             : 'border-brass/20 bg-[#16130f] text-muted-foreground hover:border-brass/40'
                         }`}
                       >
@@ -300,7 +300,7 @@ export function SanityTherapyModal({
                         onClick={() => setContactForm('keepsake')}
                         className={`p-2.5 border text-center font-serif text-xs transition-colors flex flex-col items-center gap-1 ${
                           contactForm === 'keepsake'
-                            ? 'border-brass bg-brass/15 text-brass'
+                            ? 'border-primary bg-primary/10 text-foreground'
                             : 'border-brass/20 bg-[#16130f] text-muted-foreground hover:border-brass/40'
                         }`}
                       >
@@ -358,7 +358,7 @@ export function SanityTherapyModal({
                     <Button
                       onClick={handleAnchorRecovery}
                       disabled={character.usedDowntimeRecovery || selectedAnchor?.status === 'lost'}
-                      className="w-full font-display uppercase tracking-[0.16em] text-brass bg-brass/10 border border-brass/45 hover:bg-brass/20 py-2.5"
+                      className="w-full font-display uppercase tracking-[0.16em] bg-primary text-primary-foreground border border-primary hover:bg-primary/90 py-2.5"
                     >
                       <Heart className="w-4 h-4 mr-2" />
                       {t('actionSeekSolace')}
@@ -400,7 +400,7 @@ export function SanityTherapyModal({
                             onClick={() => setSelectedTrait(trait)}
                             className={`p-3 border transition-colors flex items-center justify-between cursor-pointer ${
                               isSelected
-                                ? 'border-brass bg-brass/15'
+                                ? 'border-primary bg-primary/10'
                                 : 'border-brass/20 bg-[#16130f] hover:border-brass/40'
                             }`}
                           >
@@ -446,7 +446,7 @@ export function SanityTherapyModal({
                     <Button
                       onClick={handleSelfHelp}
                       disabled={!selectedTrait}
-                      className="w-full font-display uppercase tracking-[0.16em] text-brass bg-brass/10 border border-brass/45 hover:bg-brass/20 py-2.5"
+                      className="w-full font-display uppercase tracking-[0.16em] bg-primary text-primary-foreground border border-primary hover:bg-primary/90 py-2.5"
                     >
                       <Sparkles className="w-4 h-4 mr-2" />
                       {t('actionSelfHelp')}
@@ -478,7 +478,7 @@ export function SanityTherapyModal({
                     onClick={() => setFacility('public_asylum')}
                     className={`p-3.5 border transition-colors cursor-pointer space-y-2 ${
                       facility === 'public_asylum'
-                        ? 'border-brass bg-brass/15'
+                        ? 'border-primary bg-primary/10'
                         : 'border-brass/20 bg-[#16130f] hover:border-brass/40'
                     }`}
                   >
@@ -503,7 +503,7 @@ export function SanityTherapyModal({
                     onClick={() => canAffordPrivate && setFacility('private_sanitarium')}
                     className={`p-3.5 border transition-colors space-y-2 ${
                       facility === 'private_sanitarium'
-                        ? 'border-brass bg-brass/15 cursor-pointer'
+                        ? 'border-primary bg-primary/10 cursor-pointer'
                         : canAffordPrivate
                           ? 'border-brass/20 bg-[#16130f] hover:border-brass/40 cursor-pointer'
                           : 'opacity-40 border-brass/10 bg-[#16130f] cursor-not-allowed'
@@ -573,7 +573,7 @@ export function SanityTherapyModal({
               {!hospitalResult ? (
                 <Button
                   onClick={handleHospitalCare}
-                  className="w-full font-display uppercase tracking-[0.16em] text-brass bg-brass/10 border border-brass/45 hover:bg-brass/20 py-2.5"
+                  className="w-full font-display uppercase tracking-[0.16em] bg-primary text-primary-foreground border border-primary hover:bg-primary/90 py-2.5"
                 >
                   <Building2 className="w-4 h-4 mr-2" />
                   {t('actionBeginHospitalCare')}

@@ -21,10 +21,15 @@ describe('Gold Master Registry & Reject Gate (Issue #737)', () => {
     expect(matched).not.toBeNull();
     expect(matched?.title.toLowerCase()).toContain('nawiedzony dom');
     expect(matched?.graph?.npcs.map((n) => n.name)).toEqual(
-      expect.arrayContaining(['Steven Knott', 'Arty Wilmot', 'Ruth Blake', 'Walter Corbitt'])
+      expect.arrayContaining([
+        'Steven Knott',
+        'Arty Wilmot',
+        'Ruth Blake',
+        'Walter Corbitt',
+      ])
     );
     expect(matched?.graph?.nodes?.length).toBeGreaterThanOrEqual(5);
-    expect(matched?.handouts?.length).toBe(10);
+    expect(matched?.handouts?.length).toBe(14);
   });
 
   it('przepuszcza przez Bramkę Jakości kompletną certyfikowaną przygodę Gold Master', () => {
@@ -76,7 +81,10 @@ describe('Gold Master Registry & Reject Gate (Issue #737)', () => {
       sourceCategory: 'custom',
     };
 
-    const gate = validateAdventureQualityGate(corruptedAdventure, 'Zbyt krótki tekst');
+    const gate = validateAdventureQualityGate(
+      corruptedAdventure,
+      'Zbyt krótki tekst'
+    );
     expect(gate.isValid).toBe(false);
     expect(gate.reason).toMatch(/węzłów|postaci|warstwa tekstowa/i);
   });

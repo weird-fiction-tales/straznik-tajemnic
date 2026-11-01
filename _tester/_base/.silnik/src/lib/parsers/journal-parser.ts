@@ -181,6 +181,7 @@ export function extractJournalTags(text: string): JournalTagEntry[] {
       kronika: 'journal',
       dziennik: 'journal',
       wydarzenie: 'journal',
+      event: 'journal',
       przedmiot: 'item',
       item: 'item',
       rzecz: 'item'
@@ -192,9 +193,22 @@ export function extractJournalTags(text: string): JournalTagEntry[] {
     let inGameDate: string | undefined;
     let sourceNpc: string | undefined;
     let foundLocation: string | undefined;
+    let dossierRecordId: string | undefined;
+    let occurredAt: string | undefined;
+    let sourceQuote: string | undefined;
+    let sourceMaterialId: string | undefined;
+    let knowledge: JournalTagEntry['knowledge'];
 
     const parseSegment = (part: string) => {
       if (!part) return;
+      const quote = part.match(/^(?:source_quote|cytat_zrodla)\s*:\s*(.+)$/i);
+      if (quote) { sourceQuote = quote[1].trim(); return; }
+      const material = part.match(/^(?:source_material_id|material_zrodlowy)\s*:\s*(.+)$/i);
+      if (material) { sourceMaterialId = material[1].trim(); return; }
+      const eventDate = part.match(/^(?:event_date|data_zdarzenia)\s*:\s*(.+)$/i);
+      if (eventDate) { occurredAt = eventDate[1].trim(); return; }
+      const known = part.match(/^(?:knowledge|poznanie)\s*:\s*(mentioned|encountered|visited|wzmianka)$/i);
+      if (known) { knowledge = known[1].toLowerCase() === 'wzmianka' ? 'mentioned' : known[1].toLowerCase() as JournalTagEntry['knowledge']; return; }
       const npcMatch = part.match(/^(?:świadek|swiadek|witness|npc|źródło_npc|zrodlo_npc)\s*:\s*(.+)$/i);
       if (npcMatch) {
         sourceNpc = npcMatch[1].trim();
@@ -210,6 +224,8 @@ export function extractJournalTags(text: string): JournalTagEntry[] {
         inGameDate = dateMatch[1].trim();
         return;
       }
+      const dossierRecordMatch = part.match(/^(?:dossier_record_id|teczka_record_id)\s*:\s*(.+)$/i);
+      if (dossierRecordMatch) dossierRecordId = dossierRecordMatch[1].trim().slice(0, 200);
     };
 
     // Obsługa nagłówka z pipe'ami lub tradycyjnym dwukropkiem z datą
@@ -259,6 +275,11 @@ export function extractJournalTags(text: string): JournalTagEntry[] {
         who,
         sourceNpc,
         foundLocation,
+        ...(occurredAt ? { occurredAt } : {}),
+        ...(sourceQuote ? { sourceQuote } : {}),
+        ...(sourceMaterialId ? { sourceMaterialId } : {}),
+        ...(knowledge ? { knowledge } : {}),
+        ...(dossierRecordId ? { dossierRecordId } : {}),
       });
     }
   }

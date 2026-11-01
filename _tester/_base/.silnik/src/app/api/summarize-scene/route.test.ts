@@ -1,9 +1,12 @@
 import type { NextRequest } from 'next/server';
 import { POST } from './route';
+import { recordUserUsage } from '@/lib/user-usage';
 
 const mockGenerateContent = jest.fn();
+jest.mock('@/lib/user-usage',()=>({recordUserUsage:jest.fn(async()=>{})}));
 
 jest.mock('@google/genai', () => ({
+  ThinkingLevel: { MINIMAL: 'MINIMAL' },
   GoogleGenAI: jest.fn().mockImplementation(() => ({
     models: { generateContent: mockGenerateContent },
   })),
@@ -30,6 +33,7 @@ describe('POST /api/summarize-scene', () => {
 
   beforeEach(() => {
     mockGenerateContent.mockReset();
+    jest.mocked(recordUserUsage).mockClear();
   });
 
   it('uses the entire scene transcript and returns a neutral recap with rumor attribution', async () => {
@@ -53,6 +57,12 @@ describe('POST /api/summarize-scene', () => {
     const result = await response.json();
     const prompt = mockGenerateContent.mock.calls[0][0].contents[0].parts[0].text as string;
 
+    expect(mockGenerateContent.mock.calls[0][0].model).toBe('gemini-flash-lite-latest');
+    expect(mockGenerateContent.mock.calls[0][0].config).toMatchObject({
+      maxOutputTokens: 2048,
+      thinkingConfig: { thinkingLevel: 'MINIMAL' },
+      responseMimeType: 'application/json',
+    });
     expect(response.status).toBe(200);
     expect(prompt).toContain('Wiadomość sceny 12');
     expect(prompt).toContain('Stanisław twierdził, że list wysłano z doków.');
@@ -108,4 +118,14 @@ describe('POST /api/summarize-scene', () => {
       'Stanisław claimed the letter had been sent from the docks.'
     );
   });
+});
+
+
+test('records a successful scene recap in the local game cost ledger',async()=>{
+ mockGenerateContent.mockResolvedValue({text:JSON.stringify({summaryPl:'Helena pokazała teczkę.',summaryEn:'Helena showed the folder.'}),
+  usageMetadata:{promptTokenCount:100,candidatesTokenCount:25,totalTokenCount:125}});
+ const request={headers:{get:()=> 'test-key'},json:async()=>({messages:[{role:'assistant',content:'Helena pokazała teczkę.'}],locale:'pl'})} as unknown as NextRequest;
+ expect((await POST(request)).status).toBe(200);
+ expect(recordUserUsage).toHaveBeenCalledWith('local',{type:'gemini',tokens:125,cost:expect.any(Number)});
+ expect(jest.mocked(recordUserUsage).mock.calls[0][1]).toMatchObject({cost:0.000015});
 });

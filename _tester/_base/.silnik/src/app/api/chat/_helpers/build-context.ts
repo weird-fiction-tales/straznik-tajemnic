@@ -1,3 +1,4 @@
+import { PRABUTY_SCENES } from '@/lib/hardware/hue/score';
 import { getSpellDefinition, getTomeDefinition } from '@/lib/magic';
 import { getLocalizedOccupationName } from '@/lib/data/character';
 /**
@@ -176,9 +177,13 @@ export function buildPlayerFinancesSection(
 
   const finances = deriveFinances(character, eraContext);
   const isDefaultUsd = finances.currency === 'USD' && !eraContext;
-  const spendingStr = isDefaultUsd ? `${finances.spendingLevel} $` : finances.formattedSpendingLevel;
+  const spendingStr = isDefaultUsd
+    ? `${finances.spendingLevel} $`
+    : finances.formattedSpendingLevel;
   const cashStr = isDefaultUsd ? `${finances.cash} $` : finances.formattedCash;
-  const assetsStr = isDefaultUsd ? `${finances.assets} $` : finances.formattedAssets;
+  const assetsStr = isDefaultUsd
+    ? `${finances.assets} $`
+    : finances.formattedAssets;
   const assetsDesc =
     finances.assetsDescription &&
     finances.assetsDescription !== assetsStr &&
@@ -265,9 +270,7 @@ export function isIIRPSetting(
   }
   if (
     characters &&
-    characters.some(
-      (c) => c.era === '1920s-poland' || c.era === '1920s-pl'
-    )
+    characters.some((c) => c.era === '1920s-poland' || c.era === '1920s-pl')
   ) {
     return true;
   }
@@ -369,7 +372,9 @@ export function buildPlayerMagicSection(
   const lines: string[] = [];
 
   if (isPl) {
-    lines.push(`\n## MAGIA I WIEDZA NADPRZYRODZONA BADACZA (${character.name})`);
+    lines.push(
+      `\n## MAGIA I WIEDZA NADPRZYRODZONA BADACZA (${character.name})`
+    );
     lines.push(
       `- **Status wiary:** ${
         isBeliever
@@ -377,7 +382,9 @@ export function buildPlayerMagicSection(
           : 'Sceptyk (ZAKAZ rzucania czarów! Odłożona strata SAN do momentu załamania racjonalizmu)'
       }`
     );
-    lines.push(`- **Punkty Magii (PM):** ${currentMp} / ${maxMp} (regeneracja: 1 PM na godzinę)`);
+    lines.push(
+      `- **Punkty Magii (PM):** ${currentMp} / ${maxMp} (regeneracja: 1 PM na godzinę)`
+    );
 
     if (spellEntries.length > 0) {
       lines.push(`- **Znane zaklęcia:**`);
@@ -413,7 +420,9 @@ export function buildPlayerMagicSection(
       `- **DYREKTYWA DLA STRAŻNIKA TAJEMNIC:** NIGDY nie rozstrzygaj rzucania magii ani obrony w prozie narracyjnej! Gdy badacz rzuca czar, wyemituj tag \`[CZAR:...]\`. Gdy wróg rzuca czar na badacza, wyemituj tag obrony \`[OBRONA_MAGIA: @${character.name}: rzucajacy=... | pow=... | czar=... | opis=...]\`. Zakaz rzucania zaklęć spoza listy znanych czarów bez procedury Magii Spontanicznej (\`[MAGIA_SPONTANICZNA:...]\`).`
     );
   } else {
-    lines.push(`\n## INVESTIGATOR MAGIC & SUPERNATURAL LORE (${character.name})`);
+    lines.push(
+      `\n## INVESTIGATOR MAGIC & SUPERNATURAL LORE (${character.name})`
+    );
     lines.push(
       `- **Belief Status:** ${
         isBeliever
@@ -421,7 +430,9 @@ export function buildPlayerMagicSection(
           : 'Skeptic (FORBIDDEN to cast spells! Deferred SAN loss until rationalism breaks)'
       }`
     );
-    lines.push(`- **Magic Points (MP):** ${currentMp} / ${maxMp} (regains 1 MP per hour)`);
+    lines.push(
+      `- **Magic Points (MP):** ${currentMp} / ${maxMp} (regains 1 MP per hour)`
+    );
 
     if (spellEntries.length > 0) {
       lines.push(`- **Known Spells:**`);
@@ -463,21 +474,34 @@ export function buildActiveInvestigationSection(
   opts: BuildActiveInvestigationOpts
 ): string {
   const isEn = opts.locale === 'en';
-  const directorState = opts.sessionId ? getDirectorState(opts.sessionId) : null;
+  const directorState = opts.sessionId
+    ? getDirectorState(opts.sessionId)
+    : null;
 
   // Znajdź listę badaczy (wszystkie postacie z drużyny lub główny badacz)
   const char = opts.character || opts.characters?.[0];
-  const targetChars = opts.character ? [opts.character] : opts.characters ?? [];
-  const excluded = new Set((opts.characters ?? targetChars).flatMap(c =>
-    (c.investigatorDossier?.clues ?? []).filter(clue=>!isPublicCurrentClue(clue)).map(clue=>clue.title.trim().toLowerCase())));
+  const targetChars = opts.character
+    ? [opts.character]
+    : (opts.characters ?? []);
+  const excluded = new Set(
+    (opts.characters ?? targetChars).flatMap((c) =>
+      (c.investigatorDossier?.clues ?? [])
+        .filter((clue) => !isPublicCurrentClue(clue))
+        .map((clue) => clue.title.trim().toLowerCase())
+    )
+  );
 
   // 1. ZBIERZ POSZLAKI (Context Stuffing: pełna lista aktywnych faktów śledczych z dossier)
-  const clues: { title: string; fact: string; provenance?: ClueProvenance }[] = [];
+  const clues: { title: string; fact: string; provenance?: ClueProvenance }[] =
+    [];
   const seenClueKeys = new Set<string>();
 
   // A. Z dossier postaci (priorytet) - wykluczamy fakty unieważnione/obalone (Fact Supersession)
   for (const cChar of targetChars) {
-    if (cChar?.investigatorDossier?.clues && cChar.investigatorDossier.clues.length > 0) {
+    if (
+      cChar?.investigatorDossier?.clues &&
+      cChar.investigatorDossier.clues.length > 0
+    ) {
       // Sortuj: kluczowe poszlaki najpierw, potem najnowsze
       const sorted = [...cChar.investigatorDossier.clues]
         .filter(isPublicCurrentClue)
@@ -492,7 +516,11 @@ export function buildActiveInvestigationSection(
         if (!seenClueKeys.has(key)) {
           seenClueKeys.add(key);
           const fact = (c.description || c.investigatorInsight || '').trim();
-          clues.push({ title: `${c.status === 'unconfirmed' ? (isEn ? '[unconfirmed] ' : '[niepotwierdzona] ') : ''}${c.title.trim()}`, fact, provenance: c.provenance });
+          clues.push({
+            title: `${c.status === 'unconfirmed' ? (isEn ? '[unconfirmed] ' : '[niepotwierdzona] ') : ''}${c.title.trim()}`,
+            fact,
+            provenance: c.provenance,
+          });
         }
       }
     }
@@ -503,15 +531,23 @@ export function buildActiveInvestigationSection(
     for (const cChar of targetChars) {
       if (cChar?.journal && cChar.journal.length > 0) {
         const journalClues = cChar.journal
-          .filter((e) => e.type === 'clue' || e.type === 'discovery' || e.type === 'case')
+          .filter(
+            (e) =>
+              e.type === 'clue' || e.type === 'discovery' || e.type === 'case'
+          )
           .reverse();
 
         for (const j of journalClues) {
           const key = j.title.toLowerCase().trim();
           if (!seenClueKeys.has(key) && !excluded.has(key)) {
             seenClueKeys.add(key);
-            const prov = j.provenance || inferClueProvenance(j.title, j.content);
-            clues.push({ title: j.title.trim(), fact: j.content.trim(), provenance: prov });
+            const prov =
+              j.provenance || inferClueProvenance(j.title, j.content);
+            clues.push({
+              title: j.title.trim(),
+              fact: j.content.trim(),
+              provenance: prov,
+            });
             if (clues.length >= 5) break;
           }
         }
@@ -524,7 +560,12 @@ export function buildActiveInvestigationSection(
   if (clues.length < 5 && directorState) {
     if (directorState.clueFacts && directorState.clueFacts.length > 0) {
       for (const cf of directorState.clueFacts) {
-        if (cf.status === 'superseded' || cf.status === 'refuted' || excluded.has(cf.title.trim().toLowerCase())) continue;
+        if (
+          cf.status === 'superseded' ||
+          cf.status === 'refuted' ||
+          excluded.has(cf.title.trim().toLowerCase())
+        )
+          continue;
         const key = cf.title.toLowerCase().trim();
         if (!seenClueKeys.has(key)) {
           seenClueKeys.add(key);
@@ -533,7 +574,10 @@ export function buildActiveInvestigationSection(
           if (clues.length >= 5) break;
         }
       }
-    } else if (directorState.discoveredClues && directorState.discoveredClues.length > 0) {
+    } else if (
+      directorState.discoveredClues &&
+      directorState.discoveredClues.length > 0
+    ) {
       for (const title of directorState.discoveredClues.slice(-5)) {
         const key = title.toLowerCase().trim();
         if (!seenClueKeys.has(key) && !excluded.has(key)) {
@@ -552,7 +596,10 @@ export function buildActiveInvestigationSection(
 
   // A. Z notatek badacza (dossier.notes)
   for (const cChar of targetChars) {
-    if (cChar?.investigatorDossier?.notes && cChar.investigatorDossier.notes.length > 0) {
+    if (
+      cChar?.investigatorDossier?.notes &&
+      cChar.investigatorDossier.notes.length > 0
+    ) {
       for (const note of cChar.investigatorDossier.notes.slice(-2)) {
         const text = (note.content || note.title).trim();
         if (text && !seenHypo.has(text.toLowerCase())) {
@@ -570,7 +617,11 @@ export function buildActiveInvestigationSection(
     for (const cChar of targetChars) {
       if (cChar?.investigatorDossier?.clues) {
         for (const c of cChar.investigatorDossier.clues) {
-          if (isPublicCurrentClue(c) && c.investigatorInsight && !seenHypo.has(c.investigatorInsight.toLowerCase())) {
+          if (
+            isPublicCurrentClue(c) &&
+            c.investigatorInsight &&
+            !seenHypo.has(c.investigatorInsight.toLowerCase())
+          ) {
             seenHypo.add(c.investigatorInsight.toLowerCase());
             hypotheses.push(c.investigatorInsight.trim());
             if (hypotheses.length >= 2) break;
@@ -598,7 +649,8 @@ export function buildActiveInvestigationSection(
     activeLead = directorState.narrativeGoal.trim();
   } else if (char?.investigatorDossier?.clues) {
     const unconfirmedKey = char.investigatorDossier.clues.find(
-      (c) => isPublicCurrentClue(c) && (c.status === 'unconfirmed' || c.isKeyClue)
+      (c) =>
+        isPublicCurrentClue(c) && (c.status === 'unconfirmed' || c.isKeyClue)
     );
     if (unconfirmedKey) {
       activeLead = unconfirmedKey.title;
@@ -693,10 +745,7 @@ export interface HotSeatPlayerEntry {
   name?: string;
 }
 
-export {
-  buildDynamicScenePacingInjection,
-  type DynamicScenePacingParams,
-};
+export { buildDynamicScenePacingInjection, type DynamicScenePacingParams };
 
 export interface DepthInjectionMessage {
   role: string;
@@ -868,7 +917,12 @@ export function buildAdditionalContext(
   // These legacy channels may hold extracted document text from old saves.
   // Do not mutate the save or treat a renamed document as campaign-event memory.
   if (isDocumentModelUseBlocked()) {
-    opts = { ...opts, gameContextPrompt: undefined, truthAnchor: undefined, handoutsSection: undefined };
+    opts = {
+      ...opts,
+      gameContextPrompt: undefined,
+      truthAnchor: undefined,
+      handoutsSection: undefined,
+    };
   }
   const {
     timePromptSection,
@@ -900,7 +954,9 @@ export function buildAdditionalContext(
 
   // Materialne User Story i Kontrast Epoki dla MG (domyślna epoka CoC to 1920s)
   if (era || currentLocation) {
-    additionalContext.push(buildLocationEraGuidanceSection(era || '1920s', currentLocation));
+    additionalContext.push(
+      buildLocationEraGuidanceSection(era || '1920s', currentLocation)
+    );
   }
 
   // C1: recap przy wznowieniu zapisanej gry - instrukcja "zrób recap w tej turze".
@@ -910,14 +966,21 @@ export function buildAdditionalContext(
 
   // R1 & R2: Bezwzględna ochrona sprawczości i Fizyczny Immunitet Badacza (Solo i Hot Seat / Drużyna)
   // Wstrzykiwane ZAWSZE, aby AI dostawało konkretne imiona i twardy zakaz grania za postacie.
-  const isHotSeatActive = Boolean(hotSeatConfig?.enabled && (hotSeatConfig?.players?.length ?? 0) >= 2);
-  const isTeamSession = isHotSeatActive || (Array.isArray(characters) && characters.length >= 2);
+  const isHotSeatActive = Boolean(
+    hotSeatConfig?.enabled && (hotSeatConfig?.players?.length ?? 0) >= 2
+  );
+  const isTeamSession =
+    isHotSeatActive || (Array.isArray(characters) && characters.length >= 2);
   if (isTeamSession) {
     const gatheredNames: string[] = [];
     if (hotSeatConfig?.players && Array.isArray(hotSeatConfig.players)) {
       for (const p of hotSeatConfig.players) {
         const charName = p.characterName?.trim() || p.name?.trim();
-        if (charName && charName !== 'Nieznany' && !gatheredNames.includes(charName)) {
+        if (
+          charName &&
+          charName !== 'Nieznany' &&
+          !gatheredNames.includes(charName)
+        ) {
           gatheredNames.push(charName);
         }
       }
@@ -925,37 +988,44 @@ export function buildAdditionalContext(
     if (Array.isArray(characters)) {
       for (const c of characters) {
         const charName = c?.name?.trim();
-        if (charName && charName !== 'Nieznany' && !gatheredNames.includes(charName)) {
+        if (
+          charName &&
+          charName !== 'Nieznany' &&
+          !gatheredNames.includes(charName)
+        ) {
           gatheredNames.push(charName);
         }
       }
     }
-    const teamNames = gatheredNames.length >= 2
-      ? gatheredNames
-      : (playerCharacterName ? [playerCharacterName] : gatheredNames);
+    const teamNames =
+      gatheredNames.length >= 2
+        ? gatheredNames
+        : playerCharacterName
+          ? [playerCharacterName]
+          : gatheredNames;
 
     additionalContext.push(
       `\n## BEZWZGLĘDNA OCHRONA SPRAWCZOŚCI I FIZYCZNY IMMUNITET BADACZY (HOT SEAT / DRUŻYNA)\n` +
-      `W grze uczestniczy zespół badaczy sterowanych przez żywych graczy: **${teamNames.join(', ')}**.\n` +
-      `KATEGORYCZNY ZAKAZ GRANIE ZA BADACZY (ZAKAZ AUTOPILOTA):\n` +
-      `- ZAKAZ PRZEMIESZCZANIA: MG nie ma prawa samowolnie przemieszczać badaczy (nie decyduj, że badacze wchodzą, podchodzą, wsiadają na wóz czy z niego zeskakują). Postacie zatrzymują się na progu zdarzenia.\n` +
-      `- ZAKAZ SIĘGANIA DO EKWIPUNKU: MG nie wyciąga za badaczy broni, apteczek ani przedmiotów bez deklaracji graczy.\n` +
-      `- ZAKAZ SAMOWOLNYCH BADAŃ I OGLĘDZIN: Zakaz orzekania, że badacze badają rany, oglądają zwłoki czy przeszukują meble bez deklaracji.\n` +
-      `- ZAKAZ MOTORYKI I DIALOGÓW: Zero kwestii dialogowych, myśli, gestów ani mimiki w imieniu któregokolwiek z badaczy (${teamNames.join(', ')}).\n` +
-      `Wprowadzenie sceny i incydent inicjujący (NPC) ZAWSZE zatrzymuje się na progu zdarzenia z pytaniem [Co robicie?]. Czekaj na deklaracje graczy.`
+        `W grze uczestniczy zespół badaczy sterowanych przez żywych graczy: **${teamNames.join(', ')}**.\n` +
+        `KATEGORYCZNY ZAKAZ GRANIE ZA BADACZY (ZAKAZ AUTOPILOTA):\n` +
+        `- ZAKAZ PRZEMIESZCZANIA: MG nie ma prawa samowolnie przemieszczać badaczy (nie decyduj, że badacze wchodzą, podchodzą, wsiadają na wóz czy z niego zeskakują). Postacie zatrzymują się na progu zdarzenia.\n` +
+        `- ZAKAZ SIĘGANIA DO EKWIPUNKU: MG nie wyciąga za badaczy broni, apteczek ani przedmiotów bez deklaracji graczy.\n` +
+        `- ZAKAZ SAMOWOLNYCH BADAŃ I OGLĘDZIN: Zakaz orzekania, że badacze badają rany, oglądają zwłoki czy przeszukują meble bez deklaracji.\n` +
+        `- ZAKAZ MOTORYKI I DIALOGÓW: Zero kwestii dialogowych, myśli, gestów ani mimiki w imieniu któregokolwiek z badaczy (${teamNames.join(', ')}).\n` +
+        `Wprowadzenie sceny i incydent inicjujący (NPC) ZAWSZE zatrzymuje się na progu zdarzenia z pytaniem [Co robicie?]. Czekaj na deklaracje graczy.`
     );
   } else {
     const activeCharacterName = playerCharacterName || characters?.[0]?.name;
     if (activeCharacterName) {
       additionalContext.push(
         `\n## BEZWZGLĘDNA OCHRONA SPRAWCZOŚCI I FIZYCZNY IMMUNITET BADACZA (STERUJE CZŁOWIEK)\n` +
-        `Postać gracza: **${activeCharacterName}**. To żywy człowiek podejmuje jej decyzje, pisze jej kwestie i deklaruje akcje.\n` +
-        `FIZYCZNY IMMUNITET BADACZA (ZAKAZ AUTOPILOTA):\n` +
-        `- ZAKAZ PRZEMIESZCZANIA: MG nie ma prawa samowolnie przemieszczać badacza (nie pisz "wchodzisz", "podchodzisz", "wsiadasz", "zeskakujesz"). Badacz zatrzymuje się przed progiem nowej przestrzeni.\n` +
-        `- ZAKAZ SIĘGANIA DO EKWIPUNKU: MG nigdy nie decyduje o dobyciu broni, wyjęciu apteczki czy użyciu przedmiotów badacza bez deklaracji gracza.\n` +
-        `- ZAKAZ SAMOWOLNYCH BADAŃ I OGLĘDZIN: MG nigdy nie decyduje, że badacz bada rany, bada zwłoki czy przeszukuje pomieszczenie bez deklaracji.\n` +
-        `- ZAKAZ MOTORYKI I DIALOGÓW: Zero kwestii dialogowych, myśli, uczuć ani odruchów motorycznych postaci ${activeCharacterName}.\n` +
-        `Wprowadzenie sceny i incydent inicjujący (NPC) ZAWSZE zatrzymuje się na progu zdarzenia z markerem [Co robisz?]. Czekaj na input gracza.`
+          `Postać gracza: **${activeCharacterName}**. To żywy człowiek podejmuje jej decyzje, pisze jej kwestie i deklaruje akcje.\n` +
+          `FIZYCZNY IMMUNITET BADACZA (ZAKAZ AUTOPILOTA):\n` +
+          `- ZAKAZ PRZEMIESZCZANIA: MG nie ma prawa samowolnie przemieszczać badacza (nie pisz "wchodzisz", "podchodzisz", "wsiadasz", "zeskakujesz"). Badacz zatrzymuje się przed progiem nowej przestrzeni.\n` +
+          `- ZAKAZ SIĘGANIA DO EKWIPUNKU: MG nigdy nie decyduje o dobyciu broni, wyjęciu apteczki czy użyciu przedmiotów badacza bez deklaracji gracza.\n` +
+          `- ZAKAZ SAMOWOLNYCH BADAŃ I OGLĘDZIN: MG nigdy nie decyduje, że badacz bada rany, bada zwłoki czy przeszukuje pomieszczenie bez deklaracji.\n` +
+          `- ZAKAZ MOTORYKI I DIALOGÓW: Zero kwestii dialogowych, myśli, uczuć ani odruchów motorycznych postaci ${activeCharacterName}.\n` +
+          `Wprowadzenie sceny i incydent inicjujący (NPC) ZAWSZE zatrzymuje się na progu zdarzenia z markerem [Co robisz?]. Czekaj na input gracza.`
       );
     }
   }
@@ -1053,47 +1123,47 @@ export function buildAdditionalContext(
   if (sessionTone === 'noir') {
     additionalContext.push(
       `\n## USTAWA O PRZYGODZIE NOIR\n` +
-      `1. Prowadź grę w stylu Noir (powolne tempo, slow-burn, mrok, beznadzieja). NPC prezentują oficjalną Maskę, ale kierują się Ukrytym Celem/Strachem (są nieufni, podejrzliwi).\n` +
-      `2. Zasoby są skrajnie ograniczone (rzadka amunicja, brak gotowych środków obrony).\n` +
-      `3. CIĘCIA MONTAŻOWE: Teleportuj postać do nowej lokacji natychmiast po jej zadeklarowaniu. Jeśli jednak gracz wprost chce zrobić coś w drodze (np. czytać, przepytać kierowcę), rozegraj to jako mikro-scenę w podróży przed przeniesieniem.\n` +
-      `4. SZALEŃSTWO: Przy stracie Poczytalności narzucaj traumę, fobie i luki w pamięci bezpośrednio w opisie zachowania badacza (jako wyjątek od sprawczości). Nigdy nie pisz o punktach ani mechanice w narracji.`
+        `1. Prowadź grę w stylu Noir (powolne tempo, slow-burn, mrok, beznadzieja). NPC prezentują oficjalną Maskę, ale kierują się Ukrytym Celem/Strachem (są nieufni, podejrzliwi).\n` +
+        `2. Zasoby są skrajnie ograniczone (rzadka amunicja, brak gotowych środków obrony).\n` +
+        `3. CIĘCIA MONTAŻOWE: Teleportuj postać do nowej lokacji natychmiast po jej zadeklarowaniu. Jeśli jednak gracz wprost chce zrobić coś w drodze (np. czytać, przepytać kierowcę), rozegraj to jako mikro-scenę w podróży przed przeniesieniem.\n` +
+        `4. SZALEŃSTWO: Przy stracie Poczytalności narzucaj traumę, fobie i luki w pamięci bezpośrednio w opisie zachowania badacza (jako wyjątek od sprawczości). Nigdy nie pisz o punktach ani mechanice w narracji.`
     );
   } else if (sessionTone === 'pulp') {
     if (opts.locale === 'en') {
       additionalContext.push(
         `\n## PULP CTHULHU ADVENTURE CODE (RAW & CINEMATIC ACTION)\n` +
-        `1. HEROIC AGENCY: Investigators are larger-than-life heroes, not helpless victims. Reward initiative, audacity, and bold plans. Give them room to fight back against the horrors.\n` +
-        `2. CHANDLER'S LAW: Whenever pacing drags or the investigation stalls, don't hesitate - have a man burst through the door with a smoking gun, a cult ambush, or a ticking explosion.\n` +
-        `3. THE BEAST AT THE CLIMAX: Mythos horrors and cosmic abominations don't get wasted in background alleys; they are reserved for climactic finales and epic set-piece showdowns.\n` +
-        `4. MOOKS & MINIONS: Low-tier cultists, thugs, and henchmen drop fast from a single solid hit (>50% HP) or a cinematic takedown.\n` +
-        `5. VILLAINOUS DRAMA: Masterminds have flair, grand monologues, and getaway schemes. They sacrifice mooks to escape for future encounters.\n` +
-        `6. RULE OF COOL: If an action is cinematic, audacious, and fits pulp serial energy, enable it or grant a bonus die rather than strictly saying no.\n` +
-        `7. CHEAT DEATH: A dying hero can spend all their Luck (min 30) to miraculously survive through sheer fortune or a timely environmental twist.\n` +
-        `8. WEIRD SCIENCE & ANOMALIES: Ray-guns, ether detectors, and occult technology spark erratic surges, ozone smells, and electric crackles.\n` +
-        `9. CINEMATIC INSANITY: Sanity loss translates into adrenaline rushes, temporary combat manias, obsessive bravado, or sensory phobias rather than passive catatonia.\n` +
-        `10. PULP CLIFFHANGERS: Cut scenes on dramatic cliffhangers and urgent dilemmas that compel immediate hero intervention.`
+          `1. HEROIC AGENCY: Investigators are larger-than-life heroes, not helpless victims. Reward initiative, audacity, and bold plans. Give them room to fight back against the horrors.\n` +
+          `2. CHANDLER'S LAW: Whenever pacing drags or the investigation stalls, don't hesitate - have a man burst through the door with a smoking gun, a cult ambush, or a ticking explosion.\n` +
+          `3. THE BEAST AT THE CLIMAX: Mythos horrors and cosmic abominations don't get wasted in background alleys; they are reserved for climactic finales and epic set-piece showdowns.\n` +
+          `4. MOOKS & MINIONS: Low-tier cultists, thugs, and henchmen drop fast from a single solid hit (>50% HP) or a cinematic takedown.\n` +
+          `5. VILLAINOUS DRAMA: Masterminds have flair, grand monologues, and getaway schemes. They sacrifice mooks to escape for future encounters.\n` +
+          `6. RULE OF COOL: If an action is cinematic, audacious, and fits pulp serial energy, enable it or grant a bonus die rather than strictly saying no.\n` +
+          `7. CHEAT DEATH: A dying hero can spend all their Luck (min 30) to miraculously survive through sheer fortune or a timely environmental twist.\n` +
+          `8. WEIRD SCIENCE & ANOMALIES: Ray-guns, ether detectors, and occult technology spark erratic surges, ozone smells, and electric crackles.\n` +
+          `9. CINEMATIC INSANITY: Sanity loss translates into adrenaline rushes, temporary combat manias, obsessive bravado, or sensory phobias rather than passive catatonia.\n` +
+          `10. PULP CLIFFHANGERS: Cut scenes on dramatic cliffhangers and urgent dilemmas that compel immediate hero intervention.`
       );
     } else {
       additionalContext.push(
         `\n## USTAWA O PRZYGODZIE PULP CTHULHU (RAW & FILMOWY ROZMACH)\n` +
-        `1. SPRAWCZOŚĆ BOHATERÓW: Gracze to herosi, nie bezbronne ofiary. Promuj inicjatywę, odwagę i brawurowe pomysły. Badacze mają narzędzia, by walczyć i stawiać czoła koszmarom.\n` +
-        `2. PRAWO CHANDLERA: Gdy tempo siada lub śledztwo grzęźnie w martwym punkcie, nie czekaj - natychmiast wrzuć do pokoju faceta z rewolwerem, zamachowca kultu lub wybuchającą pułapkę.\n` +
-        `3. POTWÓR NA KOŃCU: Monstra i mityczne aberracje nie giną od razu w zaułkach tła; ujawniają się jako punkt kulminacyjny (Grand Finale) lub bossowie sekwencji.\n` +
-        `4. PACHOŁKI I MIĘSO ARMATNIE: Pospolici kultyści, zbiry i poplecznicy (Mooks) padają jak kaczki od jednego solidnego trafienia (>50% PŻ) lub spektakularnego ciosu.\n` +
-        `5. ZŁOCZYŃCY Z KLASĄ ("UWAŻAJ MISTRZU"): Główni arcywrogowie mają swoje dramatyczne monologi, plany dominacji i asów w rękawie; zawsze poświęcają pachołków, by uciec na późniejsze starcie.\n` +
-        `6. ZASADA RULE OF COOL: Jeśli deklaracja gracza jest widowiskowa, filmowa i pasuje do pulpowego kina akcji, pozwól na nią lub nagródź ułatwieniem (kością premiową), a nie sztywnym zakazem.\n` +
-        `7. OSZUKANIE ŚMIERCI (CHEAT DEATH): Postać gracza na skraju zagłady może zużyć całe Szczęście (min. 30), by cudownie przetrwać zbiegiem okoliczności w ostatniej sekundzie.\n` +
-        `8. WEIRD SCIENCE I ANOMALIE: Dziwaczna technologia, promienie śmierci, prototypy i anomalie eteru to chleb powszedni - reaguj na nie fascynacją i nagłymi przepięciami otoczenia.\n` +
-        `9. SZALEŃSTWO I SZALONE TALENTY: Utrata Poczytalności to nie paraliżujący stupor, lecz wybuch adrenaliny, heroiczny szał, obsesyjny monolog lub nagła, barwna fobia sensoryczna.\n` +
-        `10. FILMOWE CLIFFHANGERY: Kończ intensywne sceny i rozdziały dynamicznymi zawieszeniami akcji, stawiając badaczy przed natychmiastowym wyborem lub zagrożeniem.`
+          `1. SPRAWCZOŚĆ BOHATERÓW: Gracze to herosi, nie bezbronne ofiary. Promuj inicjatywę, odwagę i brawurowe pomysły. Badacze mają narzędzia, by walczyć i stawiać czoła koszmarom.\n` +
+          `2. PRAWO CHANDLERA: Gdy tempo siada lub śledztwo grzęźnie w martwym punkcie, nie czekaj - natychmiast wrzuć do pokoju faceta z rewolwerem, zamachowca kultu lub wybuchającą pułapkę.\n` +
+          `3. POTWÓR NA KOŃCU: Monstra i mityczne aberracje nie giną od razu w zaułkach tła; ujawniają się jako punkt kulminacyjny (Grand Finale) lub bossowie sekwencji.\n` +
+          `4. PACHOŁKI I MIĘSO ARMATNIE: Pospolici kultyści, zbiry i poplecznicy (Mooks) padają jak kaczki od jednego solidnego trafienia (>50% PŻ) lub spektakularnego ciosu.\n` +
+          `5. ZŁOCZYŃCY Z KLASĄ ("UWAŻAJ MISTRZU"): Główni arcywrogowie mają swoje dramatyczne monologi, plany dominacji i asów w rękawie; zawsze poświęcają pachołków, by uciec na późniejsze starcie.\n` +
+          `6. ZASADA RULE OF COOL: Jeśli deklaracja gracza jest widowiskowa, filmowa i pasuje do pulpowego kina akcji, pozwól na nią lub nagródź ułatwieniem (kością premiową), a nie sztywnym zakazem.\n` +
+          `7. OSZUKANIE ŚMIERCI (CHEAT DEATH): Postać gracza na skraju zagłady może zużyć całe Szczęście (min. 30), by cudownie przetrwać zbiegiem okoliczności w ostatniej sekundzie.\n` +
+          `8. WEIRD SCIENCE I ANOMALIE: Dziwaczna technologia, promienie śmierci, prototypy i anomalie eteru to chleb powszedni - reaguj na nie fascynacją i nagłymi przepięciami otoczenia.\n` +
+          `9. SZALEŃSTWO I SZALONE TALENTY: Utrata Poczytalności to nie paraliżujący stupor, lecz wybuch adrenaliny, heroiczny szał, obsesyjny monolog lub nagła, barwna fobia sensoryczna.\n` +
+          `10. FILMOWE CLIFFHANGERY: Kończ intensywne sceny i rozdziały dynamicznymi zawieszeniami akcji, stawiając badaczy przed natychmiastowym wyborem lub zagrożeniem.`
       );
     }
   } else if (sessionTone === 'purist') {
     additionalContext.push(
       `\n## USTAWA O PRZYGODZIE KLASYCZNEJ (LOVECRAFTIAN)\n` +
-      `1. Prowadź grę w klasycznym stylu Lovecrafta (powolne popadanie w szaleństwo, badanie starych ksiąg i rodów). NPC skrywają swoje prawdziwe oblicze pod Maską.\n` +
-      `2. CIĘCIA MONTAŻOWE: Domyślnie teleportuj badacza do nowej lokacji. Jeśli gracz wprost opisał chęć zrobienia czegoś w podróży (np. lektura, obserwacja), rozegraj to przed cięciem.\n` +
-      `3. SZALEŃSTWO: Narzucaj traumę i czasową amnezję bezpośrednio w opisie badacza po porażce SAN. Zakaz używania pojęć mechanicznych (punktów, testów) w prozie opisu.`
+        `1. Prowadź grę w klasycznym stylu Lovecrafta (powolne popadanie w szaleństwo, badanie starych ksiąg i rodów). NPC skrywają swoje prawdziwe oblicze pod Maską.\n` +
+        `2. CIĘCIA MONTAŻOWE: Domyślnie teleportuj badacza do nowej lokacji. Jeśli gracz wprost opisał chęć zrobienia czegoś w podróży (np. lektura, obserwacja), rozegraj to przed cięciem.\n` +
+        `3. SZALEŃSTWO: Narzucaj traumę i czasową amnezję bezpośrednio w opisie badacza po porażce SAN. Zakaz używania pojęć mechanicznych (punktów, testów) w prozie opisu.`
     );
   }
 
@@ -1133,8 +1203,9 @@ export function buildAdditionalContext(
 
   // Issue #68: Dwukierunkowa pętla pamięci - wstrzykiwanie sekcji ## AKTYWNE ŚLEDZTWO I WIEDZA BADACZA
   const activeInvestigationChar =
-    (playerCharacterName ? characters?.find((c) => c.name === playerCharacterName) : undefined) ??
-    characters?.[0];
+    (playerCharacterName
+      ? characters?.find((c) => c.name === playerCharacterName)
+      : undefined) ?? characters?.[0];
 
   const investigationSection = buildActiveInvestigationSection({
     character: activeInvestigationChar,
@@ -1188,11 +1259,18 @@ export function buildAdditionalContext(
 
   // Arcanum Benchmark 2026: Task 2 - Scene Presence & Information Horizon
   // Twarda obecność NPC w scenie wyznaczona z presentNpcs lub dopasowania npc.location do currentLocation
-  const scenePresentNpcs = (opts.presentNpcs && opts.presentNpcs.length > 0)
-    ? opts.presentNpcs
-    : (npcs && currentLocation
-        ? npcs.filter((n) => (n.status === 'alive' || n.status === 'unknown') && n.location && n.location.toLowerCase().trim() === currentLocation.toLowerCase().trim())
-        : []);
+  const scenePresentNpcs =
+    opts.presentNpcs && opts.presentNpcs.length > 0
+      ? opts.presentNpcs
+      : npcs && currentLocation
+        ? npcs.filter(
+            (n) =>
+              (n.status === 'alive' || n.status === 'unknown') &&
+              n.location &&
+              n.location.toLowerCase().trim() ===
+                currentLocation.toLowerCase().trim()
+          )
+        : [];
 
   if (scenePresentNpcs.length > 0) {
     const isEn = opts.locale === 'en';
@@ -1216,10 +1294,28 @@ export function buildAdditionalContext(
       ? [`\n## IMMUTABLE INVESTIGATION TRUTH (SEALED ENVELOPE)`]
       : [`\n## NIEZMIENNA PRAWDA ŚLEDZTWA (ZAMKNIĘTA KOPERTA)`];
 
-    if (ta.culprit) lines.push(isEn ? `- True Culprit: ${ta.culprit}` : `- Prawdziwy sprawca: ${ta.culprit}`);
-    if (ta.motive) lines.push(isEn ? `- Motive: ${ta.motive}` : `- Motyw zbrodni: ${ta.motive}`);
-    if (ta.murderWeapon) lines.push(isEn ? `- Murder Weapon / Method: ${ta.murderWeapon}` : `- Narzędzie / metoda: ${ta.murderWeapon}`);
-    if (ta.keyAlibi) lines.push(isEn ? `- Inviolable Alibi: ${ta.keyAlibi}` : `- Kluczowe alibi: ${ta.keyAlibi}`);
+    if (ta.culprit)
+      lines.push(
+        isEn
+          ? `- True Culprit: ${ta.culprit}`
+          : `- Prawdziwy sprawca: ${ta.culprit}`
+      );
+    if (ta.motive)
+      lines.push(
+        isEn ? `- Motive: ${ta.motive}` : `- Motyw zbrodni: ${ta.motive}`
+      );
+    if (ta.murderWeapon)
+      lines.push(
+        isEn
+          ? `- Murder Weapon / Method: ${ta.murderWeapon}`
+          : `- Narzędzie / metoda: ${ta.murderWeapon}`
+      );
+    if (ta.keyAlibi)
+      lines.push(
+        isEn
+          ? `- Inviolable Alibi: ${ta.keyAlibi}`
+          : `- Kluczowe alibi: ${ta.keyAlibi}`
+      );
     if (ta.immutableFacts && ta.immutableFacts.length > 0) {
       ta.immutableFacts.forEach((f) => lines.push(`- ${f}`));
     }
@@ -1273,19 +1369,22 @@ export function buildAdditionalContext(
 
         characters.forEach((char) => {
           const occ = isEn
-            ? (char.occupation ? (getLocalizedOccupationName(char.occupation, 'en') || char.occupation) : '')
-            : (char.occupation || '');
+            ? char.occupation
+              ? getLocalizedOccupationName(char.occupation, 'en') ||
+                char.occupation
+              : ''
+            : char.occupation || '';
           duetContext += isEn
             ? `- **${char.name}** (${occ}): ${char.background || ''}\n` +
               `  * Concept: ${char.characterConcept || ''}\n` +
-              `  * Personality & Traits: ${(char.traits || []).join(', ')}. ${((char as unknown) as Record<string, unknown>).personality || ''}\n` +
+              `  * Personality & Traits: ${(char.traits || []).join(', ')}. ${(char as unknown as Record<string, unknown>).personality || ''}\n` +
               `  * Significant Person: ${char.significantPerson || ''}\n` +
               `  * Meaningful Location: ${char.meaningfulLocation || ''}\n` +
               `  * Treasured Possession: ${char.treasuredPossession || ''}\n` +
               `  * Backstory: ${char.backstory || ''}\n`
             : `- **${char.name}** (${char.occupation}): ${char.background || ''}\n` +
               `  * Koncept: ${char.characterConcept || ''}\n` +
-              `  * Osobowość i Cechy: ${(char.traits || []).join(', ')}. ${((char as unknown) as Record<string, unknown>).personality || ''}\n` +
+              `  * Osobowość i Cechy: ${(char.traits || []).join(', ')}. ${(char as unknown as Record<string, unknown>).personality || ''}\n` +
               `  * Kluczowa osoba: ${char.significantPerson || ''}\n` +
               `  * Ważne miejsce: ${char.meaningfulLocation || ''}\n` +
               `  * Cenne posiadanie: ${char.treasuredPossession || ''}\n` +
@@ -1298,35 +1397,41 @@ export function buildAdditionalContext(
   }
 
   // Concordia Pattern: Epistemic Fog of War & MakeObservation
-  const epistemicChars: InvestigatorSubjectiveState[] = (characters && characters.length > 0)
-    ? characters.map((c) => ({
-        id: c.id,
-        name: c.name,
-        currentLocation: currentLocation,
-        sanity: c.san,
-        maxSanity: c.maxSan ?? (typeof c.san === 'number' ? 99 : undefined),
-        dayStartSan: c.dayStartSan,
-        dailySanLoss: c.dailySanLoss,
-        insanityState: c.insanityState,
-        underlyingInsanity: c.underlyingInsanity,
-        isBoutOfMadnessActive: Boolean(c.activeBoutOfMadness),
-        phobias: c.characterTraits?.phobias,
-        manias: c.characterTraits?.manias,
-      }))
-    : playerCharacterName
-      ? [{ id: 'p1', name: playerCharacterName, currentLocation }]
-      : [];
+  const epistemicChars: InvestigatorSubjectiveState[] =
+    characters && characters.length > 0
+      ? characters.map((c) => ({
+          id: c.id,
+          name: c.name,
+          currentLocation: currentLocation,
+          sanity: c.san,
+          maxSanity: c.maxSan ?? (typeof c.san === 'number' ? 99 : undefined),
+          dayStartSan: c.dayStartSan,
+          dailySanLoss: c.dailySanLoss,
+          insanityState: c.insanityState,
+          underlyingInsanity: c.underlyingInsanity,
+          isBoutOfMadnessActive: Boolean(c.activeBoutOfMadness),
+          phobias: c.characterTraits?.phobias,
+          manias: c.characterTraits?.manias,
+        }))
+      : playerCharacterName
+        ? [{ id: 'p1', name: playerCharacterName, currentLocation }]
+        : [];
 
   const unrevealedClueSet = new Set<string>();
   if (opts.truthAnchor?.unrevealedClueTitles) {
-    opts.truthAnchor.unrevealedClueTitles.forEach((t) => unrevealedClueSet.add(t));
+    opts.truthAnchor.unrevealedClueTitles.forEach((t) =>
+      unrevealedClueSet.add(t)
+    );
   }
 
   if (characters && characters.length > 0) {
     for (const char of characters) {
       if (char.investigatorDossier?.clues) {
         char.investigatorDossier.clues.forEach((c) => {
-          if (c.discoveryStatus === 'unrevealed' || c.status === 'unconfirmed') {
+          if (
+            c.discoveryStatus === 'unrevealed' ||
+            c.status === 'unconfirmed'
+          ) {
             unrevealedClueSet.add(c.title);
           }
         });
@@ -1343,18 +1448,22 @@ export function buildAdditionalContext(
 
   const unrevealedClueTitles = Array.from(unrevealedClueSet);
 
-  const concordiaTruthAnchor: EpistemicTruthAnchor | undefined = opts.truthAnchor
-    ? {
-        culprit: opts.truthAnchor.culprit,
-        motive: opts.truthAnchor.motive,
-        murderWeapon: opts.truthAnchor.murderWeapon,
-        keyAlibi: opts.truthAnchor.keyAlibi,
-        immutableFacts: opts.truthAnchor.immutableFacts,
-        unrevealedClueTitles: unrevealedClueTitles.length > 0 ? unrevealedClueTitles.slice(0, 5) : undefined,
-      }
-    : unrevealedClueTitles.length > 0
-      ? { unrevealedClueTitles: unrevealedClueTitles.slice(0, 5) }
-      : undefined;
+  const concordiaTruthAnchor: EpistemicTruthAnchor | undefined =
+    opts.truthAnchor
+      ? {
+          culprit: opts.truthAnchor.culprit,
+          motive: opts.truthAnchor.motive,
+          murderWeapon: opts.truthAnchor.murderWeapon,
+          keyAlibi: opts.truthAnchor.keyAlibi,
+          immutableFacts: opts.truthAnchor.immutableFacts,
+          unrevealedClueTitles:
+            unrevealedClueTitles.length > 0
+              ? unrevealedClueTitles.slice(0, 5)
+              : undefined,
+        }
+      : unrevealedClueTitles.length > 0
+        ? { unrevealedClueTitles: unrevealedClueTitles.slice(0, 5) }
+        : undefined;
 
   const observationDirective = buildConcordiaObservationDirective({
     characters: epistemicChars,
@@ -1373,9 +1482,13 @@ export function buildAdditionalContext(
     additionalContext.push(opts.eventResolutionDirective);
   } else if (opts.playerMessage && !opts.isGameStart) {
     const activeChar =
-      (playerCharacterName ? characters?.find((c) => c.name === playerCharacterName) : undefined) ??
+      (playerCharacterName
+        ? characters?.find((c) => c.name === playerCharacterName)
+        : undefined) ??
       characters?.[0] ??
-      (playerCharacterName ? ({ name: playerCharacterName } as Character) : null);
+      (playerCharacterName
+        ? ({ name: playerCharacterName } as Character)
+        : null);
 
     const eventResolution = adjudicateEventPipeline(opts.playerMessage, {
       character: activeChar,
@@ -1384,7 +1497,10 @@ export function buildAdditionalContext(
       npcs: npcs as NPC[] | undefined,
       presentNpcNames: scenePresentNpcs.map((n) => n.name),
       locale: opts.locale,
-      gameContext: typeof opts.gameContext === 'object' ? JSON.stringify(opts.gameContext) : undefined,
+      gameContext:
+        typeof opts.gameContext === 'object'
+          ? JSON.stringify(opts.gameContext)
+          : undefined,
     });
     if (eventResolution?.directive) {
       additionalContext.push(eventResolution.directive);
@@ -1394,7 +1510,10 @@ export function buildAdditionalContext(
     const isEn = opts.locale === 'en';
     const violation = eventResolution?.adjudication?.guardrailViolation;
     const strike = opts.guardrailState?.strikeCount ?? (violation ? 1 : 0);
-    const charName = activeChar?.name || playerCharacterName || (isEn ? 'Investigator' : 'Badacz');
+    const charName =
+      activeChar?.name ||
+      playerCharacterName ||
+      (isEn ? 'Investigator' : 'Badacz');
 
     if (strike > 0) {
       additionalContext.push(`\n[GUARDRAIL_LEVEL: ${strike}]`);
@@ -1438,5 +1557,22 @@ export function buildAdditionalContext(
     additionalContext.push(opts.worldEngineDirectives);
   }
 
+  if (
+    opts.handoutsSection?.includes('cien-nad-prabutami') ||
+    opts.truthAnchor?.culprit?.includes('Majewski')
+  ) {
+    additionalContext.push(
+      'LIGHTING DIRECTION: At an actual scene transition, emit [SCENA:sceneId] using ONLY this registry. For authored non-mechanical accents use [CUE:id] in the same sentence as the event. Never emit a gunshot or SAN cue to request a test. Hidden tags, never speak them.\n' +
+        PRABUTY_SCENES.map(
+          (scene) =>
+            `${scene.sceneId}: ${scene.name.en}; ${scene.name.pl}. Authored cues: ${
+              scene.lighting.accents
+                .filter((a) => a.trigger === 'authored')
+                .map((a) => a.id)
+                .join(', ') || 'none'
+            }`
+        ).join('\n')
+    );
+  }
   return additionalContext;
 }

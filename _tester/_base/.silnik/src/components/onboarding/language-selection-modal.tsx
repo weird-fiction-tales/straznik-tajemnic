@@ -1,5 +1,7 @@
 'use client';
 
+import '@/components/ui/deco-window.css';
+
 import { useState } from 'react';
 import { usePathname, useRouter } from '@/i18n/routing';
 import type { MeasurementSystem } from '@/lib/types';
@@ -89,7 +91,7 @@ export function LanguageSelectionContent({
               type="button"
               data-testid="btn-language-pl"
               onClick={() => onSelectLanguage('pl', 'metric')}
-              className="mt-1 w-full py-2.5 bg-primary/20 hover:bg-primary/30 border border-primary/50 text-primary hover:text-emerald-300 font-display text-xs sm:text-sm uppercase tracking-[0.14em] font-bold rounded-sm transition-all text-center cursor-pointer shadow-sm hover:shadow-[0_0_20px_rgba(20,184,166,0.3)] active:scale-[0.99]"
+              className="mt-1 w-full py-2.5 bg-primary hover:bg-primary/90 border border-primary text-primary-foreground font-display text-xs sm:text-sm uppercase tracking-[0.14em] font-bold rounded-sm transition-all text-center cursor-pointer shadow-sm hover:shadow-[0_0_20px_rgba(20,184,166,0.3)] active:scale-[0.99]"
             >
               ROZPOCZNIJ PO POLSKU &rarr;
             </button>
@@ -122,7 +124,7 @@ export function LanguageSelectionContent({
                 onClick={() => setEnMeasurement('imperial')}
                 className={`py-1.5 px-2 text-xs font-mono rounded transition-all cursor-pointer ${
                   enMeasurement === 'imperial'
-                    ? 'bg-brass/35 text-brass font-bold border border-brass/60 shadow-[0_0_12px_rgba(201,162,39,0.25)]'
+                    ? 'bg-primary/10 text-foreground font-bold border border-primary shadow-glow'
                     : 'bg-black/40 text-muted-foreground hover:text-foreground border border-brass/20 hover:bg-white/5'
                 }`}
               >
@@ -133,7 +135,7 @@ export function LanguageSelectionContent({
                 onClick={() => setEnMeasurement('metric')}
                 className={`py-1.5 px-2 text-xs font-mono rounded transition-all cursor-pointer ${
                   enMeasurement === 'metric'
-                    ? 'bg-brass/35 text-brass font-bold border border-brass/60 shadow-[0_0_12px_rgba(201,162,39,0.25)]'
+                    ? 'bg-primary/10 text-foreground font-bold border border-primary shadow-glow'
                     : 'bg-black/40 text-muted-foreground hover:text-foreground border border-brass/20 hover:bg-white/5'
                 }`}
               >
@@ -144,7 +146,7 @@ export function LanguageSelectionContent({
               type="button"
               data-testid="btn-language-en"
               onClick={() => onSelectLanguage('en', enMeasurement)}
-              className="mt-1 w-full py-2.5 bg-primary/20 hover:bg-primary/30 border border-primary/50 text-primary hover:text-emerald-300 font-display text-xs sm:text-sm uppercase tracking-[0.14em] font-bold rounded-sm transition-all text-center cursor-pointer shadow-sm hover:shadow-[0_0_20px_rgba(20,184,166,0.3)] active:scale-[0.99]"
+              className="mt-1 w-full py-2.5 bg-primary hover:bg-primary/90 border border-primary text-primary-foreground font-display text-xs sm:text-sm uppercase tracking-[0.14em] font-bold rounded-sm transition-all text-center cursor-pointer shadow-sm hover:shadow-[0_0_20px_rgba(20,184,166,0.3)] active:scale-[0.99]"
             >
               LAUNCH IN ENGLISH &rarr;
             </button>
@@ -163,7 +165,7 @@ export function LanguageSelectionContent({
           <span className="inline-block px-2 py-0.5 text-[10px] sm:text-xs font-mono font-bold tracking-widest uppercase bg-destructive/30 text-destructive-foreground border border-destructive/60 rounded-sm shadow-sm">
             18+ &bull; MATURE AUDIENCE
           </span>
-          <span className="font-display text-xs sm:text-sm uppercase tracking-wider text-amber-200 font-semibold">
+          <span className="font-display text-xs sm:text-sm uppercase tracking-wider text-brass font-semibold">
             Ostrzeżenie o zawartości / Content Warning
           </span>
         </div>
@@ -214,7 +216,7 @@ export function LanguageSelectionModal({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex flex-col items-center justify-center overflow-hidden bg-background p-3 sm:p-6"
+      className="deco-window fixed inset-0 z-[1000] flex flex-col items-center justify-center overflow-hidden lg:justify-start lg:overflow-y-auto bg-background p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="language-selection-title"

@@ -1,3 +1,5 @@
+import { readStarterState } from '@/lib/adventures/starter-client';
+import type { StarterState } from '@/lib/adventures/starter-runtime';
 import type { FullGameSave } from '@/lib/full-game-save-manager';
 import type { AISettings } from '@/lib/ai-settings';
 import { loadAISettings } from '@/lib/ai-settings';
@@ -22,7 +24,11 @@ import {
   sanitizeNpcForApi,
 } from '@/lib/chat-history-sanitizer';
 import { loadStoredWorldSetup } from '@/lib/world-setup';
+import { readPendingSkillRoll } from '@/lib/adventure-dossier/pending-skill-roll';
 import { loadCampaignMemoryScope } from '@/core/memory/campaign-scope';
+import { readDossierInventoryForSave } from '@/lib/adventure-dossier/inventory-state';
+import { readDossierWorldStateForSave } from '@/lib/adventure-dossier/world-object-state';
+import { timeManager } from '@/lib/time-manager';
 
 export interface GameTimeLike {
   year?: number;
@@ -69,6 +75,8 @@ export function generateSessionEndSaveName(
 }
 
 export interface FullGameSaveDataInput {
+  dossierState?: StarterState;
+  adventureContext?: import('@/lib/adventures-data').AdventureContext;
   messages: unknown[];
   locale?: 'pl' | 'en';
   aiSettings?: AISettings | null;
@@ -154,10 +162,47 @@ export async function performFullGameSave(
   }
 
   const userId = 'local';
+  const clockState = timeManager.getSnapshot();
+  const campaignMemory = loadCampaignMemoryScope() ?? undefined;
+  if (
+    campaignMemory &&
+    data.pdfMemory?.adventureDossierFingerprint &&
+    typeof window !== 'undefined'
+  ) {
+    const message =
+      currentLocale === 'en'
+        ? 'Send the saved roll result again before saving the game.'
+        : 'Wyślij zapisany wynik rzutu ponownie przed zapisaniem gry.';
+    try {
+      const history: LibMessage[] = JSON.parse(
+        localStorage.getItem('zew_chat_messages') ?? '[]'
+      );
+      const pending = readPendingSkillRoll(
+        localStorage,
+        {
+          ...campaignMemory,
+          editionFingerprint: data.pdfMemory.adventureDossierFingerprint,
+        },
+        history,
+        data.characters.map((c) => c.id)
+      );
+      if (pending) throw new Error(message);
+    } catch {
+      throw new Error(message);
+    }
+  }
+  const dossierInventory = readDossierInventoryForSave(
+    campaignMemory?.playthroughId
+  );
+  const dossierWorldState = readDossierWorldStateForSave(
+    campaignMemory?.playthroughId
+  );
   const saveId = `save_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
   // 1. Zbierz base64 obrazy z historii
-  const rawMessages = (data.messages || []) as unknown as Parameters<typeof collectSaveImages>[0];
+  const rawMessages = (data.messages || []) as unknown as Parameters<
+    typeof collectSaveImages
+  >[0];
   const imageRefs = collectSaveImages(rawMessages);
 
   // 2. Upload best-effort (tylko gdy saveImages === true)
@@ -252,10 +297,15 @@ export async function performFullGameSave(
     images,
     gameSettings: {
       aiSettings: saveSettings
-        ? (data.aiSettings || (typeof window !== 'undefined' ? loadAISettings() : ({} as AISettings)))
+        ? data.aiSettings ||
+          (typeof window !== 'undefined'
+            ? loadAISettings()
+            : ({} as AISettings))
         : ({} as AISettings),
     },
-    equipmentVisualEra: data.equipmentVisualEra as EquipmentVisualEra | undefined,
+    equipmentVisualEra: data.equipmentVisualEra as
+      | EquipmentVisualEra
+      | undefined,
     worldSetup: loadStoredWorldSetup(),
     characters: (data.characters || [])
       .map((c) => sanitizeCharacterForApi(c))
@@ -265,7 +315,25 @@ export async function performFullGameSave(
     investigatorBoard: data.investigatorBoard,
     campaigns: campaigns || [],
     activeCampaignId,
-    campaignMemory: loadCampaignMemoryScope() ?? undefined,
+    campaignMemory,
+    dossierInventory,
+    dossierWorldState,
+    clockState,
+    dossierState: data.dossierState ?? readStarterState() ?? undefined,
+    adventureContext:
+      data.adventureContext ??
+      (() => {
+        try {
+          const a = JSON.parse(
+            localStorage.getItem('adventure_context') || 'null'
+          );
+          return a
+            ? { ...a, handouts: undefined, graph: undefined }
+            : undefined;
+        } catch {
+          return undefined;
+        }
+      })(),
     npcs: (npcs || []).map((n) => sanitizeNpcForApi(n)),
     locations: locations || [],
     currentLocationId: data.currentLocationId,

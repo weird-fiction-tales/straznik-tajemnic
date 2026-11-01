@@ -3,6 +3,7 @@ import { timeManager } from '@/lib/time-manager';
 import { localVectorStore } from '@/lib/vector-db/local-vector-store';
 import { logApiEvent, generateTraceId, startTimer } from '@/lib/telemetry';
 import { runChatPipeline } from './_helpers/run-chat-pipeline';
+import { CampaignContextBudgetError } from '@/lib/ai-providers/context-budget';
 import { isInvalidKeyError } from './_helpers/model-fallback';
 
 // Zew-App-Local: RAG na lokalnym magazynie wektorów (data/rag/), bez Pinecone.
@@ -30,6 +31,11 @@ export async function POST(request: NextRequest) {
 
     return await runChatPipeline({ request, body, traceId, timer });
   } catch (error) {
+    if (error instanceof CampaignContextBudgetError) {
+      await logApiEvent({ traceId, endpoint: '/api/chat', status: 422, durationMs: timer.elapsed(),
+        result: 'error', errorCode: error.code }).catch(() => {});
+      return NextResponse.json({ code: error.code }, { status: 422 });
+    }
     const errorMsg =
       error instanceof Error ? error.stack || error.message : String(error);
     // IND-67: drop fs.appendFileSync('./src/api-debug.log') - Vercel READ-ONLY FS.

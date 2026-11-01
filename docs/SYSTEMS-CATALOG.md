@@ -51,3 +51,51 @@ Dokumentacja w root `docs/` jest źródłem prawdy. Kopie w runtime nie są źr�
 - Dokumentacja: root `docs/`.
 - Assety katalogowe: `public/equipment/catalog` i `equipment-catalog.ts`.
 
+
+## Odbiór autorski teczek
+
+`draft`: `scripts/gm-prep/prepare-quicksetup.mjs` zachowuje źródła presetów, a `review-scenes.mjs` tworzy prywatny podgląd grup scen. `scene-review.mjs` przypisuje rekordom właścicieli i wiąże decyzje z hashem treści oraz zależności. Oddzielne statusy dotyczą treści, mediów, integracji i próby gry. Szczegóły: [odbiór grupami](adventure-dossiers/GROUPED-REVIEW.md). Zgoda autora nie zastępuje aktywacji teczki w Quick Setup ani testów rozgrywki.
+
+`draft`: osobny [podgląd początku dla gracza](adventure-dossiers/PLAYER-OPENING.md) używa `player-opening-render.mjs`. Przygotowane wybory, media i dziennik działają lokalnie; renderer nie aktywuje teczki ani sesji AI i nie nadaje akceptacji autora.
+
+`draft`: [przestrzenna mapa teczki](adventure-dossiers/ADVENTURE-MAP.md) łączy kanon, rekordy i media przez `adventure-map-model.mjs`; lokalny HTML z `adventure-map-render.mjs` pokazuje powiązania XYZ i pełne karty autora. `build-adventure-map.mjs` kopiuje media do prywatnej paczki. Narzędzie nie aktywuje teczki w grze ani nie nadaje zgód.
+
+### Lokalny pokaz Prabuty PL - naprawa 29.10.2026
+
+Szybki start udostępnia solo i duet, zachowuje tożsamość postaci i dobiera lokalnie zmierzoną konfigurację AI. Segmenty wspólnej tury niosą właściciela deklaracji do planu Prabut. Mechanika emituje przypisane testy i operacje przedmiotów; AI nadal opisuje wynik. Publiczny dziennik wyświetla kanoniczne nazwy miejsc bez zmiany identyfikatorów zapisu oraz zapisuje poznane osoby wyłącznie z widocznej narracji. Transport Gemini ma limit czasu, anulowanie i zamykanie strumienia. Szczegółowy kontrakt i dowody: docs/audits/prabuty-demo-repair-2026-10-29/.
+
+W dokładnej operacyjnej edycji Prabut kod publikuje jawny wynik operacji przedmiotu oraz dostępne informacje źródłowe. `source-owned-narration` usuwa niedozwolone ruchy ekwipunku z prozy AI; nie nadaje uprawnień do tych ruchów. Serwer stosuje plan przed publikacją SSE i zapisem pamięci, a bramka klienta sprawdza ten sam plan idempotentnie. Zapobiega to rozjazdowi historii widocznej i pamięci wymaganej przez pełny zapis. Resolver testów najpierw wiąże jednoznaczne ID postaci z drużyny, niezależnie od aktualnie otwartej karty.
+
+Próba pokazu 29.10 - domknięcie sanitacji: wspólny stripIncompletePrivateMarkers w parserze usuwa tylko niepełne linie prywatnego protokołu, zachowując kompletne/zagnieżdżone tagi i późniejszą mechanikę. Wywołanie przed applyPrabutyPlanToText zapewnia zgodność strumienia serwera, pamięci i bramki klienta; cleanupContent stanowi ten sam filtr prezentacji. document-fidelity zatrzymuje analizę na granicy aktu mowy i wymaga jawnego odczytu, nadal blokując fikcyjne cytaty inskrypcji. Plan czasu rozpoznaje pojedynczą podróż z osobnym zdaniem jej jawnego czasu, bez domyślnego kosztu i dodatkowych działań.
+
+
+### Prabuty: zgodność publicznej narracji (29.10.2026)
+
+`prabuty-action-plan` przekazuje `narrativeFacts` i korzysta z `prabuty-narrative-fidelity` przed publikacją w pipeline oraz w tej samej walidacji klienta. Prezentacja usuwa etykietę finału, pilnuje numeru źródłowej receptury i zastępuje rozpoznane samodzielne twierdzenia o upływie minut/kwadransów/godzin zapisanym czasem. To ograniczona ochrona rozpoznanych konstrukcji językowych, nie pełna semantyczna kontrola dowolnej narracji. Podpisane cytaty rozpoznaje wspólny parser dialogów; zachowuje skróty tytułów i pełną wypowiedź. Obserwacje bez podpisu zachowują cały akapit, aby nie ucinać cytatów przy kropce w skrócie. Źródło edycji, mechaniczne identyfikatory i zapisany czas pozostają kanoniczne.
+
+
+### Publiczne wizytówki poznanych kart (30.10.2026)
+
+`public-journal` wzbogaca wyłącznie poznane karty osoby lub odwiedzonego miejsca przez `journal/prepared-public-profiles`. Wspólny `npc-public-profile` łączy gotowy portret i bezpieczną rolę z jednoznaczną tożsamością w danej przygodzie; nie importuje sekretów ani prywatnego dossier. Wizytówka pozostaje osobna od cytowanego dowodu. Projekcja starszego zapisu zachowuje ID i stan odkryć; pełny cytat może odtworzyć wyłącznie z tej samej zaakceptowanej wiadomości. `SessionJournal` pokazuje małą ikonę zamiast pustego pola obrazu i nazywa źródło świadkiem, materiałem lub sceną. Dotychczasowa historia nawigacji zachowuje wyszukiwanie, przewinięcie i fokus. Odbiór całości wymaga renderu PL/EN w dostarczonym buildzie.
+
+
+## Reżyseria światła Hue i Prabuty
+
+Lokalny `/api/hue` jest właścicielem połączenia HTTPS v2, kluczy, migawki lamp i dzierżawy sesji. Entertainment korzysta z DTLS i HueStream v2 (50 Hz). Partytura pochodzi z `data/adventures/predefined/cien-nad-prabutami.json`; runtime i eksport teczki korzystają z tych samych scen. Reżyseria jest opcjonalna; błyski wymagają osobnego włączenia. Odbiór na fizycznych lampach i pomiar synchronizacji pozostają wymagane przed oznaczeniem pełnej gotowości. Kontrakt: [HUE-LIGHTING.md](HUE-LIGHTING.md).
+
+## Oświetlenie Hue i Ambilight (2026-10-31)
+
+Reżyser `src/lib/hardware/hue/light-director.ts` wysyła te same deterministyczne efekty do Hue i dodatkowego adaptera Ambilight. TV działa także bez włączonego mostka Hue. Błąd lub oczekiwanie na TV nie blokuje lamp ani gry. Integracja TV obejmuje zgodne modele JointSpace 6 z PIN; inne wersje otrzymują komunikat o braku zgodności. Model docelowy do próby sprzętowej: Philips 55PUS7303/12.
+
+`src/lib/hardware/ambilight/` odpowiada za wykrywanie SSDP, weryfikację możliwości, parowanie, kolory i przywracanie stanu. Lokalny endpoint `/api/hardware/ambilight` obsługuje ustawienia oraz efekty. Dane parowania zapisuje serwer w `getWritableDataDir()/hardware/ambilight.json` z prawami 0600; nie trafiają do przeglądarki. Certyfikat TV przypinamy od parowania. Kopia poprzedniego trybu pozwala ponowić przywrócenie także po restarcie aplikacji. Po restarcie efekty pozostają wyłączone.
+
+Stan: implementacja i testy z atrapą TV; potwierdzenie na fizycznym urządzeniu i ocena opóźnienia pozostają osobnym krokiem. Nie gwarantujemy synchronizacji co do milisekundy ani przejść czasowych identycznych z Hue. Brak sprzętowego dowodu zgodności konkretnego firmware.
+
+
+### Przygotowanie teczki startera
+
+Lokalna edycja PL/EN: `docs/adventure-dossiers/STARTER-PREPARATION.md`. Podgląd i rekordy źródłowe mają oddzielny odbiór od integracji tury, rozgrywki i wydania desktopowego. Generator `scripts/gm-prep/prepare-starter.mjs` nie uruchamia gry ani produkcji audio.
+
+### Baza 0.9.6
+
+Skonsolidowane wydanie lokalne łączy powyższe moduły. Pakowanie zachowuje profil gracza, identyfikuje build przed otwarciem przeglądarki i wyłącza samoczynną aktualizację. Scalenie `main` nie publikuje instalatorów. Zakres i ograniczenia: [RELEASE-0.9.6.md](RELEASE-0.9.6.md).

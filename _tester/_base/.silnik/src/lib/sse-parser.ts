@@ -16,6 +16,9 @@ export interface SSETextEvent {
 /** Metadane zwracane na końcu strumienia (ilustracje, koszty, dialogi) */
 export interface SSEMetadataEvent {
   type: 'metadata';
+  dossierClueRecordIds?: string[];
+  dossierHandoutRecordIds?: string[];
+  dossierInventoryWritesAllowed?: boolean;
   illustrations?: Array<{ prompt: string; style?: string }>;
   costData?: Record<string, unknown>;
   dialogues?: Array<{ speaker: string; text: string; emotion?: string }>;

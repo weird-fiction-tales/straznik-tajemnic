@@ -1,7 +1,8 @@
 'use client';
 
 import type { FC } from 'react';
-import { useTranslations } from 'next-intl';
+import {getLocalizedSkillName} from '@/lib/data/character/skills';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Dices, Sparkles, Send } from 'lucide-react';
@@ -9,7 +10,6 @@ import {
   type DiceRoll,
   getOutcomeInfo,
   isSuccess,
-  REQUIRED_DIFFICULTY_LABELS,
 } from '@/lib/dice-utils';
 import type { RollTestData } from './RollTestModal';
 import { ArtDecoDice3D, type ArtDecoDiceBreakdown } from './ArtDecoDice3D';
@@ -50,6 +50,7 @@ export const RollTestResult: FC<RollTestResultProps> = ({
   onClose,
 }) => {
   const t = useTranslations('RollTestResult');
+  const locale=useLocale();
   const target = test.value;
   const hardThreshold = Math.floor(target / 2);
   const extremeThreshold = Math.floor(target / 5);
@@ -71,11 +72,16 @@ export const RollTestResult: FC<RollTestResultProps> = ({
     !!roll?.requiredDifficulty &&
     roll.requiredDifficulty !== 'regular' &&
     roll.passedRequirement !== undefined;
-  const rawOutcomeInfo = roll?.outcome ? getOutcomeInfo(roll.outcome) : null;
+  const rawOutcomeInfo = roll?.outcome ? getOutcomeInfo(roll.outcome,locale) : null;
   const outcomeInfo =
     hasSetDifficulty && !succeeded && roll?.outcome && isSuccess(roll.outcome)
-      ? getOutcomeInfo('fail')
+      ? getOutcomeInfo('fail',locale)
       : rawOutcomeInfo;
+
+  const displayedOutcome =
+    hasSetDifficulty && !succeeded && roll?.outcome && isSuccess(roll.outcome)
+      ? 'fail'
+      : roll?.outcome;
 
   const bonusLabel =
     test.bonusDice > 0
@@ -125,7 +131,7 @@ export const RollTestResult: FC<RollTestResultProps> = ({
                   key={idx}
                   className="flex flex-wrap items-center justify-between text-xs border-b border-border/30 pb-1 last:border-none"
                 >
-                  <span className="font-bold text-foreground">{sub.skillName}</span>
+                  <span className="font-bold text-foreground">{getLocalizedSkillName(sub.skillName,locale)}</span>
                   <div className="flex gap-2 font-mono">
                     <span className={thClass('zwykly', 'text-foreground')}>≤{subTarget}</span>
                     <span className={thClass('trudny', 'text-brass')}>½ ≤{subHard}</span>
@@ -193,9 +199,9 @@ export const RollTestResult: FC<RollTestResultProps> = ({
               <div className="space-y-0.5 text-xs font-mono text-muted-foreground">
                 {combinedResolution.subtests.map((sub, idx) => (
                   <div key={idx} className="flex justify-center gap-2">
-                    <span className="text-foreground">{sub.skillName}:</span>
+                    <span className="text-foreground">{getLocalizedSkillName(sub.skillName,locale)}:</span>
                     <span className={sub.isSuccess ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                      {sub.isSuccess ? '✓ ZDANY' : '✗ NIEZDANY'} (≤{sub.threshold})
+                      {sub.isSuccess ? '✓ '+t('passed') : '✗ '+t('failed')} (≤{sub.threshold})
                     </span>
                   </div>
                 ))}
@@ -205,9 +211,10 @@ export const RollTestResult: FC<RollTestResultProps> = ({
             <>
               {outcomeInfo && (
                 <div
-                  className={`relative font-display text-lg uppercase tracking-[0.16em] ${outcomeInfo.color}`}
+                  data-testid="roll-outcome-label"
+                  className={`relative font-display text-lg uppercase tracking-[0.16em] ${displayedOutcome === 'fail' || displayedOutcome === 'fumble' ? 'text-destructive' : displayedOutcome === 'critical' ? 'text-brass' : 'text-primary'}`}
                 >
-                  {outcomeInfo.emoji} {outcomeInfo.label}
+                  {outcomeInfo.emoji} {displayedOutcome ? t(`outcomes.${displayedOutcome}`) : ''}
                 </div>
               )}
               {roll?.requiredDifficulty &&
@@ -218,7 +225,7 @@ export const RollTestResult: FC<RollTestResultProps> = ({
                   >
                     {succeeded ? '✓' : '✗'}{' '}
                     {t('requiredLevelTag', {
-                      level: REQUIRED_DIFFICULTY_LABELS[roll.requiredDifficulty],
+                      level: { regular: t('difficultyRegular'), hard: t('difficultyHard'), extreme: t('difficultyExtreme') }[roll.requiredDifficulty],
                     })}
                   </div>
                 )}

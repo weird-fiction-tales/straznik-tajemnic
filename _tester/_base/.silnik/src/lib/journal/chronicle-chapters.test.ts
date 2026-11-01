@@ -78,6 +78,13 @@ describe('durable chronicle chapters', () => {
     expect(closeChronicleSession(turn.activeCharacter, 'end', withDestination).sceneCards).toHaveLength(2);
   });
 
+  it('retains the exact dossier edition when the player closes a known scene', () => {
+    const anna = character('anna'); const first = begin([anna], anna);
+    const binding = { adventureId: scope.adventureId, editionFingerprint: 'known-edition' };
+    first.activeCharacter.activeScene!.dossierBinding = binding;
+    expect(closeChronicleSession(first.activeCharacter, 'end').sceneCards?.[0].dossierBinding).toEqual(binding);
+  });
+
   it('recovers the previous scene boundary for legacy closure and never summarizes the whole older chat', () => {
     const anna = character('anna');
     anna.sceneCards = [{ id: 'old-card', sceneNumber: 1, location: 'Doki', title: 'Doki', timestamp: '2026-01-01', people: [], findings: [], keyTakeaways: [], isSealed: true, endMessageId: 'old-end' }];

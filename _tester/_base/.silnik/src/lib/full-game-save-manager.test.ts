@@ -3,8 +3,66 @@ import type { HotSeatConfig, Character } from './types';
 import { FullGameSaveManager } from './full-game-save-manager';
 import type { WorldSetupBundleV1 } from './world-setup';
 import { PREDEFINED_CHARACTERS } from './immersion/predefined-characters';
+import { makePublicJournalFixture } from '@/tests/fixtures/public-journal';
+import { buildPublicJournal, markJournalCardRead } from './journal/public-journal';
 
 describe('FullGameSaveManager duet persistence', () => {
+  it('round-trips shared public knowledge, exact sources, observed materials and read versions without chat history', () => {
+    const fixture = makePublicJournalFixture('pl');
+    const finding = fixture.model.cards.find(card => card.title === fixture.labels.finding)!;
+    fixture.characters[0] = markJournalCardRead(fixture.characters[0], fixture.model.scopeKey, finding);
+    const save = FullGameSaveManager.createFullSave({ name: 'Public journal', userId: 'local', messages: [],
+      gameSettings: { aiSettings: {} as AISettings }, characters: fixture.characters, campaigns: [], npcs: [], locations: [] });
+    const loaded = FullGameSaveManager.decompressSave(FullGameSaveManager.compressSave(save));
+    expect(loaded).not.toBeNull();
+    const model = buildPublicJournal({ characters: loaded!.characters, chapter: fixture.chapter, binding: fixture.binding, locale: 'pl' });
+    expect(model.cards.find(card => card.id === finding.id)?.unread).toBeUndefined();
+    expect(model.cards.find(card => card.id === finding.id)).toMatchObject({
+      sources: expect.arrayContaining([expect.objectContaining({ excerpt: fixture.labels.first }), expect.objectContaining({ excerpt: fixture.labels.second })]) });
+    expect(model.cards.find(card => card.kind === 'material')?.material?.recordId).toBe(fixture.materialId);
+  });
+  it('preserves a dossier clue record ID across a full save and load', () => {
+    const character: Character = {
+      ...PREDEFINED_CHARACTERS[0],
+      id: 'char-dossier-clue',
+      investigatorDossier: {
+        clues: [{
+          id: 'player-clue-1',
+          dossierRecordId: 'adventure.synthetic.clue.lead',
+          title: 'Ślad w archiwum',
+          description: 'Zapisany testowy ślad.',
+          category: 'document',
+          status: 'confirmed',
+          discoveryStatus: 'discovered',
+          epistemicLayer: 'player_clue',
+        }],
+        npcs: [],
+        locations: [],
+        notes: [],
+      },
+    };
+    const save = FullGameSaveManager.createFullSave({
+      name: 'Dossier clue save',
+      userId: 'local',
+      messages: [],
+      gameSettings: { aiSettings: {} as AISettings },
+      characters: [character],
+      campaigns: [],
+      npcs: [],
+      locations: [],
+    });
+
+    const loaded = FullGameSaveManager.decompressSave(
+      FullGameSaveManager.compressSave(save)
+    );
+
+    expect(loaded?.characters[0].investigatorDossier?.clues[0]).toMatchObject({
+      id: 'player-clue-1',
+      dossierRecordId: 'adventure.synthetic.clue.lead',
+      discoveryStatus: 'discovered',
+    });
+  });
+
   it('preserves scene chronicle text across a full save and load', () => {
     const character: Character = {
       ...PREDEFINED_CHARACTERS[0],
@@ -80,6 +138,31 @@ describe('FullGameSaveManager duet persistence', () => {
       .toEqual(campaignMemory);
     expect(FullGameSaveManager.decompressSave(FullGameSaveManager.compressSave(save))?.memorySnapshot)
       .toEqual(save.memorySnapshot);
+  });
+
+  it('round-trips edition-bound dossier world state with the full save', () => {
+    const dossierWorldState = {
+      schemaVersion: 1 as const,
+      playthroughId: 'run-one',
+      adventureId: 'ancient-trees',
+      editionFingerprint: `sha256:${'a'.repeat(64)}`,
+      objects: [{ entityId: 'obj-hoist', state: 'disabled', updatedByTurnId: 'turn-1', lastTransitionId: 'disable' }],
+      appliedTurnIds: ['turn-1'],
+    };
+    const save = FullGameSaveManager.createFullSave({
+      name: 'Dossier world state',
+      userId: 'local',
+      messages: [],
+      gameSettings: { aiSettings: {} as AISettings },
+      characters: [],
+      campaigns: [],
+      dossierWorldState,
+      npcs: [],
+      locations: [],
+    });
+
+    expect(FullGameSaveManager.decompressSave(FullGameSaveManager.compressSave(save))?.dossierWorldState)
+      .toEqual(dossierWorldState);
   });
 
   it('loads a 2.0.0 save without campaign memory and without dropping data', () => {

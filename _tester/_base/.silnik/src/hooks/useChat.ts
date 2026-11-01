@@ -1,8 +1,95 @@
 'use client';
+
+import {
+  readPendingSkillRoll,
+  stagePendingSkillRoll,
+  clearPendingSkillRoll,
+  isPendingSkillRollAccepted,
+  type PendingSkillRoll,
+} from '@/lib/adventure-dossier/pending-skill-roll';
+
+import {
+  isAcceptedLocationLength,
+  extractLatestCanonicalLocationTag,
+  resolveCanonicalAdventureLocation,
+  isOffGraphLocationRequest,
+  type OffGraphLocationRequest,
+  type AcceptedLocationTag,
+} from '@/lib/canonical-adventure-location';
+import {
+  hasLocalPlaytestTransport,
+  hasLocalPlaytestRules,
+  checkLocalPlaytestTransport,
+} from '@/lib/local-playtest-transport';
+import { advanceAuthoredScenarioClock } from '@/lib/adventure-dossier/authored-scenario-turn';
+import {
+  beginDossierTurnTransaction,
+  loadDossierTurnTransaction,
+  resumeDossierTurnTransaction,
+} from '@/lib/adventure-dossier/turn-transaction';
+import {
+  stripCharacterImages,
+  offloadCharacterImages,
+  hydrateCharacterImages,
+} from '@/lib/character-image-store';
+import { DossierEffectsRejectedError } from '@/lib/adventure-dossier/narration-correction';
+import { createDossierResponseGate } from '@/lib/adventure-dossier/response-gate';
+import {
+  parseValidatedDossierStream,
+  acknowledgeDossierTurn,
+  prepareDossierTurnOnServer,
+} from '@/lib/adventure-dossier/validated-stream';
+import type { SSECallbacks, SSEMetadataEvent } from '@/lib/sse-parser';
+import { loadNpcSnapshot } from '@/lib/adventure-dossier/actor-initialization';
+import {
+  selectDossierActorResolvedTests,
+  bindDossierActorTests,
+} from '@/lib/adventure-dossier/actor-turn';
+import {
+  ensureLocalDossierSession,
+  loadRuntimeDossierPayload,
+} from '@/lib/adventure-dossier/client-activation';
+import {
+  acquiredHandoutsFromTurn,
+  handoutContinuationContext,
+  type DossierHandoutBinding,
+} from '@/lib/adventure-dossier/local-handouts';
+import {
+  loadDossierInventory,
+  storeDossierInventory,
+  projectDossierInventory,
+  isDossierInventoryState,
+  type DossierInventoryProjection,
+} from '@/lib/adventure-dossier/inventory-state';
+import {
+  resolveDossierAccessChecks,
+  registerDossierAccessTests,
+} from '@/lib/adventure-dossier/apply-inventory-turn';
+import type { DossierRagPayload } from '@/lib/adventure-dossier/rag-schema';
+import {
+  loadDossierWorldState,
+  projectDossierWorldState,
+  storeDossierWorldState,
+} from '@/lib/adventure-dossier/world-object-state';
+import {
+  storeStarterState,
+  readStarterState,
+  applyStarterStateToCharacters,
+} from '@/lib/adventures/starter-client';
+import {
+  validateStarterState,
+  type StarterState,
+} from '@/lib/adventures/starter-runtime';
 import { notifyMemoryCommit } from '@/core/memory/commit-client';
-import { beginChronicleTurn, closeChronicleSession, stampChronicleEntries } from '@/lib/journal/chronicle-chapters';
+import {
+  beginChronicleTurn,
+  closeChronicleSession,
+  stampChronicleEntries,
+} from '@/lib/journal/chronicle-chapters';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
+import { CONTEXT_BUDGET_ERROR_CODE } from '@/lib/ai-providers/context-budget';
 import type {
   Message,
   Character,
@@ -11,10 +98,10 @@ import type {
   HotSeatConfig,
   HotSeatPlayer,
   JournalEntry,
-  NPC,
   OpposedMeleeEventData,
   GuardrailState,
   StatChangeEventData,
+  DiceRollEventData,
 } from '@/lib/types';
 import {
   createChaseState,
@@ -33,7 +120,18 @@ import {
   sanitizeCharacterForApi,
   sanitizeHistoryForApi,
 } from '@/lib/chat-history-sanitizer';
-import type { SkillTestData } from '@/lib/parsers/types';
+import type {
+  PushedRollResolutionContext,
+  PushedRollStakeRequestContext,
+  SanityRecoveryResolutionContext,
+  MedicalExpenseResolutionContext,
+  InvestigatorChangeResolutionContext,
+  FirearmResolutionContext,
+  JamClearingResolutionContext,
+  VehicleCollisionResolutionContext,
+  DiceRollResolutionContext,
+  SkillTestData,
+} from '@/lib/parsers/types';
 import type { SkillTestResult } from '@/lib/response-parser';
 import {
   extractHazardEvents,
@@ -46,6 +144,9 @@ import {
   extractRefereeVetoEvents,
   extractGameOverEvents,
   stripMeleeAttackTags,
+  stripPushedRollConsequenceEntries,
+  buildPushedRollConsequenceJournalEntry,
+  extractExplicitPushedRollTimeCostMinutes,
 } from '@/lib/parsers/mechanics-parser';
 import { updateGuardrailState } from '@/lib/concordia/event-resolution';
 import {
@@ -61,7 +162,7 @@ import {
   hasRequiredKeys,
   isPureTextMode,
 } from '@/lib/api-keys-service';
-import { timeManager } from '@/lib/time-manager';
+import { timeManager, isGameTime } from '@/lib/time-manager';
 import {
   generateSessionEndSaveName,
   performFullGameSave,
@@ -77,13 +178,28 @@ import { resolveImageLevel } from '@/lib/prompts/image-instructions';
 import { VisualBeliefGraph } from '@/lib/images/visual-belief-graph';
 import { directSceneIllustrations } from '@/lib/images/proactive-scene-director';
 import {
+  getAdventureVisualStyle,
+  resolvePreparedAdventureVisual,
+} from '@/lib/immersion/prepared-adventure-visuals';
+import { hasResolvedClueFailForwardTrigger } from '@/lib/adventure-dossier/mechanic-registry';
+import { isDiceRollResolutionRelevantToMessage } from '@/lib/adventure-dossier/dice-context';
+import {
   appendJournalToParty,
   appendSceneChronicleSummaryToParty,
   buildSceneChronicleTranscript,
 } from '@/lib/journal/apply-journal-tags';
 import { extractNpcTags } from '@/lib/parsers/journal-parser';
+import {
+  applyPublishedJournalVisuals,
+  type PublicJournalContext,
+} from '@/lib/journal/public-journal';
+import { retainPublishedJournalVisual } from '@/lib/journal/published-visuals';
 import { applyStatChangesToParty } from '@/lib/character/apply-stat-changes';
-import { applyEquipmentEventsToParty } from '@/lib/character/apply-equipment-events';
+import {
+  applyEquipmentEventsToParty,
+  type EquipmentNotification,
+} from '@/lib/character/apply-equipment-events';
+import { buildInvestigatorChangeResolutionContext } from '@/lib/adventure-dossier/investigator-events';
 import { toast } from '@/components/ui/use-toast';
 import { resolveCharacterByName } from '@/lib/character/match-by-name';
 import { persistCharacters } from '@/lib/character-cloud-sync';
@@ -99,8 +215,7 @@ import {
 } from '@/lib/equipment-prompt-builder';
 import { resolveEraVisualProfile } from '@/lib/era-visual-style';
 import { isCheatCommand, executeCheatCommand } from '@/lib/cheats/cheat-engine';
-import { getGlobalLightDirector } from '@/lib/hardware/hue/light-director-service';
-import { playSFX } from '@/lib/audio/sfx-catalog';
+import { immersion } from '@/lib/hardware/hue/immersion';
 import type {
   CombatResolution,
   PendingMeleeAttack,
@@ -110,6 +225,7 @@ import type {
 import {
   createCombatRoundJournal,
   loadCombatJournal,
+  COMBAT_JOURNAL_STORAGE_KEY,
   resolveCombatJournalEvent,
   saveCombatJournal,
   type CombatRoundJournal,
@@ -126,23 +242,58 @@ import {
   isSameMacroLocation,
 } from '@/lib/world-engine';
 
+/** A terminal server refusal of the one allowed correction retains the original domain issues. */
+async function classifyDossierCorrectionResponse(
+  response: Response,
+  rejectedIds: string[]
+): Promise<Response> {
+  if (response.status === 409) {
+    const body: unknown = await response.json().catch(() => null);
+    console.warn('Dossier correction refused:', {
+      code:
+        body && typeof body === 'object' && 'code' in body
+          ? body.code
+          : 'UNKNOWN',
+      rejectedIds,
+    });
+    if (
+      body &&
+      typeof body === 'object' &&
+      'code' in body &&
+      body.code === 'DOSSIER_CORRECTION_REJECTED'
+    ) {
+      throw new DossierEffectsRejectedError(rejectedIds);
+    }
+  }
+  return response;
+}
+
 const MESSAGES_STORAGE_KEY = 'zew_chat_messages';
 const ACTIVE_CHASE_STORAGE_KEY = 'zew_active_chase_state';
 
 type MechanicsContext = {
+  starter?: import('@/lib/adventures/starter-runtime').StarterMechanics;
   chase?: ChaseState;
   combat?: { resolutions: CombatResolution[] };
+  development?: { completed: true; luckRecovered: boolean };
+  ideaRoll?: {
+    completed: true;
+    outcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble';
+    subjectTitle?: string;
+    miceLens: 'milieu' | 'inquiry' | 'character' | 'event';
+  };
+  skillRolls?: import('@/lib/parsers/types').SkillRollResolution[];
+  sanity?: { activeBoutOfMadness: true };
+  pushedRoll?: PushedRollResolutionContext;
+  pushedRollStakeRequest?: PushedRollStakeRequestContext;
+  sanityRecovery?: SanityRecoveryResolutionContext[];
+  medicalExpenses?: MedicalExpenseResolutionContext[];
+  investigatorChanges?: InvestigatorChangeResolutionContext[];
+  firearmResolutions?: FirearmResolutionContext[];
+  jamClearingResolutions?: JamClearingResolutionContext[];
+  vehicleCollisionResolutions?: VehicleCollisionResolutionContext[];
+  diceRollResolutions?: DiceRollResolutionContext[];
 };
-
-function loadNpcSnapshot(): NPC[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const parsed = JSON.parse(localStorage.getItem('gm_npcs') || '[]');
-    return Array.isArray(parsed) ? (parsed as NPC[]) : [];
-  } catch {
-    return [];
-  }
-}
 
 /**
  * Zadanie 6 (hardening demo-safe): chwilowy blip sieci ≠ crash gry.
@@ -189,6 +340,11 @@ async function fetchWithRetry(
  * IND-142: manual type guard dla persistowanego Message (localStorage JSON parse).
  * Single-instance + best-effort: niezgodne wpisy pomijamy, korumpowane localStorage = reset.
  */
+function hasPendingDossierTurn(): boolean {
+  const id = loadCampaignMemoryScope()?.playthroughId;
+  return !!id && localStorage.getItem(`zew-dossier-turn:${id}`) !== null;
+}
+
 function isPersistedMessage(raw: unknown): raw is {
   id: string;
   role: 'user' | 'assistant';
@@ -222,11 +378,14 @@ export function resolveSkillTestValues(
   if (!character) return tests;
   const roster = characters.length > 0 ? characters : [character];
   return tests.map((test) => {
-    const target = resolveCharacterByName(
-      roster,
-      test.characterName,
-      character
-    );
+    if (test.starter) return test;
+    const boundActors = test.characterId
+      ? roster.filter((candidate) => candidate.id === test.characterId)
+      : [];
+    const target =
+      boundActors.length === 1
+        ? boundActors[0]
+        : resolveCharacterByName(roster, test.characterName, character);
     let combined = test.combined;
     let resolvedSkillValue: number;
 
@@ -364,6 +523,8 @@ export function composeTurnFromDeclarations(
 }
 
 export interface PdfMemory {
+  adventureDossierFingerprint?: string;
+  adventureDossierStatus?: 'ready' | 'unavailable';
   rulesUrl?: string;
   rulesTextUrl?: string;
   rulesGeminiFileUri?: string;
@@ -380,10 +541,24 @@ export interface UseChatReturn {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   newMessage: string;
   setNewMessage: React.Dispatch<React.SetStateAction<string>>;
+  pendingDossierSkillRollRetry: { testIds: string[] } | null;
+  retryDossierSkillRoll: () => Promise<boolean>;
   handleSendMessage: (
     message: string,
     mechanicsContext?: MechanicsContext
   ) => Promise<boolean>;
+  reportDossierSanityRecovery: (event: SanityRecoveryResolutionContext) => void;
+  reportDossierMedicalExpense: (event: MedicalExpenseResolutionContext) => void;
+  reportDossierInvestigatorChange: (
+    event: InvestigatorChangeResolutionContext
+  ) => void;
+  reportDossierFirearmResolution: (event: FirearmResolutionContext) => void;
+  reportDossierJamClearingResolution: (
+    event: JamClearingResolutionContext
+  ) => void;
+  reportDossierVehicleCollisionResolution: (
+    event: VehicleCollisionResolutionContext
+  ) => void;
   pendingCombatAttack: PendingMeleeAttack | null;
   pendingCombatDefensesUsed: number;
   combatDefenseWeapons: CombatDefenseWeaponOption[];
@@ -403,6 +578,10 @@ export interface UseChatReturn {
 
   /** IND-267: bieżąca lokacja bohatera z najnowszego [LOKACJA:] (pineska 📍 w headerze). */
   currentLocation: string;
+  dossierProtocolFailure: {
+    code: 'DOSSIER_PROTOCOL_REJECTED';
+    declaration: string;
+  } | null;
   // === C4 (duet): bufor deklaracji + wysyłka tury ===
   /** Czy aktywny tryb dla dwojga (Hot Seat 2 graczy) - decyduje o buforowaniu. */
   isDuet: boolean;
@@ -506,6 +685,14 @@ interface UseChatOptions {
 }
 
 export function useChat(options: UseChatOptions): UseChatReturn {
+  const contextBudgetText = useTranslations('ContextBudget');
+  const contextBudgetNoticeRef = useRef<ReturnType<typeof toast> | null>(null);
+  const budgetRetryRef = useRef<{
+    message: string;
+    actorId?: string;
+    playthroughId?: string;
+    mechanics?: MechanicsContext;
+  } | null>(null);
   const {
     pdfMemory,
     activeCharacter,
@@ -576,6 +763,28 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const shouldRecoverCombatCommitRef = useRef(
     combatJournalRef.current?.phase === 'committing'
   );
+  const appliedPushedRollIdsRef = useRef(new Set<string>());
+  const pendingSanityRecoveryEventsRef = useRef<
+    SanityRecoveryResolutionContext[]
+  >([]);
+  const pendingMedicalExpenseEventsRef = useRef<
+    MedicalExpenseResolutionContext[]
+  >([]);
+  const pendingInvestigatorChangeEventsRef = useRef<
+    InvestigatorChangeResolutionContext[]
+  >([]);
+  const pendingFirearmResolutionEventsRef = useRef<FirearmResolutionContext[]>(
+    []
+  );
+  const pendingJamClearingResolutionEventsRef = useRef<
+    JamClearingResolutionContext[]
+  >([]);
+  const pendingVehicleCollisionResolutionEventsRef = useRef<
+    VehicleCollisionResolutionContext[]
+  >([]);
+  const pendingDiceRollResolutionEventsRef = useRef<
+    DiceRollResolutionContext[]
+  >([]);
   const [pendingCombatAttack, setPendingCombatAttack] =
     useState<PendingMeleeAttack | null>(() => {
       const journal = combatJournalRef.current;
@@ -622,29 +831,21 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
   // Issue #571: AbortController oraz śledzenie wiadomości bieżącej tury do bezpiecznego cofnięcia (Stop)
   const abortControllerRef = useRef<AbortController | null>(null);
+  const transportReadinessPendingRef = useRef(false);
   const lastSentUserMessageRef = useRef<string | null>(null);
   const currentAssistantMessageIdRef = useRef<string | null>(null);
   const currentUserMessageIdRef = useRef<string | null>(null);
-  const lastHueLocationChangeTimeRef = useRef<number>(0);
+  const [pendingDossierSkillRollRetry, setPendingDossierSkillRollRetry] =
+    useState<{ testIds: string[] } | null>(null);
+  const pendingSkillRollRef = useRef<PendingSkillRoll | null>(null);
+  const skillRollRetryInFlightRef = useRef(false);
+  const authorizedSkillRollRetryRef = useRef<PendingSkillRoll | null>(null);
   const hasTriggeredSanShockThisTurnRef = useRef<boolean>(false);
-  const sceneSFXBudgetRef = useRef<{
-    hasPlayedGunshot: boolean;
-    hasPlayedThunder: boolean;
-    hasPlayedSanShock: boolean;
-  }>({
-    hasPlayedGunshot: false,
-    hasPlayedThunder: false,
-    hasPlayedSanShock: false,
-  });
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const director = getGlobalLightDirector();
-      director.onSessionStart().catch(() => {});
-    }
-  }, []);
 
   const stopGeneration = useCallback(() => {
+    if (hasPendingDossierTurn()) return;
+    immersion.cancel();
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -663,7 +864,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         prev.filter((msg) => msg.id !== assistantId && msg.id !== userId)
       );
     }
-    if (userText) {
+    if (userText && !pendingSkillRollRef.current) {
       setNewMessage(userText);
     }
 
@@ -673,6 +874,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   }, [setNewMessage, stopCurrentAudio]);
 
   const messagesRef = useRef<Message[]>(messages);
+  const dossierPendingPublicationRef = useRef(false);
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -689,7 +891,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
   useEffect(() => {
     activeChaseStateRef.current = activeChaseState;
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || hasPendingDossierTurn()) return;
     if (activeChaseState) {
       localStorage.setItem(
         ACTIVE_CHASE_STORAGE_KEY,
@@ -705,7 +907,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       setIsSessionEnded(false);
       setSessionEndStatus('idle');
       setSessionSaveStatus('idle');
-      guardrailStateRef.current = { strikeCount: 0, turnsSinceLastViolation: 0 };
+      guardrailStateRef.current = {
+        strikeCount: 0,
+        turnsSinceLastViolation: 0,
+      };
       lastIllustratedLocationRef.current = '';
       lastTrackedSceneRef.current = '';
       sceneImageCountRef.current = 0;
@@ -731,11 +936,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         const activeChar =
           characterOverride !== undefined
             ? characterOverride
-            : (activeCharacter || activeCharacterRef.current);
+            : activeCharacter || activeCharacterRef.current;
         const allChars =
           charactersOverride ||
           (characters.length > 0 ? characters : charactersRef.current);
-        const currentGameTime = timeManager?.getTime ? timeManager.getTime() : null;
+        const currentGameTime = timeManager?.getTime
+          ? timeManager.getTime()
+          : null;
         const autoSaveName = generateSessionEndSaveName(
           activeChar?.name,
           currentGameTime
@@ -799,6 +1006,34 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   // wysłał ją do promptu (build-context.ts) BEZ wpisywania jej w tablicę zależności callbacka.
   const [currentLocation, setCurrentLocation] = useState('');
   const currentLocationRef = useRef('');
+  const offGraphLocationRef = useRef<OffGraphLocationRequest | null>(null);
+  const [dossierProtocolFailure, setDossierProtocolFailure] = useState<{
+    code: 'DOSSIER_PROTOCOL_REJECTED';
+    declaration: string;
+  } | null>(null);
+  const protocolScope = `${adventureContext?.id ?? ''}:${loadCampaignMemoryScope()?.playthroughId ?? ''}`;
+  useEffect(() => {
+    setDossierProtocolFailure(null);
+  }, [protocolScope]);
+  const rememberAcceptedLocation = useCallback(
+    (location: AcceptedLocationTag) => {
+      const scope = loadCampaignMemoryScope();
+      offGraphLocationRef.current =
+        location.mode === 'off_graph' &&
+        scope &&
+        scope.adventureId === adventureContext?.id
+          ? {
+              mode: 'off_graph',
+              label: location.name,
+              adventureId: scope.adventureId,
+              playthroughId: scope.playthroughId,
+            }
+          : null;
+      currentLocationRef.current = location.name;
+      setCurrentLocation(location.name);
+    },
+    [adventureContext?.id]
+  );
   // Issue #563: Scene Sensory Memory & Dwupoziomowa Pamięć Strefowa
   const turnsInCurrentLocationRef = useRef(0);
   const visitedMacroLocationsRef = useRef<string[]>([]);
@@ -810,10 +1045,245 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const lastTrackedSceneRef = useRef('');
   const lastIllustratedLocationRef = useRef('');
   // Visual Belief Graph (DeepMind Proactive T2I)
-  const visualBeliefGraphRef = useRef<VisualBeliefGraph>(new VisualBeliefGraph());
+  const visualBeliefGraphRef = useRef<VisualBeliefGraph>(
+    new VisualBeliefGraph()
+  );
+
+  const readCurrentSkillRoll = useCallback(() => {
+    const scope = loadCampaignMemoryScope();
+    if (
+      !scope ||
+      !adventureContext?.id ||
+      scope.adventureId !== adventureContext.id ||
+      !pdfMemory.adventureDossierFingerprint
+    )
+      return null;
+    const history: Message[] = JSON.parse(
+      localStorage.getItem(MESSAGES_STORAGE_KEY) ?? '[]'
+    );
+    if (!Array.isArray(history))
+      throw new Error('DOSSIER_SKILL_ROLL_RETRY_INVALID');
+    const characterIds = [
+      ...new Set(
+        [
+          ...charactersRef.current.map((character) => character.id),
+          activeCharacterRef.current?.id,
+        ].filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const binding = {
+      playthroughId: scope.playthroughId,
+      adventureId: scope.adventureId,
+      editionFingerprint: pdfMemory.adventureDossierFingerprint,
+    };
+    return {
+      binding,
+      history,
+      characterIds,
+      pending: readPendingSkillRoll(
+        localStorage,
+        binding,
+        history,
+        characterIds
+      ),
+    };
+  }, [adventureContext?.id, pdfMemory.adventureDossierFingerprint]);
+  const publishPendingSkillRoll = useCallback(
+    (pending: PendingSkillRoll | null) => {
+      pendingSkillRollRef.current = pending;
+      const next = pending
+        ? {
+            testIds: pending.mechanicsContext.skillRolls.map(
+              (roll) => roll.testId!
+            ),
+          }
+        : null;
+      setPendingDossierSkillRollRetry((previous) =>
+        JSON.stringify(previous) === JSON.stringify(next) ? previous : next
+      );
+    },
+    []
+  );
+  const syncPendingSkillRoll = useCallback(() => {
+    try {
+      const current = readCurrentSkillRoll();
+      if (
+        current?.pending &&
+        !hasPendingDossierTurn() &&
+        isPendingSkillRollAccepted(current.pending, current.history)
+      ) {
+        clearPendingSkillRoll(localStorage, current.pending);
+        publishPendingSkillRoll(null);
+        return;
+      }
+      publishPendingSkillRoll(current?.pending ?? null);
+    } catch {
+      publishPendingSkillRoll(null);
+    } // Keep invalid/stale records untouched and unavailable.
+  }, [readCurrentSkillRoll, publishPendingSkillRoll]);
+  const pendingRollScopeKey = JSON.stringify([
+    loadCampaignMemoryScope()?.playthroughId,
+    loadCampaignMemoryScope()?.adventureId,
+  ]);
+  useEffect(() => {
+    syncPendingSkillRoll();
+  }, [
+    messages,
+    pendingRollScopeKey,
+    syncPendingSkillRoll,
+    characters,
+    activeCharacter,
+  ]);
+
+  const restoreDossierEnding = useCallback(async () => {
+    const scope = loadCampaignMemoryScope();
+    if (
+      !scope ||
+      !adventureContext?.id ||
+      !pdfMemory.adventureDossierFingerprint ||
+      scope.adventureId !== adventureContext.id
+    )
+      return;
+    const payload = await loadRuntimeDossierPayload(
+      adventureContext.id,
+      pdfMemory.adventureDossierFingerprint
+    );
+    if (
+      loadCampaignMemoryScope()?.playthroughId !== scope.playthroughId ||
+      hasPendingDossierTurn()
+    )
+      return;
+    const world = loadDossierWorldState(
+      {
+        playthroughId: scope.playthroughId,
+        adventureId: adventureContext.id,
+        editionFingerprint: pdfMemory.adventureDossierFingerprint,
+      },
+      payload
+    );
+    const status = advanceAuthoredScenarioClock({
+      payload,
+      state: world,
+      turnId: 'restore-ending',
+      gameTime: timeManager.getTime(),
+      writesAllowed: false,
+    });
+    if (status.ending) {
+      setSessionEndStatus('ended');
+      setIsSessionEnded(true);
+    }
+  }, [adventureContext?.id, pdfMemory.adventureDossierFingerprint]);
+
+  const recoverDossierTurn = useCallback(async (): Promise<boolean> => {
+    const playthroughId = loadCampaignMemoryScope()?.playthroughId;
+    if (!playthroughId || !hasPendingDossierTurn()) return false;
+    if (!adventureContext?.id || !pdfMemory.adventureDossierFingerprint)
+      throw new Error('DOSSIER_TRANSACTION_SCOPE_CHANGED');
+    const binding = {
+      playthroughId,
+      adventureId: adventureContext.id,
+      editionFingerprint: pdfMemory.adventureDossierFingerprint,
+    };
+    const pending = loadDossierTurnTransaction(localStorage, binding);
+    if (!pending) return false;
+    const isCurrent = () =>
+      loadCampaignMemoryScope()?.playthroughId === playthroughId;
+    await resumeDossierTurnTransaction(localStorage, binding, {
+      prepare: prepareDossierTurnOnServer,
+      accept: (token) => acknowledgeDossierTurn(token, true),
+      isCurrent,
+    });
+    if (!isCurrent()) return true;
+    const history: unknown = JSON.parse(
+      localStorage.getItem(MESSAGES_STORAGE_KEY) ?? '[]'
+    );
+    if (!Array.isArray(history) || !history.every(isPersistedMessage))
+      throw new Error('DOSSIER_TRANSACTION_INVALID');
+    setMessages(
+      history.map(
+        (raw) => ({ ...raw, timestamp: new Date(raw.timestamp) }) as Message
+      )
+    );
+    const recoveredLast = [...history]
+      .reverse()
+      .find((message) => message.role === 'assistant');
+    const recoveredLocation =
+      recoveredLast &&
+      extractLatestCanonicalLocationTag(
+        recoveredLast.content,
+        adventureContext.id
+      );
+    if (recoveredLocation) rememberAcceptedLocation(recoveredLocation);
+
+    const clockPatch = pending.writes.find((p) => p.key === 'coc7_game_time');
+    if (clockPatch?.after) {
+      const clock: unknown = JSON.parse(clockPatch.after);
+      if (!isGameTime(clock)) throw new Error('DOSSIER_TIME_INVALID');
+      timeManager.setTime(clock);
+    }
+    const chasePatch = pending.writes.find(
+      (p) => p.key === ACTIVE_CHASE_STORAGE_KEY
+    );
+    if (chasePatch) {
+      const chase = JSON.parse(chasePatch.after ?? 'null');
+      setActiveChaseState(chase);
+      activeChaseStateRef.current = chase;
+    }
+    if (pending.writes.some((p) => p.key === COMBAT_JOURNAL_STORAGE_KEY)) {
+      const journal = loadCombatJournal(localStorage);
+      combatJournalRef.current = journal;
+      setPendingCombatAttack(
+        journal?.attacks.find(
+          (attack) =>
+            !journal.resolutions.some(
+              (resolution) => resolution.eventId === attack.eventId
+            )
+        ) ?? null
+      );
+    }
+
+    const rosterPatch = pending.writes.find((p) => p.key === 'characters');
+    if (rosterPatch?.after) {
+      const roster = await hydrateCharacterImages(
+        JSON.parse(rosterPatch.after)
+      );
+      if (isCurrent()) {
+        setCharacters(roster);
+        const active = roster.find(
+          (c) => c.id === activeCharacterRef.current?.id
+        );
+        if (active) setActiveCharacter(active);
+      }
+    }
+    // Recovery restores accepted ending state too, without replaying TTS or images.
+    await restoreDossierEnding();
+    syncPendingSkillRoll();
+    return true;
+  }, [
+    adventureContext?.id,
+    pdfMemory.adventureDossierFingerprint,
+    setCharacters,
+    setActiveCharacter,
+    restoreDossierEnding,
+    rememberAcceptedLocation,
+    syncPendingSkillRoll,
+  ]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && messages.length > 0) {
+    void recoverDossierTurn()
+      .then((recovered) => {
+        if (!recovered) return restoreDossierEnding();
+      })
+      .catch((error) => console.warn('Dossier turn recovery pending:', error));
+  }, [recoverDossierTurn, restoreDossierEnding]);
+
+  useEffect(() => {
+    if (
+      typeof window !== 'undefined' &&
+      messages.length > 0 &&
+      !hasPendingDossierTurn() &&
+      !dossierPendingPublicationRef.current
+    ) {
       // IND-142: persistuj historię BEZ ciężkich base64 obrazów (reuse sanitizera
       // IND-237). Obrazy data: URL (~2MB każdy, generatedImages + intro inline w
       // content) przepełniały localStorage (~5MB) → QuotaExceededError crashował
@@ -874,6 +1344,25 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A published image can finish before or after its public knowledge record.
+  useEffect(() => {
+    // Cosmetic metadata must not change the roster snapshot of an accepted-turn transaction.
+    if (isLoading || hasPendingDossierTurn()) return;
+    const publications = messages.flatMap(
+      (message) => message.publicJournalVisuals ?? []
+    );
+    if (!publications.length) return;
+    const next = applyPublishedJournalVisuals(characters, publications);
+    if (next === characters) return;
+    persistCharacters(next);
+    setCharacters(next);
+    setActiveCharacter((previous) =>
+      previous
+        ? (next.find((character) => character.id === previous.id) ?? previous)
+        : previous
+    );
+  }, [messages, characters, isLoading, setCharacters, setActiveCharacter]);
+
   // Pineska lokacji: zasiej `currentLocation` lokacją przygody, dopóki AI nie wyemituje
   // pierwszego [LOKACJA:]. Bez tego stare sesje (gdzie tag rzadko padał) miały pustą
   // pineskę. Warunek `!currentLocationRef.current` chroni przed nadpisaniem bieżącej
@@ -888,16 +1377,28 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
   // Issue #563: Odtwórz stan pamięci sensorycznej z historii messages (np. po F5, wczytaniu zapisu lub starcie przez useGameStart)
   useEffect(() => {
+    // A streamed opening can receive its canonical location after the first chunk.
+    // Rebuild derived sensory state when content or its dossier binding changes.
     if (
       messages.length > 0 &&
-      turnsInCurrentLocationRef.current === 0 &&
-      visitedMacroLocationsRef.current.length === 0 &&
       messages.some((m) => m.role === 'assistant' && m.content)
     ) {
       const derived = deriveSceneSensoryMemoryFromMessages(
         messages,
-        currentLocationRef.current || adventureContext?.location
+        undefined,
+        adventureContext?.id,
+        Boolean(pdfMemory.adventureDossierFingerprint)
       );
+      if (pdfMemory.adventureDossierFingerprint) {
+        const last = [...messages]
+          .reverse()
+          .filter((m) => m.role === 'assistant')
+          .map((m) =>
+            extractLatestCanonicalLocationTag(m.content, adventureContext?.id)
+          )
+          .find(Boolean);
+        if (last) rememberAcceptedLocation(last);
+      }
       if (derived.currentLocation) {
         currentLocationRef.current = derived.currentLocation;
         setCurrentLocation(derived.currentLocation);
@@ -905,7 +1406,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       turnsInCurrentLocationRef.current = derived.turnsInCurrentLocation;
       visitedMacroLocationsRef.current = derived.visitedMacroLocations;
     }
-  }, [messages, adventureContext?.location]);
+  }, [
+    messages,
+    adventureContext?.location,
+    adventureContext?.id,
+    pdfMemory.adventureDossierFingerprint,
+    rememberAcceptedLocation,
+    protocolScope,
+  ]);
 
   // Visual Belief Graph: synchronizuj profil Badacza, NPC z Dossier i epokę
   useEffect(() => {
@@ -944,14 +1452,35 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
       });
     }
-  }, [activeCharacter, characters, adventureContext?.era, adventureContext?.eraLabel, adventureContext?.yearRange]);
+  }, [
+    activeCharacter,
+    characters,
+    adventureContext?.era,
+    adventureContext?.eraLabel,
+    adventureContext?.yearRange,
+  ]);
 
   const generateImages = useCallback(
     async (illustrations: ImageToGenerate[], messageId: string) => {
       if (isPureTextMode()) {
         return;
       }
+      const scope =
+        loadCampaignMemoryScope() ??
+        activeCharacterRef.current?.chronicleSession;
+      const journalContext: PublicJournalContext = {
+        scope,
+        ...(pdfMemory.adventureDossierFingerprint && adventureContext?.id
+          ? {
+              binding: {
+                adventureId: adventureContext.id,
+                editionFingerprint: pdfMemory.adventureDossierFingerprint,
+              },
+            }
+          : {}),
+      };
       const generatedUrls: string[] = [];
+      const generatedRequests: ImageToGenerate[] = [];
       const generatedTypes: (
         | 'portrait'
         | 'scene'
@@ -965,11 +1494,35 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         adventureContext?.eraLabel ||
         adventureContext?.era ||
         '1920s';
+      const packVisualStyle = getAdventureVisualStyle(adventureContext?.id);
 
       for (const img of illustrations) {
+        // Dossier evidence uses the discovery-gated HANDOUT path, never a second item illustration.
+        if (pdfMemory.adventureDossierFingerprint && img.type === 'item')
+          continue;
         const isLocation = img.type === 'location';
         const loc =
           img.locationName?.trim() || currentLocationRef.current?.trim();
+
+        const prepared = resolvePreparedAdventureVisual(
+          adventureContext?.id,
+          img as unknown as import('@/lib/parsers/types').ImageRequest,
+          img.locationName || currentLocationRef.current,
+          true
+        );
+        if (prepared) {
+          if (
+            messagesRef.current.some((message) =>
+              message.generatedImages?.includes(prepared.imageUrl)
+            ) ||
+            generatedUrls.includes(prepared.imageUrl)
+          )
+            continue;
+          generatedUrls.push(prepared.imageUrl);
+          generatedTypes.push(prepared.imageType);
+          generatedRequests.push(img);
+          continue;
+        }
 
         // Sprawdź persistent cache lokacji przed wywołaniem API - WYŁĄCZNIE dla ujęć lokacji (establishing shot),
         // NIGDY dla dynamicznych scen akcji, potworów ani wizji!
@@ -980,6 +1533,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             if (cachedLocImage) {
               generatedUrls.push(cachedLocImage);
               generatedTypes.push('location');
+              generatedRequests.push(img);
               continue;
             }
           } catch {
@@ -1002,17 +1556,32 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 : 'horror');
 
         const defaultAspectRatio =
-          img.aspectRatio ||
-          (img.type === 'portrait'
-            ? '3:4'
-            : '16:9');
+          img.aspectRatio || (img.type === 'portrait' ? '3:4' : '16:9');
+
+        if (img.type === 'portrait' && img.portraitName) {
+          try {
+            const cachedPortrait = await persistentMediaCache.getNpcPortrait(
+              img.portraitName
+            );
+            if (cachedPortrait) {
+              generatedUrls.push(cachedPortrait);
+              generatedTypes.push('portrait');
+              generatedRequests.push(img);
+              continue;
+            }
+          } catch {
+            // A stale or unavailable local portrait cache must not block this image.
+          }
+        }
 
         try {
           const response = await fetchWithRetry('/api/imagen', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              prompt: img.prompt,
+              prompt: packVisualStyle
+                ? `${img.prompt}\n\nVisual continuity for this adventure: ${packVisualStyle}.`
+                : img.prompt,
               style: defaultStyle,
               isMythos: isMythosEffective,
               era: activeEra,
@@ -1025,6 +1594,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           if (result.imageUrl) {
             generatedUrls.push(result.imageUrl);
             generatedTypes.push(img.type || 'scene');
+            generatedRequests.push(img);
 
             // Zapisz wygenerowany kadr lokacji do cache na przyszłe wizyty (TYLKO dla typu location!)
             if (isLocation && loc) {
@@ -1042,12 +1612,27 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         setMessages((prev) =>
           prev.map((msg) => {
             if (msg.id !== messageId) return msg;
+            const existing = new Set(
+              prev.flatMap((message) => message.generatedImages ?? [])
+            );
+            const freshImages = generatedUrls
+              .map((url, index) => ({
+                url,
+                type: generatedTypes[index],
+                request: generatedRequests[index],
+              }))
+              .filter(({ url }) => {
+                if (existing.has(url)) return false;
+                existing.add(url);
+                return true;
+              });
+            if (!freshImages.length) return msg;
             // IND-262: zapis obrazów do IndexedDB (persistentMediaCache, store
             // chat-images) + lekkie klucze cache w wiadomości. base64 zostaje w
             // generatedImages dla natychmiastowego renderu w sesji; po reloadzie
             // generatedImages stripowane z localStorage, więc hydrują z cache.
             const startIdx = msg.generatedImages?.length ?? 0;
-            const newCacheIds = generatedUrls.map((url, i) => {
+            const newCacheIds = freshImages.map(({ url }, i) => {
               const idx = startIdx + i;
               // fire-and-forget: błąd zapisu cache NIE blokuje renderu base64.
               // setChatImage jest idempotentny (klucz messageId_idx) → StrictMode
@@ -1057,15 +1642,59 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 .catch(() => {});
               return `${messageId}_${idx}`;
             });
+            for (const image of freshImages) {
+              const name =
+                image.type === 'portrait'
+                  ? image.request.portraitName
+                  : image.type === 'location'
+                    ? image.request.locationName
+                    : undefined;
+              if (!name) continue;
+              void retainPublishedJournalVisual({
+                kind: image.type === 'portrait' ? 'person' : 'place',
+                name,
+                imageUrl: image.url,
+                messageId,
+                context: journalContext,
+              })
+                .then((publication) => {
+                  if (!publication) return;
+                  setMessages((current) =>
+                    current.map((currentMessage) => {
+                      if (
+                        currentMessage.id !== messageId ||
+                        !currentMessage.generatedImages?.includes(image.url)
+                      )
+                        return currentMessage;
+                      const previous =
+                        currentMessage.publicJournalVisuals ?? [];
+                      return previous.some(
+                        (item) =>
+                          item.cardId === publication.cardId &&
+                          JSON.stringify(item.visual) ===
+                            JSON.stringify(publication.visual)
+                      )
+                        ? currentMessage
+                        : {
+                            ...currentMessage,
+                            publicJournalVisuals: [...previous, publication],
+                          };
+                    })
+                  );
+                })
+                .catch(() => {
+                  /* Missing retained bytes leave the category symbol in place. */
+                });
+            }
             return {
               ...msg,
               generatedImages: [
                 ...(msg.generatedImages || []),
-                ...generatedUrls,
+                ...freshImages.map((image) => image.url),
               ],
               generatedImageTypes: [
                 ...(msg.generatedImageTypes || []),
-                ...generatedTypes,
+                ...freshImages.map((image) => image.type),
               ],
               generatedImageCacheIds: [
                 ...(msg.generatedImageCacheIds || []),
@@ -1076,7 +1705,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         );
 
         // Synchronizacja portretów NPC z Dziennikiem oraz pamięcią persistentMediaCache
-        const portraitUpdates = illustrations
+        const portraitUpdates = generatedRequests
           .map((img, idx) => ({ img, url: generatedUrls[idx] }))
           .filter(
             (update): update is { img: ImageToGenerate; url: string } =>
@@ -1139,7 +1768,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
 
         // Synchronizacja ilustracji przedmiotów ze stanem ekwipunku i dziennika
-        const itemUpdates = illustrations
+        const itemUpdates = generatedRequests
           .map((img, idx) => ({ img, url: generatedUrls[idx] }))
           .filter(
             (update) =>
@@ -1205,7 +1834,86 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
       }
     },
-    [setCharacters, setActiveCharacter]
+    [
+      setCharacters,
+      setActiveCharacter,
+      adventureContext?.id,
+      pdfMemory.adventureDossierFingerprint,
+    ]
+  );
+
+  const reportDossierSanityRecovery = useCallback(
+    (event: SanityRecoveryResolutionContext) => {
+      const participantIds = new Set(
+        [
+          activeCharacter?.id,
+          ...(hotSeatConfig?.players ?? []).map((player) => player.characterId),
+        ].filter((id): id is string => typeof id === 'string' && id.length > 0)
+      );
+      if (!participantIds.has(event.characterId)) return;
+      pendingSanityRecoveryEventsRef.current = [
+        ...pendingSanityRecoveryEventsRef.current,
+        event,
+      ].slice(-8);
+    },
+    [activeCharacter?.id, hotSeatConfig?.players]
+  );
+
+  const reportDossierMedicalExpense = useCallback(
+    (event: MedicalExpenseResolutionContext) => {
+      const participantIds = new Set(
+        [
+          activeCharacter?.id,
+          ...(hotSeatConfig?.players ?? []).map((player) => player.characterId),
+        ].filter((id): id is string => typeof id === 'string' && id.length > 0)
+      );
+      if (!participantIds.has(event.characterId)) return;
+      pendingMedicalExpenseEventsRef.current = [
+        ...pendingMedicalExpenseEventsRef.current,
+        event,
+      ].slice(-8);
+    },
+    [activeCharacter?.id, hotSeatConfig?.players]
+  );
+
+  const reportDossierInvestigatorChange = useCallback(
+    (event: InvestigatorChangeResolutionContext) => {
+      pendingInvestigatorChangeEventsRef.current = [
+        ...pendingInvestigatorChangeEventsRef.current,
+        event,
+      ].slice(-8);
+    },
+    []
+  );
+
+  const reportDossierFirearmResolution = useCallback(
+    (event: FirearmResolutionContext) => {
+      pendingFirearmResolutionEventsRef.current = [
+        ...pendingFirearmResolutionEventsRef.current,
+        event,
+      ].slice(-8);
+    },
+    []
+  );
+
+  const reportDossierJamClearingResolution = useCallback(
+    (event: JamClearingResolutionContext) => {
+      pendingJamClearingResolutionEventsRef.current = [
+        ...pendingJamClearingResolutionEventsRef.current,
+        event,
+      ].slice(-8);
+    },
+    []
+  );
+
+  const reportDossierVehicleCollisionResolution = useCallback(
+    (event: VehicleCollisionResolutionContext) => {
+      pendingVehicleCollisionResolutionEventsRef.current = [
+        ...pendingVehicleCollisionResolutionEventsRef.current,
+        event,
+      ].slice(-8);
+    },
+    []
   );
 
   const handleSendMessage = useCallback(
@@ -1217,6 +1925,52 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         activeCharacter: Character | null;
       }
     ) => {
+      try {
+        if (hasPendingDossierTurn() && (await recoverDossierTurn()))
+          return false;
+      } catch (error) {
+        console.warn('Dossier turn recovery pending:', error);
+        return false;
+      }
+      let submittedSkillRoll: PendingSkillRoll | null = null;
+      if (pdfMemory.adventureDossierFingerprint) {
+        try {
+          const current = readCurrentSkillRoll();
+          if (current?.pending) {
+            if (isPendingSkillRollAccepted(current.pending, current.history)) {
+              clearPendingSkillRoll(localStorage, current.pending);
+              publishPendingSkillRoll(null);
+              return false;
+            }
+            const authorized = authorizedSkillRollRetryRef.current;
+            if (
+              !authorized ||
+              authorized.id !== current.pending.id ||
+              message !== current.pending.message ||
+              JSON.stringify(mechanicsContext) !==
+                JSON.stringify(current.pending.mechanicsContext)
+            )
+              return false;
+            submittedSkillRoll = current.pending;
+          } else if (mechanicsContext?.skillRolls?.length) {
+            if (!current) return false;
+            submittedSkillRoll = stagePendingSkillRoll(
+              localStorage,
+              current.binding,
+              message,
+              mechanicsContext as MechanicsContext & {
+                skillRolls: import('@/lib/parsers/types').SkillRollResolution[];
+              },
+              current.history,
+              current.characterIds
+            );
+          }
+          if (submittedSkillRoll) publishPendingSkillRoll(submittedSkillRoll);
+        } catch (error) {
+          console.warn('Dossier skill result remains unavailable:', error);
+          return false;
+        }
+      }
       // Issue #79 (Decyzja 1A): Natychmiast ucisz lektora i przerwij wiszące odtwarzanie TTS
       stopCurrentAudio?.();
 
@@ -1315,15 +2069,36 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
 
         if (execRes.assistantMessage) {
+          const localDiceEvents = execRes.assistantMessage.diceRollEvents ?? [];
+          if (localDiceEvents.length > 0) {
+            pendingDiceRollResolutionEventsRef.current = [
+              ...pendingDiceRollResolutionEventsRef.current,
+              ...localDiceEvents.map((event: DiceRollEventData) => ({
+                source: 'local_chat_command' as const,
+                originalEventId: event.id,
+                resolutionId: crypto.randomUUID(),
+                formula: event.formula,
+                diceValues: event.trace.dice.map((die) => die.value),
+                modifier: event.trace.modifier,
+                total: event.trace.total,
+                ...(event.characterName
+                  ? { characterName: event.characterName }
+                  : {}),
+                ...(event.label ? { label: event.label } : {}),
+              })),
+            ].slice(-8);
+          }
           const assistantMsg: Message = {
             id: execRes.assistantMessage.id || crypto.randomUUID(),
             role: 'assistant',
             content: execRes.assistantMessage.content || '',
             timestamp: new Date(),
             gameTime: currentGameTime,
-            chaseState: (execRes.rawCommand?.includes('CHASE') || execRes.rawCommand?.includes('POŚCIG'))
-              ? activeChaseStateRef.current ?? undefined
-              : undefined,
+            chaseState:
+              execRes.rawCommand?.includes('CHASE') ||
+              execRes.rawCommand?.includes('POŚCIG')
+                ? (activeChaseStateRef.current ?? undefined)
+                : undefined,
             skillTests: execRes.assistantMessage.skillTests,
             hazardEvents: execRes.assistantMessage.hazardEvents,
             spellCastEvents: execRes.assistantMessage.spellCastEvents,
@@ -1344,10 +2119,56 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       // dla różnych assistantMessageId. Send button w ChatWindow NIE jest disabled
       // na isLoading (lin 403: disabled={!newMessage.trim()}), więc guard tutaj jest
       // jedyną linią obrony.
-      if (isLoading) return false;
+      if (isLoading || transportReadinessPendingRef.current) return false;
 
+      // Cold F5 can race the page handshake. Await its real health/rules result before
+      // publishing the declaration; refresh one cached failure, sharing any in-flight check.
+      const hasBrowserKey =
+        typeof hasRequiredKeys === 'function' ? hasRequiredKeys() : true;
+      if (!hasBrowserKey && !hasLocalPlaytestTransport()) {
+        transportReadinessPendingRef.current = true;
+        const readinessController = new AbortController();
+        abortControllerRef.current = readinessController;
+        currentAssistantMessageIdRef.current = null;
+        currentUserMessageIdRef.current = null;
+        lastSentUserMessageRef.current = message;
+        const readinessScope = loadCampaignMemoryScope()?.playthroughId;
+        setIsLoading(true);
+        try {
+          await checkLocalPlaytestTransport(true);
+        } catch {
+          /* Failed checks never authorize. */
+        } finally {
+          transportReadinessPendingRef.current = false;
+          if (abortControllerRef.current === readinessController)
+            abortControllerRef.current = null;
+          setIsLoading(false);
+        }
+        if (
+          readinessController.signal.aborted ||
+          readinessScope !== loadCampaignMemoryScope()?.playthroughId
+        )
+          return false;
+        if (!(hasRequiredKeys() || hasLocalPlaytestTransport())) {
+          if (typeof window !== 'undefined')
+            window.dispatchEvent(new CustomEvent('open-api-keys-modal'));
+          return false;
+        }
+      }
+
+      contextBudgetNoticeRef.current?.dismiss();
+      contextBudgetNoticeRef.current = null;
+      let receivedStarterState: StarterState | null = null;
       const requestCharacters = runtimeOverride?.characters ?? characters;
-      const requestCharacter = runtimeOverride?.activeCharacter ?? activeCharacter;
+      const requestCharacter =
+        runtimeOverride?.activeCharacter ?? activeCharacter;
+      const previousEndStatus = sessionEndStatus;
+      const pendingRetry = budgetRetryRef.current;
+      const isBudgetRetry =
+        pendingRetry?.message === message &&
+        pendingRetry.actorId === requestCharacter?.id &&
+        pendingRetry.playthroughId === loadCampaignMemoryScope()?.playthroughId;
+      if (!isBudgetRetry) budgetRetryRef.current = null;
 
       if (message.includes('[KONIEC_SESJI]')) {
         setSessionEndStatus('awaiting_player_closure');
@@ -1365,48 +2186,235 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
       // Reducer pościgu CoC 7e RAW: jeśli trwa pościg i gracz przesyła wynik testu kości
       if (
+        !isBudgetRetry &&
         activeChaseStateRef.current?.status === 'ongoing' &&
-        (message.includes('[DICE_ROLL]') || message.includes('🎲') || message.includes('Test:'))
+        (message.includes('[DICE_ROLL]') ||
+          message.includes('🎲') ||
+          message.includes('Test:'))
       ) {
         const upper = message.toUpperCase();
-        let rollOutcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble' | null = null;
-        if (upper.includes('CRITICAL') || upper.includes('KRYTYCZNY')) rollOutcome = 'critical';
-        else if (upper.includes('EXTREME') || upper.includes('EKSTREMALNY')) rollOutcome = 'extreme';
-        else if (upper.includes('HARD') || upper.includes('TRUDNY')) rollOutcome = 'hard';
-        else if (upper.includes('FUMBLE') || upper.includes('PECH') || upper.includes('FARSA')) rollOutcome = 'fumble';
-        else if (upper.includes('FAIL') || upper.includes('PORAŻKA') || upper.includes('PORAZKA')) rollOutcome = 'fail';
-        else if (upper.includes('REGULAR') || upper.includes('ZWYKŁY') || upper.includes('ZWYKLY') || upper.includes('SUKCES')) rollOutcome = 'regular';
+        let rollOutcome:
+          | 'critical'
+          | 'extreme'
+          | 'hard'
+          | 'regular'
+          | 'fail'
+          | 'fumble'
+          | null = null;
+        if (upper.includes('CRITICAL') || upper.includes('KRYTYCZNY'))
+          rollOutcome = 'critical';
+        else if (upper.includes('EXTREME') || upper.includes('EKSTREMALNY'))
+          rollOutcome = 'extreme';
+        else if (upper.includes('HARD') || upper.includes('TRUDNY'))
+          rollOutcome = 'hard';
+        else if (
+          upper.includes('FUMBLE') ||
+          upper.includes('PECH') ||
+          upper.includes('FARSA')
+        )
+          rollOutcome = 'fumble';
+        else if (
+          upper.includes('FAIL') ||
+          upper.includes('PORAŻKA') ||
+          upper.includes('PORAZKA')
+        )
+          rollOutcome = 'fail';
+        else if (
+          upper.includes('REGULAR') ||
+          upper.includes('ZWYKŁY') ||
+          upper.includes('ZWYKLY') ||
+          upper.includes('SUKCES')
+        )
+          rollOutcome = 'regular';
 
         if (rollOutcome) {
-          const updatedChase = advanceChaseOnSkillRoll(activeChaseStateRef.current, rollOutcome);
+          const updatedChase = advanceChaseOnSkillRoll(
+            activeChaseStateRef.current,
+            rollOutcome
+          );
           setActiveChaseState(updatedChase);
           activeChaseStateRef.current = updatedChase;
         }
       }
 
+      const participantIds = new Set(
+        [
+          activeCharacter?.id,
+          ...(hotSeatConfig?.players ?? []).map((player) => player.characterId),
+        ].filter((id): id is string => typeof id === 'string' && id.length > 0)
+      );
+      const pendingSanityRecovery =
+        pendingSanityRecoveryEventsRef.current.filter((event) =>
+          participantIds.has(event.characterId)
+        );
+      const pendingMedicalExpenses =
+        pendingMedicalExpenseEventsRef.current.filter((event) =>
+          participantIds.has(event.characterId)
+        );
+      const pendingInvestigatorChanges =
+        pendingInvestigatorChangeEventsRef.current.filter((event) =>
+          participantIds.has(event.characterId)
+        );
+      const pendingFirearmResolutions =
+        pendingFirearmResolutionEventsRef.current;
+      const pendingJamClearingResolutions =
+        pendingJamClearingResolutionEventsRef.current.filter((event) =>
+          participantIds.has(event.actorId)
+        );
+      const pendingVehicleCollisionResolutions =
+        pendingVehicleCollisionResolutionEventsRef.current;
+      const pendingDiceRollResolutions =
+        pendingDiceRollResolutionEventsRef.current.filter((event) =>
+          isDiceRollResolutionRelevantToMessage(event, message)
+        );
+      const attachedSanityRecoveryIds = new Set(
+        pendingSanityRecovery.map((event) => event.resolutionId)
+      );
+      const attachedMedicalExpenseIds = new Set(
+        pendingMedicalExpenses.map((event) => event.resolutionId)
+      );
+      const attachedInvestigatorChangeIds = new Set(
+        pendingInvestigatorChanges.map((event) => event.resolutionId)
+      );
+      const attachedFirearmResolutionIds = new Set(
+        pendingFirearmResolutions.map((event) => event.resolutionId)
+      );
+      const attachedJamClearingResolutionIds = new Set(
+        pendingJamClearingResolutions.map((event) => event.resolutionId)
+      );
+      const attachedVehicleCollisionResolutionIds = new Set(
+        pendingVehicleCollisionResolutions.map((event) => event.resolutionId)
+      );
+      const attachedDiceRollResolutionIds = new Set(
+        pendingDiceRollResolutions.map((event) => event.resolutionId)
+      );
       const effectiveMechanicsContext = {
         ...mechanicsContext,
-        ...(activeChaseStateRef.current?.status === 'ongoing' && !mechanicsContext?.chase
+        ...(mechanicsContext?.sanityRecovery?.length ||
+        pendingSanityRecovery.length
+          ? {
+              sanityRecovery: [
+                ...(mechanicsContext?.sanityRecovery ?? []),
+                ...pendingSanityRecovery,
+              ],
+            }
+          : {}),
+        ...(mechanicsContext?.medicalExpenses?.length ||
+        pendingMedicalExpenses.length
+          ? {
+              medicalExpenses: [
+                ...(mechanicsContext?.medicalExpenses ?? []),
+                ...pendingMedicalExpenses,
+              ],
+            }
+          : {}),
+        ...(mechanicsContext?.investigatorChanges?.length ||
+        pendingInvestigatorChanges.length
+          ? {
+              investigatorChanges: [
+                ...(mechanicsContext?.investigatorChanges ?? []),
+                ...pendingInvestigatorChanges,
+              ],
+            }
+          : {}),
+        ...(mechanicsContext?.firearmResolutions?.length ||
+        pendingFirearmResolutions.length
+          ? {
+              firearmResolutions: [
+                ...(mechanicsContext?.firearmResolutions ?? []),
+                ...pendingFirearmResolutions,
+              ],
+            }
+          : {}),
+        ...(mechanicsContext?.jamClearingResolutions?.length ||
+        pendingJamClearingResolutions.length
+          ? {
+              jamClearingResolutions: [
+                ...(mechanicsContext?.jamClearingResolutions ?? []),
+                ...pendingJamClearingResolutions,
+              ],
+            }
+          : {}),
+        ...(mechanicsContext?.vehicleCollisionResolutions?.length ||
+        pendingVehicleCollisionResolutions.length
+          ? {
+              vehicleCollisionResolutions: [
+                ...(mechanicsContext?.vehicleCollisionResolutions ?? []),
+                ...pendingVehicleCollisionResolutions,
+              ],
+            }
+          : {}),
+        ...(mechanicsContext?.diceRollResolutions?.length ||
+        pendingDiceRollResolutions.length
+          ? {
+              diceRollResolutions: [
+                ...(mechanicsContext?.diceRollResolutions ?? []),
+                ...pendingDiceRollResolutions,
+              ],
+            }
+          : {}),
+        ...(activeCharacter?.activeBoutOfMadness
+          ? { sanity: { activeBoutOfMadness: true as const } }
+          : {}),
+        ...(activeChaseStateRef.current?.status === 'ongoing' &&
+        !mechanicsContext?.chase
           ? { chase: activeChaseStateRef.current }
           : {}),
       };
-      const resolvedMechanicsContext =
-        Object.keys(effectiveMechanicsContext).length > 0
+      const resolvedMechanicsContext = isBudgetRetry
+        ? pendingRetry?.mechanics
+        : Object.keys(effectiveMechanicsContext).length > 0
           ? effectiveMechanicsContext
           : undefined;
 
+      const pushedRoll = resolvedMechanicsContext?.pushedRoll;
+      const pushedTimeCost =
+        pushedRoll?.source === 'chat_skill_test' &&
+        pushedRoll.initialTestFailed === true &&
+        pushedRoll.passedRequirement === false &&
+        pushedRoll.stakePresented === true &&
+        pushedRoll.playerAcceptedStake === true &&
+        pushedRoll.originalTestId.trim().length > 0 &&
+        !appliedPushedRollIdsRef.current.has(pushedRoll.pushedRollId)
+          ? extractExplicitPushedRollTimeCostMinutes(pushedRoll.failureStake)
+          : null;
+      let pushedTimeUpdate: GameTime | undefined =
+        pdfMemory.adventureDossierFingerprint && pushedTimeCost !== null
+          ? timeManager.previewAdvanceTime(pushedTimeCost)
+          : undefined;
+
+      const dossierResolvedTests = selectDossierActorResolvedTests(
+        messagesRef.current,
+        resolvedMechanicsContext?.skillRolls ?? []
+      );
+
+      const rollScope = resolvedMechanicsContext?.skillRolls?.length
+        ? loadCampaignMemoryScope()
+        : null;
       const userMessage: Message = {
         id: crypto.randomUUID(),
         role: 'user',
         content: message,
         timestamp: new Date(),
         gameTime: currentGameTime,
-        mechanicsContext: resolvedMechanicsContext,
+        mechanicsContext: resolvedMechanicsContext && {
+          ...resolvedMechanicsContext,
+          ...(rollScope
+            ? {
+                skillRollScope: {
+                  playthroughId: rollScope.playthroughId,
+                  adventureId: rollScope.adventureId,
+                },
+              }
+            : {}),
+        },
       };
       if (resolvedMechanicsContext?.chase) {
         setActiveChaseState(resolvedMechanicsContext.chase);
         activeChaseStateRef.current = resolvedMechanicsContext.chase;
       }
+      if (pdfMemory.adventureDossierFingerprint)
+        dossierPendingPublicationRef.current = true;
       setMessages((prev) => [...prev, userMessage]);
       setIsLoading(true);
       hasTriggeredSanShockThisTurnRef.current = false;
@@ -1441,16 +2449,21 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       lastSentUserMessageRef.current = message;
       currentAssistantMessageIdRef.current = assistantMessageId;
       currentUserMessageIdRef.current = userMessage.id;
+      let dossierTurnCommitted = false;
 
       try {
         // Doktryna Czystego Emulatora BYOB - Dwuskładnikowy Bloker Sesji (Runtime Hard Guard)
-        const hasKey = typeof hasRequiredKeys === 'function' ? hasRequiredKeys() : true;
-        const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+        const hasKey =
+          (typeof hasRequiredKeys === 'function' ? hasRequiredKeys() : true) ||
+          hasLocalPlaytestTransport();
+        const isTestEnv =
+          typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
         const hasRules =
+          hasLocalPlaytestRules() ||
           isTestEnv ||
           (typeof window !== 'undefined' &&
             (localStorage.getItem('rules_onboarding_completed') === 'true' ||
-             !!localStorage.getItem('coc7_rulebook_profile')));
+              !!localStorage.getItem('coc7_rulebook_profile')));
 
         if (!hasKey || !hasRules) {
           const locale =
@@ -1460,12 +2473,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               : 'pl';
 
           const warningContent = !hasKey
-            ? (locale === 'en'
-                ? '⚠️ API Key required. Please configure your API key to start the investigation.'
-                : '⚠️ Wymagany klucz API. Skonfiguruj klucz API, aby rozpocząć śledztwo.')
-            : (locale === 'en'
-                ? '⚠️ CoC 7e Rulebook required (BYOB Clean Emulator). Upload your Quick-Start Rules or Keeper Rulebook to enable the Game Master.'
-                : '⚠️ Wymagana Księga Zasad CoC 7e (Doktryna Czystego Emulatora BYOB). Wgraj Zasady Skrócone lub Księgę Strażnika, aby aktywować Mistrza Gry.');
+            ? locale === 'en'
+              ? '⚠️ API Key required. Please configure your API key to start the investigation.'
+              : '⚠️ Wymagany klucz API. Skonfiguruj klucz API, aby rozpocząć śledztwo.'
+            : locale === 'en'
+              ? '⚠️ CoC 7e Rulebook required (BYOB Clean Emulator). Upload your Quick-Start Rules or Keeper Rulebook to enable the Game Master.'
+              : '⚠️ Wymagana Księga Zasad CoC 7e (Doktryna Czystego Emulatora BYOB). Wgraj Zasady Skrócone lub Księgę Strażnika, aby aktywować Mistrza Gry.';
 
           setMessages((prev) =>
             prev.map((msg) =>
@@ -1493,7 +2506,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         ) {
           const derived = deriveSceneSensoryMemoryFromMessages(
             messages,
-            currentLocationRef.current || adventureContext?.location
+            currentLocationRef.current || adventureContext?.location,
+            adventureContext?.id,
+            Boolean(pdfMemory.adventureDossierFingerprint)
           );
           if (derived.currentLocation) {
             currentLocationRef.current = derived.currentLocation;
@@ -1504,14 +2519,236 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
 
         const prevLocationBeforeTurn = currentLocationRef.current;
-        const hadVisitedAnyMacroBeforeTurn = visitedMacroLocationsRef.current.length > 0;
+        const offGraphLocation = offGraphLocationRef.current;
+        if (
+          offGraphLocation &&
+          !isOffGraphLocationRequest(
+            offGraphLocation,
+            adventureContext?.id,
+            loadCampaignMemoryScope()?.playthroughId
+          )
+        )
+          throw new Error('DOSSIER_STATE_CHANGED');
+        const canonicalLocation =
+          !offGraphLocation && pdfMemory.adventureDossierFingerprint
+            ? resolveCanonicalAdventureLocation(
+                adventureContext?.id,
+                prevLocationBeforeTurn
+              )
+            : null;
+        const hadVisitedAnyMacroBeforeTurn =
+          visitedMacroLocationsRef.current.length > 0;
 
-        const response = await fetchWithRetry('/api/chat', {
+        let dossierInventory: DossierInventoryProjection | undefined;
+        let dossierWorldState:
+          | ReturnType<typeof projectDossierWorldState>
+          | undefined;
+        let activeDossierPayload: DossierRagPayload | undefined;
+        if (pdfMemory.adventureDossierStatus === 'unavailable') {
+          throw new Error(
+            locale === 'en'
+              ? 'This edition has no ready adventure dossier.'
+              : 'To wydanie nie ma jeszcze gotowej teczki przygody.'
+          );
+        }
+        if (pdfMemory.adventureDossierFingerprint) {
+          const sessionId = loadCampaignMemoryScope()?.playthroughId;
+          const adventureId = adventureContext?.id;
+          if (!sessionId || !adventureId)
+            throw new Error('DOSSIER_SESSION_UNAVAILABLE');
+          activeDossierPayload = await loadRuntimeDossierPayload(
+            adventureId,
+            pdfMemory.adventureDossierFingerprint
+          );
+          const inventoryState = resolveDossierAccessChecks(
+            activeDossierPayload,
+            loadDossierInventory({
+              playthroughId: sessionId,
+              adventureId,
+              editionFingerprint: pdfMemory.adventureDossierFingerprint,
+            }),
+            resolvedMechanicsContext?.skillRolls ?? [],
+            offGraphLocation
+              ? 'OFF_GRAPH'
+              : (canonicalLocation?.locationId ?? prevLocationBeforeTurn),
+            requestCharacters.length ? requestCharacters : [requestCharacter!]
+          );
+          storeDossierInventory(inventoryState);
+          dossierInventory = projectDossierInventory(inventoryState);
+          const worldState = loadDossierWorldState(
+            {
+              playthroughId: sessionId,
+              adventureId,
+              editionFingerprint: pdfMemory.adventureDossierFingerprint,
+            },
+            activeDossierPayload
+          );
+          storeDossierWorldState(worldState);
+          const clockProjection = advanceAuthoredScenarioClock({
+            payload: activeDossierPayload,
+            state: worldState,
+            turnId: assistantMessageId,
+            gameTime: currentGameTime,
+            writesAllowed: true,
+          });
+          dossierWorldState = projectDossierWorldState(
+            clockProjection.applicable ? clockProjection.state : worldState
+          );
+          const activation = await ensureLocalDossierSession(
+            sessionId,
+            adventureId,
+            pdfMemory.adventureDossierFingerprint
+          );
+          if (!activation.ok)
+            throw new Error(
+              locale === 'en'
+                ? 'The local adventure dossier could not be restored.'
+                : 'Nie udało się przywrócić lokalnej teczki przygody.'
+            );
+        }
+
+        const rosterVersion = JSON.stringify([
+          charactersRef.current,
+          activeCharacterRef.current,
+        ]);
+        const sideStateKeys = [
+          'coc7_game_time',
+          ACTIVE_CHASE_STORAGE_KEY,
+          COMBAT_JOURNAL_STORAGE_KEY,
+        ];
+        const sideStateVersion = JSON.stringify(
+          sideStateKeys.map((key) => localStorage.getItem(key))
+        );
+        const dossierGate =
+          activeDossierPayload && dossierInventory
+            ? createDossierResponseGate({
+                payload: activeDossierPayload,
+                ...dossierInventory,
+                turnId: assistantMessageId,
+                playerMessage: message,
+                locale,
+                previousAssistantMessage: messages
+                  .filter((msg) => msg.role === 'assistant')
+                  .at(-1)?.content,
+                location: offGraphLocation
+                  ? 'OFF_GRAPH'
+                  : (canonicalLocation?.locationId ?? prevLocationBeforeTurn),
+                now: new Date(),
+                gameTime: currentGameTime,
+                finalGameTime: pushedTimeUpdate,
+                ordinaryTurn:
+                  !resolvedMechanicsContext?.pushedRoll &&
+                  !resolvedMechanicsContext?.pushedRollStakeRequest,
+                offGraph: Boolean(offGraphLocation),
+                era:
+                  adventureContext?.yearRange ||
+                  adventureContext?.era ||
+                  '1920s',
+                characters: requestCharacters,
+                activeCharacter: requestCharacter ?? null,
+                knownHandoutIds: messages
+                  .filter(
+                    (msg) =>
+                      msg.dossierHandoutBinding?.adventureId ===
+                        adventureContext?.id &&
+                      msg.dossierHandoutBinding?.editionFingerprint ===
+                        pdfMemory.adventureDossierFingerprint
+                  )
+                  .flatMap((msg) => msg.dossierHandoutRecordIds ?? []),
+                skillTests: dossierResolvedTests,
+                skillRolls: resolvedMechanicsContext?.skillRolls ?? [],
+                isCurrent: () =>
+                  !abortController.signal.aborted &&
+                  currentAssistantMessageIdRef.current === assistantMessageId &&
+                  rosterVersion ===
+                    JSON.stringify([
+                      charactersRef.current,
+                      activeCharacterRef.current,
+                    ]) &&
+                  sideStateVersion ===
+                    JSON.stringify(
+                      sideStateKeys.map((key) => localStorage.getItem(key))
+                    ),
+              })
+            : undefined;
+        let releaseDossierResponse: (() => void) | undefined;
+        let dossierMetadata: SSEMetadataEvent | undefined;
+        const parseTurnStream = (
+          response: Response,
+          callbacks: SSECallbacks
+        ) =>
+          dossierGate
+            ? parseValidatedDossierStream(
+                response,
+                {
+                  onText: (text) => {
+                    streamedFullText = stripMeleeAttackTags(text);
+                  },
+                  onMetadata: (metadata) => {
+                    dossierMetadata = metadata;
+                    dossierInventoryWritesAllowed =
+                      metadata.dossierInventoryWritesAllowed === true;
+                    isGuardrailResponse = Boolean(metadata.guardrail);
+                    retrievedDossierClueRecordIds =
+                      metadata.dossierClueRecordIds ?? [];
+                    retrievedDossierHandoutRecordIds =
+                      metadata.dossierHandoutRecordIds ?? [];
+                    dossierRequestedTests = bindDossierActorTests(
+                      activeDossierPayload,
+                      resolveSkillTestValues(
+                        (metadata.skillTests ??
+                          []) as unknown as SkillTestData[],
+                        requestCharacter,
+                        requestCharacters
+                      )
+                    );
+                    releaseDossierResponse = () => {
+                      callbacks.onText?.(
+                        dossierGate.candidate?.cleanText ?? streamedFullText
+                      );
+                      callbacks.onMetadata?.({
+                        ...metadata,
+                        timeUpdate: dossierGate.gameTime,
+                      });
+                    };
+                  },
+                },
+                {
+                  validate: async (text, metadata) => {
+                    dossierGate.validate(text, metadata);
+                    if (dossierGate.token)
+                      await prepareDossierTurnOnServer(dossierGate.token);
+                    dossierGate.assertCurrent();
+                  },
+                  reject: async (token) => {
+                    await acknowledgeDossierTurn(token, false);
+                  },
+                  correct: async (correction) => {
+                    dossierGate.assertCurrent();
+                    const response = await fetchWithApiKeys('/api/chat', {
+                      ...turnRequest,
+                      body: JSON.stringify({
+                        ...JSON.parse(turnRequest.body),
+                        dossierCorrection: correction,
+                      }),
+                    });
+                    return classifyDossierCorrectionResponse(
+                      response,
+                      correction.rejectedIds
+                    );
+                  },
+                }
+              )
+            : parseSSEStream(response, callbacks);
+
+        const turnRequest = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: abortController.signal,
           body: JSON.stringify({
             message: outgoingApiMessage,
+            dossierInventory,
+            dossierWorldState,
             messages: sanitizeHistoryForApi([...messages, userMessage]),
             pdfMemory,
             character: sanitizeCharacterForApi(requestCharacter),
@@ -1523,7 +2760,16 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             userMessageId: userMessage.id,
             adventureContext,
             memoryScope: loadCampaignMemoryScope(),
-            gameTime: timeManager.getTime(),
+            gameTime: currentGameTime,
+            ...(activeDossierPayload
+              ? {
+                  activeLocationId: canonicalLocation?.locationId ?? null,
+                  activeNodeId: canonicalLocation?.nodeId ?? null,
+                  ...(offGraphLocation
+                    ? { dossierLocation: offGraphLocation }
+                    : {}),
+                }
+              : {}),
             currentLocation: currentLocationRef.current,
             turnsInCurrentLocation: turnsInCurrentLocationRef.current,
             visitedMacroLocations: visitedMacroLocationsRef.current,
@@ -1542,10 +2788,16 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             mechanicsContext: resolvedMechanicsContext,
             guardrailState: guardrailStateRef.current,
           }),
-        });
+        };
+        const response = await fetchWithRetry('/api/chat', turnRequest);
 
         if (!response.ok) {
           const errorBody = await response.json().catch(() => ({}));
+          if (errorBody?.code === CONTEXT_BUDGET_ERROR_CODE) {
+            throw Object.assign(new Error(CONTEXT_BUDGET_ERROR_CODE), {
+              code: CONTEXT_BUDGET_ERROR_CODE,
+            });
+          }
           const serverMsg =
             (errorBody as Record<string, string>)?.error || response.statusText;
           throw new Error(`Chat API ${response.status}: ${serverMsg}`);
@@ -1558,10 +2810,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
         let isGuardrailResponse = false;
         let streamedFullText = '';
+        let retrievedDossierClueRecordIds: string[] = [];
+        let retrievedDossierHandoutRecordIds: string[] = [];
+        let dossierInventoryWritesAllowed = false;
+        let dossierRequestedTests: SkillTestData[] = [];
         let hasSessionEndConfirmation = false;
         let lastFinishReason: string | undefined;
         let lastCostData: Message['costData'];
-        const fullText = await parseSSEStream(response, {
+        const rawTurnText = await parseTurnStream(response, {
           onText: (text) => {
             let cleanText = stripMeleeAttackTags(text);
             if (text.includes('[KONIEC_SESJI:POTWIERDZENIE]')) {
@@ -1573,88 +2829,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               setSessionSaveStatus('saving');
               hasSessionEndConfirmation = true;
               if (typeof window !== 'undefined') {
-                const director = getGlobalLightDirector();
-                director.onSessionEnd().catch(() => {});
+                immersion.end(assistantMessageId).catch(() => {});
               }
             }
 
-            // Reżyseria oświetlenia Philips Hue w locie (Q1 -> A)
-            if (typeof window !== 'undefined') {
-              const locMatch = extractLatestTagLocation(text);
-              if (
-                locMatch &&
-                locMatch.name.length <= 45 &&
-                !isVisualPromptLeak(locMatch.name)
-              ) {
-                const now = Date.now();
-                if (now - lastHueLocationChangeTimeRef.current >= 10000) {
-                  lastHueLocationChangeTimeRef.current = now;
-                  const director = getGlobalLightDirector();
-                  const mood = director.evaluateEnvironmentMood({
-                    locationText: locMatch.name,
-                    hour: typeof currentGameTime?.hour === 'number' ? currentGameTime.hour : undefined,
-                  });
-                  director.applyPreset(mood).catch(() => {});
-                }
-              }
-
-              // Reset budżetu sceny przy cięciu reżyserskim [ZMIANA_SCENY] (Issue #789)
-              if (/\[(?:ZMIANA_SCENY|SCENE_CHANGE)\b/i.test(text)) {
-                sceneSFXBudgetRef.current = {
-                  hasPlayedGunshot: false,
-                  hasPlayedThunder: false,
-                  hasPlayedSanShock: false,
-                };
-              }
-
-              // 1. Szok SAN (Somatyczny mrok + szept utraty poczytalności)
-              if (
-                !sceneSFXBudgetRef.current.hasPlayedSanShock &&
-                /\[SANITY:\s*(?:@[^:]+:\s*)?-\d+/i.test(text)
-              ) {
-                sceneSFXBudgetRef.current.hasPlayedSanShock = true;
-                hasTriggeredSanShockThisTurnRef.current = true;
-                playSFX('sanity_loss_whisper');
-                const director = getGlobalLightDirector();
-                director.triggerSanityShock().catch(() => {});
-              }
-
-              // 2. Wystrzał w scenie (Kinowy akcent One-Shot per Scene z rozbłyskiem Hue)
-              if (!sceneSFXBudgetRef.current.hasPlayedGunshot) {
-                const isGunshotEvent =
-                  /\[\s*(?:WALKA_ATAK|ATAK_WALKA|OPPOSED_MELEE|WALKA|COMBAT|BROŃ|WEAPON)\s*:[^\]]*(?:pistolet|rewolwer|strzelb|karabin|shotgun|tommy|gun|shot|paln)\b/i.test(text) ||
-                  /\[TEST:\s*(?:Broń palna|Strzelectwo|Pistolet|Strzelba|Karabin|Firearms)\b/i.test(text);
-
-                if (isGunshotEvent) {
-                  sceneSFXBudgetRef.current.hasPlayedGunshot = true;
-                  let sfxId = 'gunshot';
-                  if (/strzelb|shotgun|obrzyn/i.test(text)) sfxId = 'shotgun_blast';
-                  else if (/tommy|automat|seri/i.test(text)) sfxId = 'tommy_gun_burst';
-                  else if (/karabin|rifle/i.test(text)) sfxId = 'rifle_shot_bolt';
-                  else if (/derringer/i.test(text)) sfxId = 'derringer_pocket_shot';
-
-                  playSFX(sfxId);
-                  const director = getGlobalLightDirector();
-                  director.triggerGunshotFlash().catch(() => {});
-                }
-              }
-
-              // 3. Piorun w burzowej scenie (Fizyka diegetyczna: błysk natychmiast, grzmot po 300 ms)
-              if (!sceneSFXBudgetRef.current.hasPlayedThunder) {
-                const isThunderEvent =
-                  /\[POGODA:[^\]]*(?:burz|piorun|nawałnic|storm|thunder)\b/i.test(text) ||
-                  /\b(?:piorun\s+uderzył|zagrzmiało|błyskawica\s+rozcięła|huk\s+grzmotu)\b/i.test(text);
-
-                if (isThunderEvent) {
-                  sceneSFXBudgetRef.current.hasPlayedThunder = true;
-                  const director = getGlobalLightDirector();
-                  director.triggerLightningFlash().catch(() => {});
-                  setTimeout(() => {
-                    playSFX('thunder');
-                  }, 300);
-                }
-              }
-            }
+            immersion.feed(
+              assistantMessageId,
+              text,
+              voiceEnabled && isTTSEnabled
+            );
             streamedFullText = cleanText;
             setMessages((prev) =>
               prev.map((msg) =>
@@ -1668,6 +2851,34 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             }
           },
           onMetadata: (metadata) => {
+            if (typeof metadata.dossierInventoryWritesAllowed === 'boolean')
+              dossierInventoryWritesAllowed =
+                metadata.dossierInventoryWritesAllowed;
+            retrievedDossierClueRecordIds = Array.isArray(
+              metadata.dossierClueRecordIds
+            )
+              ? metadata.dossierClueRecordIds.filter(
+                  (recordId): recordId is string => typeof recordId === 'string'
+                )
+              : [];
+            if (Array.isArray(metadata.dossierHandoutRecordIds))
+              retrievedDossierHandoutRecordIds =
+                metadata.dossierHandoutRecordIds.filter(
+                  (recordId): recordId is string => typeof recordId === 'string'
+                );
+            // Retrieval is not possession. Original handouts are committed after the complete response.
+            if (!pdfMemory.adventureDossierFingerprint)
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? {
+                        ...msg,
+                        dossierHandoutRecordIds:
+                          retrievedDossierHandoutRecordIds,
+                      }
+                    : msg
+                )
+              );
             if (metadata.guardrail) {
               isGuardrailResponse = true;
             }
@@ -1677,7 +2888,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               metadata.pendingMeleeAttacks.length > 0 &&
               typeof window !== 'undefined'
             ) {
-              const attacks = metadata.pendingMeleeAttacks as PendingMeleeAttack[];
+              const attacks =
+                metadata.pendingMeleeAttacks as PendingMeleeAttack[];
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === assistantMessageId
@@ -1709,7 +2921,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               Array.isArray(metadata.opposedMeleeEvents) &&
               metadata.opposedMeleeEvents.length > 0
             ) {
-              const opposedMelee = metadata.opposedMeleeEvents as OpposedMeleeEventData[];
+              const opposedMelee =
+                metadata.opposedMeleeEvents as OpposedMeleeEventData[];
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === assistantMessageId
@@ -1746,6 +2959,26 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               });
             }
 
+            if (metadata.starterState) {
+              validateStarterState(metadata.starterState);
+              receivedStarterState = metadata.starterState;
+              const previous = readStarterState(
+                receivedStarterState.playthroughId
+              );
+              const minutes =
+                receivedStarterState.elapsedMinutes -
+                (previous?.elapsedMinutes || 0);
+              storeStarterState(receivedStarterState);
+              if (minutes > 0) timeManager.advanceTime(minutes);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, skillTests: receivedStarterState!.pendingTests }
+                    : m
+                )
+              );
+            }
+
             // Metadane costData zapisz do wiadomości
             if (metadata.costData) {
               lastCostData = metadata.costData;
@@ -1777,11 +3010,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               Array.isArray(metadata.skillTests) &&
               metadata.skillTests.length > 0
             ) {
-              const resolvedTests = resolveSkillTestValues(
-                metadata.skillTests as unknown as SkillTestData[],
-                requestCharacter,
-                requestCharacters
+              const resolvedTests = bindDossierActorTests(
+                activeDossierPayload,
+                resolveSkillTestValues(
+                  metadata.skillTests as unknown as SkillTestData[],
+                  requestCharacter,
+                  requestCharacters
+                )
               );
+              dossierRequestedTests = resolvedTests;
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === assistantMessageId
@@ -1814,9 +3051,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             if (Array.isArray(parsed)) {
               for (const e of parsed) {
                 if (e && typeof e === 'object') {
-                  const ev = e as { type?: string; title?: string; description?: string };
+                  const ev = e as {
+                    type?: string;
+                    title?: string;
+                    description?: string;
+                  };
                   if (ev.type === 'npc' && ev.title) {
-                    const rawName = ev.title.replace(/^Spotkano:\s*/i, '').trim();
+                    const rawName = ev.title
+                      .replace(/^Spotkano:\s*/i, '')
+                      .trim();
                     if (rawName) {
                       visualBeliefGraphRef.current.registerNPC(
                         {
@@ -1827,9 +3070,20 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                         era
                       );
                     }
-                  } else if (ev.type === 'location' && ev.title) {
-                    const name = sanitizeLocationName(ev.title);
-                    if (name && name.length <= 45 && !isVisualPromptLeak(name)) {
+                  } else if (
+                    !activeDossierPayload &&
+                    ev.type === 'location' &&
+                    ev.title
+                  ) {
+                    const name = sanitizeLocationName(
+                      ev.title,
+                      adventureContext?.id
+                    );
+                    if (
+                      name &&
+                      isAcceptedLocationLength(name, adventureContext?.id) &&
+                      !isVisualPromptLeak(name)
+                    ) {
                       visualBeliefGraphRef.current.updateLocation(name, {
                         atmosphere: ev.description || undefined,
                       });
@@ -1847,9 +3101,20 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                     (e as { type?: string }).type === 'location'
                 ) as { title?: string; description?: string } | undefined;
               const rawTitle = locEvent?.title;
-              if (typeof rawTitle === 'string' && rawTitle.trim()) {
-                const name = sanitizeLocationName(rawTitle);
-                if (name && name.length <= 45 && !isVisualPromptLeak(name)) {
+              if (
+                !activeDossierPayload &&
+                typeof rawTitle === 'string' &&
+                rawTitle.trim()
+              ) {
+                const name = sanitizeLocationName(
+                  rawTitle,
+                  adventureContext?.id
+                );
+                if (
+                  name &&
+                  isAcceptedLocationLength(name, adventureContext?.id) &&
+                  !isVisualPromptLeak(name)
+                ) {
                   currentLocationRef.current = name;
                   setCurrentLocation(name);
                   visualBeliefGraphRef.current.updateLocation(name, {
@@ -1904,22 +3169,42 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 // Zamiast naiwnego slice(0, 1), proaktywny reżyser ocenia wagę dramaturgiczną,
                 // dobiera 1-3 zbalansowane kadry (lokacja / NPC / poszlaka / Mity)
                 // i wzbogaca je o Visual Belief Graph.
-                const maxAllowed = options.aiSettings?.replicateSettings?.maxImagesPerMessage ?? 1;
-                const freq = options.aiSettings?.replicateSettings?.imageFrequency || 'normal';
+                const maxAllowed =
+                  options.aiSettings?.replicateSettings?.maxImagesPerMessage ??
+                  1;
+                const freq =
+                  options.aiSettings?.replicateSettings?.imageFrequency ||
+                  'normal';
 
-                const directorResult = directSceneIllustrations(illustrationsList as unknown as import('@/lib/parsers/types').ImageRequest[], {
-                  maxImagesPerMessage: maxAllowed,
-                  imageFrequency: freq,
-                  effectiveEraOrYear: era,
-                  beliefGraph: visualBeliefGraphRef.current,
-                });
+                const directorResult = directSceneIllustrations(
+                  illustrationsList as unknown as import('@/lib/parsers/types').ImageRequest[],
+                  {
+                    maxImagesPerMessage: maxAllowed,
+                    imageFrequency: freq,
+                    effectiveEraOrYear: era,
+                    beliefGraph: visualBeliefGraphRef.current,
+                  }
+                );
 
                 // Zapobieganie powielaniu kadrów tej samej lokacji w kolejnych wiadomościach
                 const filteredShots = directorResult.shots.filter((s) => {
-                  const isLoc = s.role === 'establishing_location' || s.request.type === 'location';
+                  const isLoc =
+                    s.role === 'establishing_location' ||
+                    s.request.type === 'location';
                   if (!isLoc) return true;
-                  const locName = (s.request.locationName || currentLocationRef.current || sceneKey || '').trim().toLowerCase();
-                  if (locName && lastIllustratedLocationRef.current && locName === lastIllustratedLocationRef.current) {
+                  const locName = (
+                    s.request.locationName ||
+                    currentLocationRef.current ||
+                    sceneKey ||
+                    ''
+                  )
+                    .trim()
+                    .toLowerCase();
+                  if (
+                    locName &&
+                    lastIllustratedLocationRef.current &&
+                    locName === lastIllustratedLocationRef.current
+                  ) {
                     return false;
                   }
                   return true;
@@ -1927,20 +3212,31 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
                 if (filteredShots.length > 0) {
                   filteredShots.forEach((s) => {
-                    const isLoc = s.role === 'establishing_location' || s.request.type === 'location';
+                    const isLoc =
+                      s.role === 'establishing_location' ||
+                      s.request.type === 'location';
                     if (isLoc) {
-                      const locName = (s.request.locationName || currentLocationRef.current || sceneKey || '').trim().toLowerCase();
+                      const locName = (
+                        s.request.locationName ||
+                        currentLocationRef.current ||
+                        sceneKey ||
+                        ''
+                      )
+                        .trim()
+                        .toLowerCase();
                       if (locName) {
                         lastIllustratedLocationRef.current = locName;
                       }
                     }
                   });
 
-                  const curatedImages: ImageToGenerate[] = filteredShots.map((s) => ({
-                    ...s.request,
-                    prompt: s.enrichedPrompt,
-                    aspectRatio: s.aspectRatio,
-                  }));
+                  const curatedImages: ImageToGenerate[] = filteredShots.map(
+                    (s) => ({
+                      ...s.request,
+                      prompt: s.enrichedPrompt,
+                      aspectRatio: s.aspectRatio,
+                    })
+                  );
                   generateImages(curatedImages, assistantMessageId);
                 }
               }
@@ -1955,6 +3251,91 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             hook: 'useChat',
           }),
         });
+
+        const fullText = dossierGate?.actionPlan
+          ? dossierGate.candidate!.cleanText
+          : rawTurnText;
+        const stateText = stripPushedRollConsequenceEntries(fullText);
+        if (!dossierGate && pushedRoll && pushedTimeCost !== null) {
+          pushedTimeUpdate = timeManager.advanceTime(pushedTimeCost);
+          appliedPushedRollIdsRef.current.add(pushedRoll.pushedRollId);
+        }
+        const journalText =
+          stateText +
+          buildPushedRollConsequenceJournalEntry(pushedRoll, locale);
+        let stagedHistory: Message[] = [
+          ...messages,
+          userMessage,
+          assistantMessage,
+        ];
+        const updateTurnMessages = (
+          update: (previous: Message[]) => Message[]
+        ) => {
+          stagedHistory = update(stagedHistory);
+          if (!dossierGate) setMessages(update);
+        };
+        const committedEffects: Array<() => void | Promise<void>> = [];
+        const afterCommit = (effect: () => void | Promise<void>) => {
+          if (dossierGate?.token) committedEffects.push(effect);
+          else return effect();
+        };
+        let finalInventory = dossierGate?.candidate?.next.inventory;
+        let rosterChanged = false;
+        let acquiredDossierHandoutIds: string[] = [];
+        let dossierHandoutBinding: DossierHandoutBinding | undefined;
+
+        if (
+          pdfMemory.adventureDossierFingerprint &&
+          adventureContext?.id &&
+          !isGuardrailResponse
+        ) {
+          dossierHandoutBinding = {
+            adventureId: adventureContext.id,
+            editionFingerprint: pdfMemory.adventureDossierFingerprint,
+          };
+          if (!activeDossierPayload)
+            throw new Error('DOSSIER_LOCAL_SOURCE_UNAVAILABLE');
+          acquiredDossierHandoutIds =
+            dossierGate?.handouts ??
+            acquiredHandoutsFromTurn(
+              fullText,
+              retrievedDossierHandoutRecordIds,
+              activeDossierPayload,
+              {
+                playerMessage: message,
+                location: prevLocationBeforeTurn,
+              }
+            );
+        }
+        let dossierWorldCleanText: string | undefined;
+        if (activeDossierPayload && dossierWorldState && !isGuardrailResponse) {
+          const candidate = dossierGate?.candidate;
+          if (!candidate) throw new Error('DOSSIER_FINALIZATION_REQUIRED');
+
+          dossierWorldCleanText = candidate.cleanText;
+        }
+        const displayText = stripPushedRollConsequenceEntries(
+          dossierWorldCleanText ?? streamedFullText
+        );
+        updateTurnMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? {
+                  ...msg,
+                  content: displayText,
+                  ...(dossierHandoutBinding
+                    ? {
+                        dossierHandoutBinding,
+                        dossierHandoutRecordIds: acquiredDossierHandoutIds,
+                        dossierInventoryWritesAllowed:
+                          dossierInventoryWritesAllowed && !isGuardrailResponse,
+                      }
+                    : {}),
+                  ...(pushedTimeUpdate ? { gameTime: pushedTimeUpdate } : {}),
+                }
+              : msg
+          )
+        );
 
         // IND-201: auto-dziennik. Po pełnym streamie dopisz wpisy [DZIENNIK:] z
         // surowej narracji MG do character.journal (modal sesji). fullText jest
@@ -1973,14 +3354,16 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           // Rejestracja nowo napotkanych NPC z tagów [NPC:] / [DZIENNIK:npc:] w VisualBeliefGraph
           const extractedNpcs = extractNpcTags(fullText);
           for (const npcTag of extractedNpcs) {
-            visualBeliefGraphRef.current.registerNPC(
-              {
-                id: npcTag.name.toLowerCase(),
-                name: npcTag.name,
-                description: npcTag.description,
-              },
-              currentEra
-            );
+            afterCommit(() => {
+              visualBeliefGraphRef.current.registerNPC(
+                {
+                  id: npcTag.name.toLowerCase(),
+                  name: npcTag.name,
+                  description: npcTag.description,
+                },
+                currentEra
+              );
+            });
           }
 
           // Duet/Hot Seat: kieruj wpisy [DZIENNIK:] i zmiany SAN/HP do postaci
@@ -1989,131 +3372,277 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           // No-op (changed=false) gdy brak tagów → tani skip zapisu.
           const scope = loadCampaignMemoryScope();
           const participantIds = hotSeatConfig?.enabled
-            ? hotSeatConfig.players.map((player) => player.characterId).filter((id): id is string => Boolean(id))
+            ? hotSeatConfig.players
+                .map((player) => player.characterId)
+                .filter((id): id is string => Boolean(id))
             : [activeCharacter.id];
-          const prepared = scope ? beginChronicleTurn(characters, activeCharacter, {
-            scope,
-            adventureTitle: adventureContext?.title,
-            participantIds,
-            startMessageId: userMessage.id,
-            location: currentLocationRef.current || adventureContext?.location,
-          }) : { characters, activeCharacter, changed: false };
-          const partyCharacters = scope ? prepared.characters.filter((character) => character.id === activeCharacter.id || participantIds.includes(character.id)) : prepared.characters;
-          if (scope && !partyCharacters.some((character) => character.id === activeCharacter.id)) partyCharacters.push(prepared.activeCharacter);
+          const prepared = scope
+            ? beginChronicleTurn(characters, activeCharacter, {
+                scope,
+                adventureTitle: adventureContext?.title,
+                participantIds,
+                startMessageId: userMessage.id,
+                location:
+                  currentLocationRef.current || adventureContext?.location,
+              })
+            : { characters, activeCharacter, changed: false };
+          const partyCharacters = scope
+            ? prepared.characters.filter(
+                (character) =>
+                  character.id === activeCharacter.id ||
+                  participantIds.includes(character.id)
+              )
+            : prepared.characters;
+          if (
+            scope &&
+            !partyCharacters.some(
+              (character) => character.id === activeCharacter.id
+            )
+          )
+            partyCharacters.push(prepared.activeCharacter);
+          const clueAcquisitionCause = hasResolvedClueFailForwardTrigger({
+            ideaRollResolved:
+              resolvedMechanicsContext?.ideaRoll?.completed === true,
+            ideaRollOutcome: resolvedMechanicsContext?.ideaRoll?.outcome,
+            skillRolls: resolvedMechanicsContext?.skillRolls,
+          })
+            ? ('fail_forward' as const)
+            : undefined;
           let j = appendJournalToParty(
             partyCharacters,
             prepared.activeCharacter,
-            fullText,
-            assistantMessageId
+            journalText,
+            assistantMessageId,
+            clueAcquisitionCause,
+            retrievedDossierClueRecordIds,
+            {
+              scope: scope ?? undefined,
+              binding: dossierHandoutBinding,
+              handoutRecordIds: acquiredDossierHandoutIds,
+              sourceContent: displayText,
+              payload: activeDossierPayload ?? undefined,
+              learnedAt: timeManager.formatDateTime?.(locale),
+            }
           );
-          const sessionEnded = hasSessionEndConfirmation || fullText.includes('[KONIEC_SESJI:POTWIERDZENIE]');
+          const sessionEnded =
+            hasSessionEndConfirmation ||
+            fullText.includes('[KONIEC_SESJI:POTWIERDZENIE]');
           const updateChronicle = (character: Character): Character => {
-            if (!scope || (character.id !== activeCharacter.id && !participantIds.includes(character.id))) return character;
-            const previous = characters.find((candidate) => candidate.id === character.id) ?? activeCharacter;
+            if (
+              !scope ||
+              (character.id !== activeCharacter.id &&
+                !participantIds.includes(character.id))
+            )
+              return character;
+            const previous =
+              characters.find((candidate) => candidate.id === character.id) ??
+              activeCharacter;
             const stamped = stampChronicleEntries(character, previous);
-            return sessionEnded && stamped.chronicleSession?.sessionId === prepared.activeCharacter.chronicleSession?.sessionId
-              ? closeChronicleSession(stamped, assistantMessageId, fullText) : stamped;
+            return sessionEnded &&
+              stamped.chronicleSession?.sessionId ===
+                prepared.activeCharacter.chronicleSession?.sessionId
+              ? closeChronicleSession(stamped, assistantMessageId, fullText)
+              : stamped;
           };
-          const chapterCharacters = j.characters.map(updateChronicle);
+          const chapterCharacters = receivedStarterState
+            ? applyStarterStateToCharacters(
+                j.characters.map(updateChronicle),
+                receivedStarterState,
+                locale === 'en' ? 'en' : 'pl'
+              )
+            : j.characters.map(updateChronicle);
           j = {
             characters: chapterCharacters,
-            activeCharacter: chapterCharacters.find((character) => character.id === activeCharacter.id) ?? updateChronicle(j.activeCharacter),
-            changed: j.changed || prepared.changed || (sessionEnded && Boolean(prepared.activeCharacter.chronicleSession)),
+            activeCharacter:
+              chapterCharacters.find(
+                (character) => character.id === activeCharacter.id
+              ) ?? updateChronicle(j.activeCharacter),
+            changed:
+              j.changed ||
+              Boolean(receivedStarterState) ||
+              prepared.changed ||
+              (sessionEnded &&
+                Boolean(prepared.activeCharacter.chronicleSession)),
           };
           if (j.activeCharacter.investigatorDossier?.npcs) {
             for (const npc of j.activeCharacter.investigatorDossier.npcs) {
-              visualBeliefGraphRef.current.registerNPC(npc, currentEra);
+              afterCommit(() => {
+                visualBeliefGraphRef.current.registerNPC(npc, currentEra);
+              });
             }
           }
           const s = applyStatChangesToParty(
             j.characters,
             j.activeCharacter,
             fullText,
-            (ev) => {
-              if (ev.type === 'int_check_required') {
-                toast({
-                  title:
-                    locale === 'pl'
-                      ? 'Wymagany Test Inteligencji (≥ 5 SAN)'
-                      : 'Intelligence Test Required (≥ 5 SAN)',
-                  description: ev.message[locale === 'pl' ? 'pl' : 'en'],
-                });
-              } else if (ev.type === 'indefinite_insanity') {
-                toast({
-                  title:
-                    locale === 'pl'
-                      ? 'Czasowa Niepoczytalność (1/5 SAN)'
-                      : 'Indefinite Insanity (1/5 SAN)',
-                  description: ev.message[locale === 'pl' ? 'pl' : 'en'],
-                });
-              } else if (ev.type === 'bout_of_madness') {
-                toast({
-                  title:
-                    locale === 'pl' ? 'Atak Szaleństwa' : 'Bout of Madness',
-                  description: ev.message[locale === 'pl' ? 'pl' : 'en'],
-                });
-              } else if (ev.type === 'permanent_insanity') {
-                toast({
-                  title:
-                    locale === 'pl'
-                      ? 'Nieodwracalny Obłęd (0 SAN)'
-                      : 'Permanent Insanity (0 SAN)',
-                  description: ev.message[locale === 'pl' ? 'pl' : 'en'],
-                });
-              }
-            }
+            (ev) =>
+              afterCommit(() => {
+                if (ev.type === 'int_check_required') {
+                  toast({
+                    title:
+                      locale === 'pl'
+                        ? 'Wymagany Test Inteligencji (≥ 5 SAN)'
+                        : 'Intelligence Test Required (≥ 5 SAN)',
+                    description: ev.message[locale === 'pl' ? 'pl' : 'en'],
+                  });
+                } else if (ev.type === 'indefinite_insanity') {
+                  toast({
+                    title:
+                      locale === 'pl'
+                        ? 'Czasowa Niepoczytalność (1/5 SAN)'
+                        : 'Indefinite Insanity (1/5 SAN)',
+                    description: ev.message[locale === 'pl' ? 'pl' : 'en'],
+                  });
+                } else if (ev.type === 'bout_of_madness') {
+                  toast({
+                    title:
+                      locale === 'pl' ? 'Atak Szaleństwa' : 'Bout of Madness',
+                    description: ev.message[locale === 'pl' ? 'pl' : 'en'],
+                  });
+                } else if (ev.type === 'permanent_insanity') {
+                  toast({
+                    title:
+                      locale === 'pl'
+                        ? 'Nieodwracalny Obłęd (0 SAN)'
+                        : 'Permanent Insanity (0 SAN)',
+                    description: ev.message[locale === 'pl' ? 'pl' : 'en'],
+                  });
+                }
+              })
           );
+          if (
+            s.characters.some((updated) => {
+              const previous = j.characters.find((c) => c.id === updated.id);
+              return previous && updated.san < previous.san;
+            })
+          )
+            immersion.commitSanity(assistantMessageId);
           statChangeEvents = s.statChangeEvents;
-          const eq = applyEquipmentEventsToParty(
-            s.characters,
-            s.activeCharacter,
-            fullText,
-            (notif) => {
-              if (notif.type === 'use') {
-                toast({
-                  title: locale === 'pl' ? 'Zużyto ekwipunek' : 'Item Used',
-                  description:
-                    locale === 'pl'
-                      ? `${notif.characterName}: ${notif.itemName} (pozostało: ${notif.remaining})`
-                      : `${notif.characterName}: ${notif.itemName} (${notif.remaining} left)`,
-                });
-              } else if (notif.type === 'remove') {
-                toast({
-                  title:
-                    locale === 'pl'
-                      ? 'Przedmiot wyczerpany / utracony'
-                      : 'Item Depleted / Lost',
-                  description:
-                    locale === 'pl'
-                      ? `${notif.characterName}: ${notif.itemName}`
-                      : `${notif.characterName}: ${notif.itemName}`,
-                });
-              } else if (notif.type === 'add') {
-                toast({
-                  title:
-                    locale === 'pl' ? 'Nowy przedmiot' : 'New Item Acquired',
-                  description:
-                    locale === 'pl'
-                      ? `${notif.characterName}: ${notif.itemName}`
-                      : `${notif.characterName}: ${notif.itemName}`,
-                });
-              }
+          const notifyEquipment = (notif: EquipmentNotification) => {
+            if (notif.type === 'use') {
+              toast({
+                title: locale === 'pl' ? 'Zużyto ekwipunek' : 'Item Used',
+                description:
+                  locale === 'pl'
+                    ? `${notif.characterName}: ${notif.itemName} (pozostało: ${notif.remaining})`
+                    : `${notif.characterName}: ${notif.itemName} (${notif.remaining} left)`,
+              });
+            } else if (notif.type === 'remove') {
+              toast({
+                title:
+                  locale === 'pl'
+                    ? 'Przedmiot wyczerpany / utracony'
+                    : 'Item Depleted / Lost',
+                description:
+                  locale === 'pl'
+                    ? `${notif.characterName}: ${notif.itemName}`
+                    : `${notif.characterName}: ${notif.itemName}`,
+              });
+            } else if (notif.type === 'add') {
+              toast({
+                title: locale === 'pl' ? 'Nowy przedmiot' : 'New Item Acquired',
+                description:
+                  locale === 'pl'
+                    ? `${notif.characterName}: ${notif.itemName}`
+                    : `${notif.characterName}: ${notif.itemName}`,
+              });
             }
+          };
+          const candidate = dossierGate?.candidate;
+          const candidateCharacters = new Map(
+            candidate?.next.characters.map((c) => [c.id, c])
           );
+          const eq =
+            candidate && activeDossierPayload && candidate.next.activeCharacter
+              ? {
+                  characters: s.characters.map((c) => ({
+                    ...c,
+                    equipment:
+                      candidateCharacters.get(c.id)?.equipment ?? c.equipment,
+                  })),
+                  activeCharacter: {
+                    ...s.activeCharacter,
+                    equipment: candidate.next.activeCharacter.equipment,
+                  },
+                  state: registerDossierAccessTests(
+                    activeDossierPayload,
+                    candidate.next.inventory,
+                    isGuardrailResponse ? [] : dossierRequestedTests,
+                    prevLocationBeforeTurn,
+                    s.characters
+                  ),
+                  changed: candidate.changed.inventory,
+                  notifications: candidate.notifications,
+                }
+              : applyEquipmentEventsToParty(
+                  s.characters,
+                  s.activeCharacter,
+                  fullText,
+                  undefined,
+                  currentEra
+                );
+          if ('state' in eq) {
+            if (!isDossierInventoryState(eq.state))
+              throw new Error('DOSSIER_INVENTORY_INVALID');
+            if (dossierGate) finalInventory = eq.state;
+            else storeDossierInventory(eq.state);
+          }
+          afterCommit(() => {
+            eq.notifications.forEach(notifyEquipment);
+          });
+          if (eq.changed) {
+            const beforeById = new Map(
+              [...s.characters, s.activeCharacter].map((candidate) => [
+                candidate.id,
+                candidate,
+              ])
+            );
+            const afterById = new Map(
+              [...eq.characters, eq.activeCharacter].map((candidate) => [
+                candidate.id,
+                candidate,
+              ])
+            );
+            for (const [characterId, before] of beforeById) {
+              const after = afterById.get(characterId);
+              if (!after) continue;
+              const dossierEvent = buildInvestigatorChangeResolutionContext(
+                before,
+                after
+              );
+              if (dossierEvent)
+                afterCommit(() => {
+                  reportDossierInvestigatorChange(dossierEvent);
+                });
+            }
+          }
           let updatedActiveCharacter = eq.activeCharacter;
           let updatedCharacters = eq.characters;
           // A missing recap remains eligible on the next turn after a transient error.
           const pendingScenes = (j.activeCharacter.sceneCards ?? []).filter(
-            (scene) => scene.isSealed && scene.endMessageId && scene.chronicleBoundaryKnown !== false &&
-              !(scene.chronicleSummaryByLocale?.pl && scene.chronicleSummaryByLocale.en)
+            (scene) =>
+              scene.isSealed &&
+              scene.endMessageId &&
+              scene.chronicleBoundaryKnown !== false &&
+              !(
+                scene.chronicleSummaryByLocale?.pl &&
+                scene.chronicleSummaryByLocale.en
+              )
           );
 
           for (const pendingScene of pendingScenes) {
-            const transcript = buildSceneChronicleTranscript([
-              ...messages,
-              userMessage,
-              { id: assistantMessageId, role: 'assistant', content: fullText },
-            ], pendingScene);
+            const transcript = buildSceneChronicleTranscript(
+              [
+                ...messages,
+                userMessage,
+                {
+                  id: assistantMessageId,
+                  role: 'assistant',
+                  content: fullText,
+                },
+              ],
+              pendingScene
+            );
             if (transcript.length === 0) continue;
 
             try {
@@ -2155,19 +3684,35 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             }
           }
 
-          if (j.changed || s.changed || eq.changed || pendingScenes.length > 0) {
+          if (
+            j.changed ||
+            s.changed ||
+            eq.changed ||
+            pendingScenes.length > 0
+          ) {
             if (scope) {
-              const updates = new Map(updatedCharacters.map((character) => [character.id, character]));
-              updatedCharacters = prepared.characters.map((character) => updates.get(character.id) ?? character);
-              if (!updatedCharacters.some((character) => character.id === activeCharacter.id)) updatedCharacters.push(updatedActiveCharacter);
+              const updates = new Map(
+                updatedCharacters.map((character) => [character.id, character])
+              );
+              updatedCharacters = prepared.characters.map(
+                (character) => updates.get(character.id) ?? character
+              );
+              if (
+                !updatedCharacters.some(
+                  (character) => character.id === activeCharacter.id
+                )
+              )
+                updatedCharacters.push(updatedActiveCharacter);
             }
-            setActiveCharacter(updatedActiveCharacter);
-            setCharacters(updatedCharacters);
+            rosterChanged = true;
+            afterCommit(() => {
+              setActiveCharacter(updatedActiveCharacter);
+              setCharacters(updatedCharacters);
+            });
             finalActiveChar = updatedActiveCharacter;
             finalCharacters = updatedCharacters;
-            if (typeof window !== 'undefined') {
+            if (!dossierGate && typeof window !== 'undefined')
               persistCharacters(updatedCharacters);
-            }
           }
         }
 
@@ -2176,9 +3721,18 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         const acquiredItems = extractAcquiredItemProposals(
           fullText,
           assistantMessageId
+        ).filter(
+          (proposal) =>
+            !activeDossierPayload?.records.some(
+              (record) =>
+                record.inventory_item &&
+                (record.inventory_item.name.toLocaleLowerCase() ===
+                  proposal.name.trim().toLocaleLowerCase() ||
+                  proposal.name === `@${record.record_id}`)
+            )
         );
         if (acquiredItems.length > 0) {
-          setMessages((prev) =>
+          updateTurnMessages((prev) =>
             prev.map((message) =>
               message.id === assistantMessageId
                 ? { ...message, acquiredItems }
@@ -2200,12 +3754,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         const chaseStartTag = extractChaseTag(fullText);
         const chaseEndTag = extractChaseEndTag(fullText);
 
+        let nextChase = activeChaseStateRef.current;
         if (chaseEndTag) {
-          setActiveChaseState(null);
-          activeChaseStateRef.current = null;
+          nextChase = null;
         } else if (
           chaseStartTag &&
-          (!activeChaseStateRef.current || activeChaseStateRef.current.status !== 'ongoing')
+          (!activeChaseStateRef.current ||
+            activeChaseStateRef.current.status !== 'ongoing')
         ) {
           const newChase = createInitialChaseFromTag({
             activeCharacter: finalActiveChar ?? activeCharacter,
@@ -2217,15 +3772,16 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             isShort: chaseStartTag.isShort,
             locale,
           });
-          setActiveChaseState(newChase);
-          activeChaseStateRef.current = newChase;
+          nextChase = newChase;
         }
 
-        const currentChase = activeChaseStateRef.current;
+        const currentChase = nextChase;
 
         // Senne Wezwania CoC 7e RAW (Issue #787: diegetyczne okno snu w czacie)
         const dreamTag = extractDreamVisionTag(fullText);
-        let dreamVisionEvent: import('@/lib/types').DreamVisionEventData | undefined;
+        let dreamVisionEvent:
+          | import('@/lib/types').DreamVisionEventData
+          | undefined;
         if (dreamTag) {
           const variant =
             ANCIENT_TREES_DREAM_VARIANTS[dreamTag.variantId] ||
@@ -2237,22 +3793,26 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                     c.name.toLowerCase().trim() ===
                     dreamTag.investigatorName?.toLowerCase().trim()
                 )
-              : null) || (finalActiveChar ?? activeCharacter);
+              : null) ||
+            (finalActiveChar ?? activeCharacter);
 
           dreamVisionEvent = {
             id: `dream_${assistantMessageId}_${variant.id}`,
             variantId: variant.id,
             number: variant.number,
             title: locale === 'en' ? variant.titleEn : variant.titlePl,
-            narrative: locale === 'en' ? variant.narrativeEn : variant.narrativePl,
+            narrative:
+              locale === 'en' ? variant.narrativeEn : variant.narrativePl,
             investigatorName: targetChar?.name,
             nightNumber: dreamTag.nightNumber || 1,
             status: 'active',
             mechanicalEffect: {
-              sanityCheckRequired: variant.mechanicalResolution.sanityCheckRequired,
+              sanityCheckRequired:
+                variant.mechanicalResolution.sanityCheckRequired,
               sanityLossFormula: variant.mechanicalResolution.sanityLossFormula,
               conPenaltyDice: variant.mechanicalResolution.conPenaltyDice,
-              subsequentTriggerLocation: variant.mechanicalResolution.subsequentTriggerLocation,
+              subsequentTriggerLocation:
+                variant.mechanicalResolution.subsequentTriggerLocation,
             },
           };
         }
@@ -2270,7 +3830,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           dreamVisionEvent ||
           statChangeEvents.length > 0
         ) {
-          setMessages((prev) =>
+          updateTurnMessages((prev) =>
             prev.map((message) =>
               message.id === assistantMessageId
                 ? {
@@ -2278,116 +3838,166 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                     ...(hazardEvents.length > 0 ? { hazardEvents } : {}),
                     ...(spellCastEvents.length > 0 ? { spellCastEvents } : {}),
                     ...(tomeStudyEvents.length > 0 ? { tomeStudyEvents } : {}),
-                    ...(opposedMagicEvents.length > 0 ? { opposedMagicEvents } : {}),
-                    ...(opposedMeleeEvents.length > 0 ? { opposedMeleeEvents } : {}),
-                    ...(firearmsAttackEvents.length > 0 ? { firearmsAttackEvents } : {}),
-                    ...(refereeVetoEvents.length > 0 ? { refereeVetoEvents } : {}),
+                    ...(opposedMagicEvents.length > 0
+                      ? { opposedMagicEvents }
+                      : {}),
+                    ...(opposedMeleeEvents.length > 0
+                      ? { opposedMeleeEvents }
+                      : {}),
+                    ...(firearmsAttackEvents.length > 0
+                      ? { firearmsAttackEvents }
+                      : {}),
+                    ...(refereeVetoEvents.length > 0
+                      ? { refereeVetoEvents }
+                      : {}),
                     ...(gameOverEvents.length > 0 ? { gameOverEvents } : {}),
                     ...(currentChase ? { chaseState: currentChase } : {}),
                     ...(dreamVisionEvent ? { dreamVisionEvent } : {}),
-                    ...(statChangeEvents.length > 0 ? { statChangeEvents } : {}),
+                    ...(statChangeEvents.length > 0
+                      ? { statChangeEvents }
+                      : {}),
                   }
                 : message
             )
           );
           if (currentChase && currentChase.status !== 'ongoing') {
-            setActiveChaseState(null);
-            activeChaseStateRef.current = null;
+            nextChase = null;
           }
         }
+
+        afterCommit(() => {
+          setActiveChaseState(nextChase);
+          activeChaseStateRef.current = nextChase;
+        });
 
         // Aktualizacja stanu guardrails i strike countera (Issue #380)
-        if (refereeVetoEvents.length > 0) {
-          guardrailStateRef.current = updateGuardrailState(
-            guardrailStateRef.current,
-            true,
-            refereeVetoEvents[0].type
-          );
-        } else if (
-          gameOverEvents.some(
-            (e) =>
-              e.reason?.includes('Serious Sam') ||
-              e.newspaperSnippet?.headline?.includes('ROZERWANA TKANKA')
-          )
-        ) {
-          guardrailStateRef.current = {
-            strikeCount: 3,
-            turnsSinceLastViolation: 0,
-            lastViolationType: 'impossible',
-          };
-        } else {
-          guardrailStateRef.current = updateGuardrailState(
-            guardrailStateRef.current,
-            false
-          );
-        }
-
-        // IND-267: śledzenie lokacji. Najnowszy [LOKACJA:] z narracji MG zasila pineskę 📍
-        // w headerze (currentLocation) i jest odsyłany do promptu w kolejnej turze
-        // (currentLocationRef). Wpis dziennika typu `location` powstaje już w
-        // appendJournalFromText - ten sam tor [LOKACJA:].
-        const pushMacroIfAbsent = (locName: string) => {
-          const macro = extractMacroLocation(locName);
-          if (
-            macro &&
-            !visitedMacroLocationsRef.current.some(
-              (existing) =>
-                existing.toLowerCase().trim() === macro.toLowerCase().trim() ||
-                isSameMacroLocation(existing, macro)
+        afterCommit(() => {
+          if (refereeVetoEvents.length > 0) {
+            guardrailStateRef.current = updateGuardrailState(
+              guardrailStateRef.current,
+              true,
+              refereeVetoEvents[0].type
+            );
+          } else if (
+            gameOverEvents.some(
+              (e) =>
+                e.reason?.includes('Serious Sam') ||
+                e.newspaperSnippet?.headline?.includes('ROZERWANA TKANKA')
             )
           ) {
-            visitedMacroLocationsRef.current.push(macro);
-          }
-        };
-
-        const latestLocation = extractLatestTagLocation(fullText);
-        if (latestLocation && latestLocation.name.length <= 45 && !isVisualPromptLeak(latestLocation.name)) {
-          const prevLoc = prevLocationBeforeTurn.trim().toLowerCase();
-          const nextLoc = latestLocation.name.trim().toLowerCase();
-          if (!prevLoc || !hadVisitedAnyMacroBeforeTurn || prevLoc === nextLoc) {
-            turnsInCurrentLocationRef.current += 1;
-            pushMacroIfAbsent(latestLocation.name);
+            guardrailStateRef.current = {
+              strikeCount: 3,
+              turnsSinceLastViolation: 0,
+              lastViolationType: 'impossible',
+            };
           } else {
-            pushMacroIfAbsent(prevLocationBeforeTurn);
-            turnsInCurrentLocationRef.current = 0;
-            if (isSameMacroLocation(prevLocationBeforeTurn, latestLocation.name)) {
+            guardrailStateRef.current = updateGuardrailState(
+              guardrailStateRef.current,
+              false
+            );
+          }
+
+          // IND-267: śledzenie lokacji. Najnowszy [LOKACJA:] z narracji MG zasila pineskę 📍
+          // w headerze (currentLocation) i jest odsyłany do promptu w kolejnej turze
+          // (currentLocationRef). Wpis dziennika typu `location` powstaje już w
+          // appendJournalFromText - ten sam tor [LOKACJA:].
+          const pushMacroIfAbsent = (locName: string) => {
+            const macro = extractMacroLocation(locName);
+            if (
+              macro &&
+              !visitedMacroLocationsRef.current.some(
+                (existing) =>
+                  existing.toLowerCase().trim() ===
+                    macro.toLowerCase().trim() ||
+                  isSameMacroLocation(existing, macro)
+              )
+            ) {
+              visitedMacroLocationsRef.current.push(macro);
+            }
+          };
+
+          const latestLocation = activeDossierPayload
+            ? extractLatestCanonicalLocationTag(fullText, adventureContext?.id)
+            : extractLatestTagLocation(fullText, adventureContext?.id);
+          if (
+            latestLocation &&
+            (('mode' in latestLocation &&
+              latestLocation.mode === 'off_graph') ||
+              isAcceptedLocationLength(
+                latestLocation.name,
+                adventureContext?.id
+              )) &&
+            !isVisualPromptLeak(latestLocation.name)
+          ) {
+            const prevLoc = prevLocationBeforeTurn.trim().toLowerCase();
+            const nextLoc = latestLocation.name.trim().toLowerCase();
+            if (
+              !prevLoc ||
+              !hadVisitedAnyMacroBeforeTurn ||
+              prevLoc === nextLoc
+            ) {
+              turnsInCurrentLocationRef.current += 1;
               pushMacroIfAbsent(latestLocation.name);
+            } else {
+              pushMacroIfAbsent(prevLocationBeforeTurn);
+              turnsInCurrentLocationRef.current = 0;
+              if (
+                isSameMacroLocation(prevLocationBeforeTurn, latestLocation.name)
+              ) {
+                pushMacroIfAbsent(latestLocation.name);
+              }
+            }
+            if (activeDossierPayload)
+              rememberAcceptedLocation(latestLocation as AcceptedLocationTag);
+            else {
+              currentLocationRef.current = latestLocation.name;
+              setCurrentLocation(latestLocation.name);
+            }
+            visualBeliefGraphRef.current.updateLocation(latestLocation.name, {
+              atmosphere: latestLocation.description || undefined,
+            });
+          } else {
+            // Brak nowego tagu [LOKACJA:] - tura upłynęła w tej samej lokacji
+            turnsInCurrentLocationRef.current += 1;
+            if (currentLocationRef.current) {
+              pushMacroIfAbsent(currentLocationRef.current);
             }
           }
-          currentLocationRef.current = latestLocation.name;
-          setCurrentLocation(latestLocation.name);
-          visualBeliefGraphRef.current.updateLocation(latestLocation.name, {
-            atmosphere: latestLocation.description || undefined,
-          });
-        } else {
-          // Brak nowego tagu [LOKACJA:] - tura upłynęła w tej samej lokacji
-          turnsInCurrentLocationRef.current += 1;
-          if (currentLocationRef.current) {
-            pushMacroIfAbsent(currentLocationRef.current);
-          }
-        }
 
-        // IND-230: Faza Rozwoju CoC. Po pełnym streamie wyłuskaj wyniki testów
-        // [WYNIK:] z narracji MG (SKILL_RESULT_INSTRUCTIONS każe je emitować po
-        // każdym teście) i przekaż do oznaczania umiejętności. Sukces bez Szczęścia
-        // oznacza umiejętność do rozwoju (logika w extractSkillResults). Oznaczenia
-        // konsumuje useSkillMarking w page.tsx -> Faza Rozwoju.
-        if (onSkillResults) {
-          const skillResults = extractSkillResults(fullText);
-          if (skillResults.length > 0) {
-            onSkillResults(skillResults);
+          // IND-230: Faza Rozwoju CoC. Po pełnym streamie wyłuskaj wyniki testów
+          // [WYNIK:] z narracji MG (SKILL_RESULT_INSTRUCTIONS każe je emitować po
+          // każdym teście) i przekaż do oznaczania umiejętności. Sukces bez Szczęścia
+          // oznacza umiejętność do rozwoju (logika w extractSkillResults). Oznaczenia
+          // konsumuje useSkillMarking w page.tsx -> Faza Rozwoju.
+          if (onSkillResults) {
+            const skillResults = extractSkillResults(fullText);
+            if (skillResults.length > 0) {
+              onSkillResults(skillResults);
+            }
           }
-        }
+        });
 
         if (
           hasSessionEndConfirmation ||
+          Boolean(dossierGate?.candidate?.codeEvidence?.ending) ||
           fullText.includes('[KONIEC_SESJI:POTWIERDZENIE]')
         ) {
-          setSessionEndStatus('ended');
-          setIsSessionEnded(true);
+          afterCommit(() => {
+            setSessionEndStatus('ended');
+            setIsSessionEnded(true);
+          });
           const finalAssistantMsg: Message = {
             ...assistantMessage,
-            content: streamedFullText,
+            content: displayText,
+            ...(dossierHandoutBinding
+              ? {
+                  dossierHandoutBinding,
+                  dossierHandoutRecordIds: acquiredDossierHandoutIds,
+                  dossierInventoryWritesAllowed:
+                    dossierInventoryWritesAllowed && !isGuardrailResponse,
+                }
+              : {}),
+            ...(pushedTimeUpdate ? { gameTime: pushedTimeUpdate } : {}),
             ...(lastFinishReason ? { finishReason: lastFinishReason } : {}),
             ...(lastCostData ? { costData: lastCostData } : {}),
             ...(acquiredItems.length > 0 ? { acquiredItems } : {}),
@@ -2404,16 +4014,170 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             userMessage,
             finalAssistantMsg,
           ];
-          messagesRef.current = messagesToSave;
-          activeCharacterRef.current = finalActiveChar;
-          charactersRef.current = finalCharacters;
+          await afterCommit(async () => {
+            const acceptedMessages = dossierGate
+              ? stagedHistory
+              : messagesToSave;
+            messagesRef.current = acceptedMessages;
+            activeCharacterRef.current = finalActiveChar;
+            charactersRef.current = finalCharacters;
 
-          await executeSessionAutoSave(
-            messagesToSave,
-            finalActiveChar,
-            finalCharacters
-          );
+            await executeSessionAutoSave(
+              acceptedMessages,
+              finalActiveChar,
+              finalCharacters
+            );
+          });
         }
+
+        if (dossierGate?.token && dossierInventory) {
+          dossierGate.assertCurrent();
+          const candidate = dossierGate.candidate;
+          if (!candidate || !finalInventory)
+            throw new Error('DOSSIER_FINALIZATION_REQUIRED');
+          const patch = (key: string, value: unknown) => ({
+            key,
+            before: localStorage.getItem(key),
+            after: JSON.stringify(value),
+          });
+          const writes = [
+            patch(
+              `zew-dossier-inventory:${dossierInventory.playthroughId}`,
+              finalInventory
+            ),
+          ];
+          if (candidate.changed.world)
+            writes.push(
+              patch(
+                `zew-dossier-world-state:${dossierInventory.playthroughId}`,
+                candidate.next.world
+              )
+            );
+          if (candidate.changed.actors)
+            writes.push(patch('gm_npcs', candidate.next.npcs));
+          if (rosterChanged)
+            writes.push(
+              patch('characters', stripCharacterImages(finalCharacters))
+            );
+          const nextTime =
+            pushedTimeUpdate ?? dossierMetadata?.timeUpdate ?? undefined;
+          if (nextTime !== undefined) {
+            if (!isGameTime(nextTime)) throw new Error('DOSSIER_TIME_INVALID');
+            const clock = timeManager.getSnapshot();
+            writes.push(
+              patch('coc7_game_time', {
+                ...nextTime,
+                deadline: clock.deadline,
+                deadlineTotalHours: clock.deadlineTotalHours,
+              })
+            );
+            // The durable clock was already committed; publish it before any ending autosave.
+            committedEffects.unshift(() => {
+              timeManager.setTime(nextTime);
+            });
+          }
+          if (chaseStartTag || chaseEndTag)
+            writes.push(patch(ACTIVE_CHASE_STORAGE_KEY, nextChase));
+          const pendingAttacks = dossierMetadata?.pendingMeleeAttacks as
+            | PendingMeleeAttack[]
+            | undefined;
+          if (Array.isArray(pendingAttacks) && pendingAttacks.length) {
+            const existing = combatJournalRef.current;
+            const journal =
+              existing?.roundId === pendingAttacks[0].roundId
+                ? existing
+                : createCombatRoundJournal({
+                    attacks: pendingAttacks,
+                    roster: requestCharacters,
+                    roundSeed: crypto.randomUUID(),
+                  });
+            writes.push(patch(COMBAT_JOURNAL_STORAGE_KEY, journal));
+            afterCommit(() => {
+              combatJournalRef.current = journal;
+            });
+          }
+
+          stagedHistory = stagedHistory.map((msg) =>
+            msg.id === assistantMessageId
+              ? {
+                  ...msg,
+                  content: displayText,
+                  ...(dossierMetadata?.finishReason
+                    ? { finishReason: String(dossierMetadata.finishReason) }
+                    : {}),
+                  ...(dossierMetadata?.costData
+                    ? { costData: dossierMetadata.costData }
+                    : {}),
+                  ...(dossierRequestedTests.length
+                    ? { skillTests: dossierRequestedTests }
+                    : {}),
+                  ...(isGameTime(nextTime) ? { gameTime: nextTime } : {}),
+                  ...(pendingAttacks?.length
+                    ? { pendingMeleeAttacks: pendingAttacks }
+                    : {}),
+                  ...(Array.isArray(dossierMetadata?.opposedMeleeEvents)
+                    ? {
+                        opposedMeleeEvents:
+                          dossierMetadata.opposedMeleeEvents as OpposedMeleeEventData[],
+                      }
+                    : {}),
+                }
+              : msg
+          );
+          beginDossierTurnTransaction(localStorage, {
+            ...dossierInventory,
+            turnId: assistantMessageId,
+            token: dossierGate.token,
+            writes,
+            publication: patch(
+              MESSAGES_STORAGE_KEY,
+              sanitizeHistoryForApi(stagedHistory)
+            ),
+          });
+          const memory = await resumeDossierTurnTransaction(
+            localStorage,
+            dossierInventory,
+            {
+              prepare: prepareDossierTurnOnServer,
+              accept: (token) => acknowledgeDossierTurn(token, true),
+              isCurrent: () =>
+                loadCampaignMemoryScope()?.playthroughId ===
+                dossierInventory?.playthroughId,
+            }
+          );
+          dossierTurnCommitted = true;
+          if (submittedSkillRoll) {
+            clearPendingSkillRoll(localStorage, submittedSkillRoll);
+            publishPendingSkillRoll(null);
+          }
+          if (memory) notifyMemoryCommit(memory, locale);
+          if (rosterChanged) void offloadCharacterImages(finalCharacters);
+          setMessages(stagedHistory);
+        }
+        if (pushedTimeUpdate && dossierGate && pushedRoll)
+          appliedPushedRollIdsRef.current.add(pushedRoll.pushedRollId);
+        for (const effect of committedEffects) await effect();
+        releaseDossierResponse?.();
+        if (dossierGate)
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? {
+                    ...msg,
+                    content: displayText,
+                    ...(dossierHandoutBinding
+                      ? {
+                          dossierHandoutBinding,
+                          dossierHandoutRecordIds: acquiredDossierHandoutIds,
+                          dossierInventoryWritesAllowed:
+                            dossierInventoryWritesAllowed &&
+                            !isGuardrailResponse,
+                        }
+                      : {}),
+                  }
+                : msg
+            )
+          );
 
         if (currentAssistantMessageIdRef.current === assistantMessageId) {
           currentAssistantMessageIdRef.current = null;
@@ -2421,8 +4185,84 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           lastSentUserMessageRef.current = null;
         }
 
+        if (attachedSanityRecoveryIds.size > 0) {
+          pendingSanityRecoveryEventsRef.current =
+            pendingSanityRecoveryEventsRef.current.filter(
+              (event) => !attachedSanityRecoveryIds.has(event.resolutionId)
+            );
+        }
+        if (attachedMedicalExpenseIds.size > 0) {
+          pendingMedicalExpenseEventsRef.current =
+            pendingMedicalExpenseEventsRef.current.filter(
+              (event) => !attachedMedicalExpenseIds.has(event.resolutionId)
+            );
+        }
+        if (attachedInvestigatorChangeIds.size > 0) {
+          pendingInvestigatorChangeEventsRef.current =
+            pendingInvestigatorChangeEventsRef.current.filter(
+              (event) => !attachedInvestigatorChangeIds.has(event.resolutionId)
+            );
+        }
+        if (attachedFirearmResolutionIds.size > 0) {
+          pendingFirearmResolutionEventsRef.current =
+            pendingFirearmResolutionEventsRef.current.filter(
+              (event) => !attachedFirearmResolutionIds.has(event.resolutionId)
+            );
+        }
+        if (attachedJamClearingResolutionIds.size > 0) {
+          pendingJamClearingResolutionEventsRef.current =
+            pendingJamClearingResolutionEventsRef.current.filter(
+              (event) =>
+                !attachedJamClearingResolutionIds.has(event.resolutionId)
+            );
+        }
+        if (attachedVehicleCollisionResolutionIds.size > 0) {
+          pendingVehicleCollisionResolutionEventsRef.current =
+            pendingVehicleCollisionResolutionEventsRef.current.filter(
+              (event) =>
+                !attachedVehicleCollisionResolutionIds.has(event.resolutionId)
+            );
+        }
+        if (attachedDiceRollResolutionIds.size > 0) {
+          pendingDiceRollResolutionEventsRef.current =
+            pendingDiceRollResolutionEventsRef.current.filter(
+              (event) => !attachedDiceRollResolutionIds.has(event.resolutionId)
+            );
+        }
+
+        setDossierProtocolFailure(null);
+        budgetRetryRef.current = null;
         return true;
       } catch (error) {
+        if (
+          error instanceof Error &&
+          'code' in error &&
+          error.code === CONTEXT_BUDGET_ERROR_CODE
+        ) {
+          budgetRetryRef.current = {
+            message,
+            actorId: requestCharacter?.id,
+            playthroughId: loadCampaignMemoryScope()?.playthroughId,
+            mechanics: resolvedMechanicsContext,
+          };
+          setMessages((prev) =>
+            prev.filter(
+              (m) => m.id !== userMessage.id && m.id !== assistantMessageId
+            )
+          );
+          setNewMessage(message);
+          setSessionEndStatus(previousEndStatus);
+          currentAssistantMessageIdRef.current = null;
+          currentUserMessageIdRef.current = null;
+          lastSentUserMessageRef.current = null;
+          contextBudgetNoticeRef.current = toast({
+            title: contextBudgetText('title'),
+            description: contextBudgetText('description'),
+            variant: 'destructive',
+            duration: Infinity,
+          });
+          return false;
+        }
         const isAborted =
           abortController.signal.aborted ||
           (error instanceof DOMException && error.name === 'AbortError') ||
@@ -2430,10 +4270,36 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             (error.name === 'AbortError' || error.message.includes('aborted')));
 
         if (isAborted) {
-          return false;
+          if (
+            submittedSkillRoll &&
+            !hasPendingDossierTurn() &&
+            !dossierTurnCommitted
+          ) {
+            setMessages((prev) =>
+              prev.filter(
+                (msg) =>
+                  msg.id !== assistantMessageId && msg.id !== userMessage.id
+              )
+            );
+          }
+          return dossierTurnCommitted;
         }
 
-        console.error('Błąd:', error);
+        if (hasPendingDossierTurn()) {
+          console.warn('Dossier turn recovery pending:', error);
+          return false;
+        }
+        const dossierRejected =
+          error instanceof Error &&
+          /^DOSSIER_(EFFECTS_REJECTED|STATE_CHANGED|STREAM_INCOMPLETE)/.test(
+            error.message
+          );
+        if (dossierRejected)
+          console.warn(
+            'Dossier response rejected:',
+            error instanceof Error ? error.message : 'UNKNOWN'
+          );
+        if (!dossierRejected) console.error('Błąd:', error);
         trackEvent('ai_error', {
           endpoint: '/api/chat',
           errorType:
@@ -2452,24 +4318,67 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
 
         // Zadanie 6: po wyczerpaniu retry rozróżnij błąd autoryzacji i blip sieci od innego błędu.
-        const friendly = isAuthError
+        const protocolRejected =
+          dossierRejected &&
+          /DOSSIER_(LOCATION_(INVALID|REQUIRED)|TIME_REQUIRED|OFF_GRAPH_EFFECT)/.test(
+            errorStr
+          );
+        const friendly = protocolRejected
           ? locale === 'en'
-            ? '⚠️ The Gemini API key is invalid or expired. Enter a valid key in Settings (key icon in menu) and try again.'
-            : '⚠️ Klucz Gemini API jest nieprawidłowy lub wygasł. Wklej poprawny klucz w Ustawieniach (ikona klucza w menu) i spróbuj ponownie.'
-          : isNetworkBlip(error)
+            ? 'The location or game time could not be confirmed after one correction. This response was not saved. Please try again.'
+            : 'Nie udało się potwierdzić lokacji lub czasu gry po jednej korekcie. Ta odpowiedź nie została zapisana. Spróbuj ponownie.'
+          : isAuthError
             ? locale === 'en'
-              ? '⚠️ A temporary connection problem occurred - try sending your message again.'
-              : '⚠️ Chwilowy problem z połączeniem - spróbuj wysłać wiadomość jeszcze raz.'
-            : locale === 'en'
-              ? 'I am sorry, an error occurred.'
-              : 'Przepraszam, wystąpił błąd.';
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMessageId ? { ...msg, content: friendly } : msg
-          )
-        );
+              ? '⚠️ The Gemini API key is invalid or expired. Enter a valid key in Settings (key icon in menu) and try again.'
+              : '⚠️ Klucz Gemini API jest nieprawidłowy lub wygasł. Wklej poprawny klucz w Ustawieniach (ikona klucza w menu) i spróbuj ponownie.'
+            : isNetworkBlip(error)
+              ? locale === 'en'
+                ? '⚠️ A temporary connection problem occurred - try sending your message again.'
+                : '⚠️ Chwilowy problem z połączeniem - spróbuj wysłać wiadomość jeszcze raz.'
+              : locale === 'en'
+                ? 'I am sorry, an error occurred.'
+                : 'Przepraszam, wystąpił błąd.';
+        if (pdfMemory.adventureDossierFingerprint && dossierTurnCommitted) {
+          // ACK and durable publication succeeded; a later UI/audio failure cannot undo the turn.
+          toast({ description: friendly, variant: 'destructive' });
+          return true;
+        }
+        if (pdfMemory.adventureDossierFingerprint || protocolRejected) {
+          if (protocolRejected) {
+            setDossierProtocolFailure(
+              resolvedMechanicsContext
+                ? null
+                : { code: 'DOSSIER_PROTOCOL_REJECTED', declaration: message }
+            );
+          } else if (
+            !resolvedMechanicsContext &&
+            !/(?:^\s*[\/!#$@]|[\[\]<>])/.test(message) &&
+            (isAuthError ||
+              isNetworkBlip(error) ||
+              /^Chat API \d{3}:/.test(errorStr))
+          ) {
+            setNewMessage((previous) => (previous.trim() ? previous : message));
+          }
+          // Only this failed draft is removed; earlier accepted or legacy history stays intact.
+          setMessages((prev) =>
+            prev.filter(
+              (msg) =>
+                msg.id !== assistantMessageId && msg.id !== userMessage.id
+            )
+          );
+          toast({ description: friendly, variant: 'destructive' });
+        } else {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, content: friendly }
+                : msg
+            )
+          );
+        }
         return false;
       } finally {
+        dossierPendingPublicationRef.current = false;
         if (abortControllerRef.current === abortController) {
           abortControllerRef.current = null;
         }
@@ -2493,21 +4402,66 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       onSkillResults,
       hotSeatConfig,
       sessionEndStatus,
+      contextBudgetText,
       activeChaseState,
       locale,
+      options.aiSettings,
+      readCurrentSkillRoll,
+      publishPendingSkillRoll,
+      reportDossierInvestigatorChange,
+      recoverDossierTurn,
+      rememberAcceptedLocation,
     ]
   );
 
+  const retryDossierSkillRoll = useCallback(async (): Promise<boolean> => {
+    if (skillRollRetryInFlightRef.current || isLoading) return false;
+    skillRollRetryInFlightRef.current = true;
+    try {
+      // An uncertain ACK is recovered, never replaced with a second narrative request.
+      if (hasPendingDossierTurn()) {
+        const recovered = await recoverDossierTurn();
+        syncPendingSkillRoll();
+        return recovered;
+      }
+      const current = readCurrentSkillRoll();
+      if (!current?.pending) return false;
+      if (isPendingSkillRollAccepted(current.pending, current.history)) {
+        clearPendingSkillRoll(localStorage, current.pending);
+        publishPendingSkillRoll(null);
+        return false;
+      }
+      authorizedSkillRollRetryRef.current = current.pending;
+      return await handleSendMessage(
+        current.pending.message,
+        current.pending.mechanicsContext
+      );
+    } catch (error) {
+      console.warn('Dossier skill result retry blocked:', error);
+      return false;
+    } finally {
+      authorizedSkillRollRetryRef.current = null;
+      skillRollRetryInFlightRef.current = false;
+    }
+  }, [
+    isLoading,
+    recoverDossierTurn,
+    syncPendingSkillRoll,
+    readCurrentSkillRoll,
+    publishPendingSkillRoll,
+    handleSendMessage,
+  ]);
+
   const pendingCombatDefensesUsed = pendingCombatAttack
-    ? combatJournalRef.current?.resolutions.filter(
+    ? (combatJournalRef.current?.resolutions.filter(
         (resolution) =>
           resolution.defenderId === pendingCombatAttack.target.characterId
-      ).length ?? 0
+      ).length ?? 0)
     : 0;
   const combatDefender = pendingCombatAttack
-    ? characters.find(
+    ? (characters.find(
         (character) => character.id === pendingCombatAttack.target.characterId
-      ) ?? null
+      ) ?? null)
     : null;
   const combatDefenseWeapons = getCombatDefenseWeapons(combatDefender);
 
@@ -2561,8 +4515,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       setCharacters(resolved.nextRoster);
       setActiveCharacter((previous) =>
         previous
-          ? resolved.nextRoster.find((character) => character.id === previous.id) ??
-            previous
+          ? (resolved.nextRoster.find(
+              (character) => character.id === previous.id
+            ) ?? previous)
           : previous
       );
 
@@ -2586,9 +4541,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       setPendingCombatAttack(null);
 
       const nextActive = activeCharacter
-        ? committing.nextRoster.find(
+        ? (committing.nextRoster.find(
             (character) => character.id === activeCharacter.id
-          ) ?? activeCharacter
+          ) ?? activeCharacter)
         : null;
       const committedSuccessfully = await handleSendMessage(
         locale === 'en'
@@ -2600,7 +4555,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       if (!committedSuccessfully) {
         setPendingCombatAttack(attack);
         toast({
-          title: locale === 'en' ? 'Narration interrupted' : 'Przerwano narrację',
+          title:
+            locale === 'en' ? 'Narration interrupted' : 'Przerwano narrację',
           description:
             locale === 'en'
               ? 'Choose the defense once more to retry without rolling again.'
@@ -2609,7 +4565,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         });
         return;
       }
-      const committed: CombatRoundJournal = { ...committing, phase: 'committed' };
+      const committed: CombatRoundJournal = {
+        ...committing,
+        phase: 'committed',
+      };
       combatJournalRef.current = committed;
       saveCombatJournal(localStorage, committed);
       localStorage.removeItem('combat_round_journal_v1');
@@ -2630,7 +4589,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       !shouldRecoverCombatCommitRef.current ||
       journal?.phase !== 'committing' ||
       journal.resolutions.length !== journal.attacks.length
-    ) return;
+    )
+      return;
     const lastAttack = journal.attacks.at(-1);
     if (!lastAttack) return;
     const storedChoice = journal.choices[lastAttack.eventId];
@@ -2655,6 +4615,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const handleContinueNarration = useCallback(
     async (messageId?: string) => {
       if (continuationInFlightRef.current || isLoading) return;
+      try {
+        if (hasPendingDossierTurn() && (await recoverDossierTurn())) return;
+      } catch (error) {
+        console.warn('Dossier turn recovery pending:', error);
+        return;
+      }
 
       // Cel: wskazana wiadomość albo najnowsza asystenta urwana na MAX_TOKENS.
       const target = messageId
@@ -2670,6 +4636,17 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               (m) => m.role === 'assistant' && m.finishReason === 'MAX_TOKENS'
             );
       if (!target) return;
+      const continuationPlayerMessage =
+        [
+          ...messages.slice(
+            0,
+            messages.findIndex((msg) => msg.id === target.id)
+          ),
+        ]
+          .reverse()
+          .find((msg) => msg.role === 'user')?.content ?? '';
+      contextBudgetNoticeRef.current?.dismiss();
+      contextBudgetNoticeRef.current = null;
 
       continuationInFlightRef.current = true;
       // Zamówienie oznaczamy PRZED wysyłką - UI natychmiast blokuje przycisk.
@@ -2698,9 +4675,202 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       lastSentUserMessageRef.current = null;
 
       const markedTarget: Message = { ...target, continuationRequested: true };
+      const continuationLocation = currentLocationRef.current;
+      const continuationOffGraph = offGraphLocationRef.current;
+      const continuationCanonicalLocation =
+        !continuationOffGraph && pdfMemory.adventureDossierFingerprint
+          ? resolveCanonicalAdventureLocation(
+              adventureContext?.id,
+              continuationLocation
+            )
+          : null;
+      const targetIndex = messages.findIndex(
+        (message) => message.id === target.id
+      );
+      const continuationTime = timeManager.getTime();
+      const continuationClockVersion = localStorage.getItem('coc7_game_time');
+      const precedingMessages = messages.slice(0, targetIndex);
+      const continuationRolls =
+        [...precedingMessages]
+          .reverse()
+          .find((message) => message.role === 'user')?.mechanicsContext
+          ?.skillRolls ?? [];
+      const continuationTests = selectDossierActorResolvedTests(
+        precedingMessages,
+        continuationRolls
+      );
+      const hasLaterPlayerTurn = messages
+        .slice(targetIndex + 1)
+        .some((message) => message.role === 'user');
 
       try {
-        const response = await fetchWithRetry('/api/chat', {
+        if (
+          continuationOffGraph &&
+          !isOffGraphLocationRequest(
+            continuationOffGraph,
+            adventureContext?.id,
+            loadCampaignMemoryScope()?.playthroughId
+          )
+        )
+          throw new Error('DOSSIER_STATE_CHANGED');
+        let continuationPayload: DossierRagPayload | undefined;
+        let continuationInventory: DossierInventoryProjection | undefined;
+        let continuationWorldState:
+          | ReturnType<typeof projectDossierWorldState>
+          | undefined;
+        if (pdfMemory.adventureDossierStatus === 'unavailable')
+          throw new Error('DOSSIER_NOT_ACTIVE');
+        if (pdfMemory.adventureDossierFingerprint) {
+          const sessionId = loadCampaignMemoryScope()?.playthroughId;
+          if (!sessionId || !adventureContext?.id)
+            throw new Error('DOSSIER_SESSION_UNAVAILABLE');
+          continuationInventory = projectDossierInventory(
+            loadDossierInventory({
+              playthroughId: sessionId,
+              adventureId: adventureContext.id,
+              editionFingerprint: pdfMemory.adventureDossierFingerprint,
+            })
+          );
+          const activation = await ensureLocalDossierSession(
+            sessionId,
+            adventureContext.id,
+            pdfMemory.adventureDossierFingerprint
+          );
+          if (!activation.ok) throw new Error('DOSSIER_NOT_ACTIVE');
+          const payload = await loadRuntimeDossierPayload(
+            adventureContext.id,
+            pdfMemory.adventureDossierFingerprint
+          );
+          continuationPayload = payload;
+          const world = loadDossierWorldState(continuationInventory, payload);
+          const projected = advanceAuthoredScenarioClock({
+            payload,
+            state: world,
+            turnId: `${target.id}.continuation`,
+            gameTime: continuationTime,
+            writesAllowed:
+              target.dossierInventoryWritesAllowed === true &&
+              !hasLaterPlayerTurn,
+          });
+          continuationWorldState = projectDossierWorldState(
+            projected.applicable ? projected.state : world
+          );
+        }
+        const rosterVersion = JSON.stringify([
+          charactersRef.current,
+          activeCharacterRef.current,
+        ]);
+        const continuationGate =
+          continuationPayload && continuationInventory
+            ? createDossierResponseGate({
+                payload: continuationPayload,
+                ...continuationInventory,
+                turnId: `${target.id}.continuation`,
+                continuation: true,
+                playerMessage: continuationPlayerMessage,
+                ...handoutContinuationContext(
+                  messages,
+                  target.id,
+                  continuationInventory
+                ),
+                knownHandoutIds: messages
+                  .filter(
+                    (msg) =>
+                      msg.dossierHandoutBinding?.adventureId ===
+                        adventureContext?.id &&
+                      msg.dossierHandoutBinding?.editionFingerprint ===
+                        pdfMemory.adventureDossierFingerprint
+                  )
+                  .flatMap((msg) => msg.dossierHandoutRecordIds ?? []),
+                offGraph: Boolean(continuationOffGraph),
+                location: continuationOffGraph
+                  ? 'OFF_GRAPH'
+                  : (continuationCanonicalLocation?.locationId ??
+                    continuationLocation),
+                now: new Date(),
+                gameTime: continuationTime,
+                era:
+                  adventureContext?.yearRange ||
+                  adventureContext?.era ||
+                  '1920s',
+                characters,
+                activeCharacter,
+                applyLegacy: false,
+                skillTests: continuationTests,
+                skillRolls: continuationRolls,
+                writesAllowed:
+                  target.dossierInventoryWritesAllowed === true &&
+                  !hasLaterPlayerTurn,
+                isCurrent: () =>
+                  !abortController.signal.aborted &&
+                  currentAssistantMessageIdRef.current === assistantMessageId &&
+                  rosterVersion ===
+                    JSON.stringify([
+                      charactersRef.current,
+                      activeCharacterRef.current,
+                    ]) &&
+                  continuationClockVersion ===
+                    localStorage.getItem('coc7_game_time'),
+              })
+            : undefined;
+        let continuationMetadata: SSEMetadataEvent | undefined;
+        let releaseDossierResponse: (() => void) | undefined;
+        const parseContinuationStream = (
+          response: Response,
+          callbacks: SSECallbacks
+        ) =>
+          continuationGate
+            ? parseValidatedDossierStream(
+                response,
+                {
+                  onText: (text) => {
+                    streamedFullText = text;
+                  },
+                  onMetadata: (metadata) => {
+                    continuationMetadata = metadata;
+                    continuationFinishReason = metadata.finishReason
+                      ? String(metadata.finishReason)
+                      : undefined;
+                    eligibleHandoutIds = metadata.dossierHandoutRecordIds ?? [];
+                    continuationWritesAllowed =
+                      metadata.dossierInventoryWritesAllowed === true;
+                    releaseDossierResponse = () => {
+                      callbacks.onText?.(
+                        continuationGate.candidate?.cleanText ??
+                          streamedFullText
+                      );
+                      callbacks.onMetadata?.(metadata);
+                    };
+                  },
+                },
+                {
+                  validate: async (text, metadata) => {
+                    continuationGate.validate(text, metadata);
+                    if (continuationGate.token)
+                      await prepareDossierTurnOnServer(continuationGate.token);
+                    continuationGate.assertCurrent();
+                  },
+                  reject: async (token) => {
+                    await acknowledgeDossierTurn(token, false);
+                  },
+                  correct: async (correction) => {
+                    continuationGate.assertCurrent();
+                    const response = await fetchWithApiKeys('/api/chat', {
+                      ...continuationRequest,
+                      body: JSON.stringify({
+                        ...JSON.parse(continuationRequest.body),
+                        dossierCorrection: correction,
+                      }),
+                    });
+                    return classifyDossierCorrectionResponse(
+                      response,
+                      correction.rejectedIds
+                    );
+                  },
+                }
+              )
+            : parseSSEStream(response, callbacks);
+        const continuationRequest = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: abortController.signal,
@@ -2710,11 +4880,27 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 ? "Continue the Game Master's previous truncated response exactly where it ended. Do not repeat it and do not comment on the interruption."
                 : 'Dokończ poprzednią, urwaną wypowiedź Mistrza Gry dokładnie od miejsca, w którym się skończyła. Nie powtarzaj jej i nie komentuj przerwania.',
             messages: sanitizeHistoryForApi([markedTarget]),
+            assistantMessageId,
+            isContinuation: true,
+            dossierInventory: continuationInventory,
+            dossierWorldState: continuationWorldState,
+            mechanicsContext: { skillRolls: continuationRolls },
+            npcs: loadNpcSnapshot(),
             pdfMemory,
             character: sanitizeCharacterForApi(activeCharacter),
             adventureContext,
             memoryScope: loadCampaignMemoryScope(),
-            gameTime: timeManager.getTime(),
+            gameTime: continuationTime,
+            ...(continuationPayload
+              ? {
+                  activeLocationId:
+                    continuationCanonicalLocation?.locationId ?? null,
+                  activeNodeId: continuationCanonicalLocation?.nodeId ?? null,
+                  ...(continuationOffGraph
+                    ? { dossierLocation: continuationOffGraph }
+                    : {}),
+                }
+              : {}),
             currentLocation: currentLocationRef.current,
             turnsInCurrentLocation: turnsInCurrentLocationRef.current,
             visitedMacroLocations: visitedMacroLocationsRef.current,
@@ -2722,18 +4908,32 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             locale,
             guardrailState: guardrailStateRef.current,
           }),
-        });
+        };
+        const response = await fetchWithRetry('/api/chat', continuationRequest);
 
         if (!response.ok) {
           const errorBody = await response.json().catch(() => ({}));
+          if (errorBody?.code === CONTEXT_BUDGET_ERROR_CODE) {
+            throw Object.assign(new Error(CONTEXT_BUDGET_ERROR_CODE), {
+              code: CONTEXT_BUDGET_ERROR_CODE,
+            });
+          }
           const serverMsg =
             (errorBody as Record<string, string>)?.error || response.statusText;
           throw new Error(`Chat API ${response.status}: ${serverMsg}`);
         }
 
         let streamedFullText = '';
-        const fullText = await parseSSEStream(response, {
+        let eligibleHandoutIds: string[] = [];
+        let continuationWritesAllowed = false;
+        let continuationFinishReason: string | undefined;
+        const fullText = await parseContinuationStream(response, {
           onText: (text) => {
+            immersion.feed(
+              assistantMessageId,
+              text,
+              voiceEnabled && isTTSEnabled
+            );
             streamedFullText = text;
             setMessages((prev) =>
               prev.map((msg) =>
@@ -2745,6 +4945,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             }
           },
           onMetadata: (metadata) => {
+            if (Array.isArray(metadata.dossierHandoutRecordIds))
+              eligibleHandoutIds = metadata.dossierHandoutRecordIds.filter(
+                (id): id is string => typeof id === 'string'
+              );
+            if (typeof metadata.dossierInventoryWritesAllowed === 'boolean')
+              continuationWritesAllowed =
+                metadata.dossierInventoryWritesAllowed;
             notifyMemoryCommit(metadata, locale);
             if (metadata.finishReason) {
               setMessages((prev) =>
@@ -2768,20 +4975,220 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           }),
         });
 
-        void fullText;
+        if (pdfMemory.adventureDossierFingerprint && adventureContext?.id) {
+          const binding = {
+            adventureId: adventureContext.id,
+            editionFingerprint: pdfMemory.adventureDossierFingerprint,
+          };
+          if (continuationPayload) {
+            const payload = continuationPayload;
+            const ids =
+              continuationGate?.handouts ??
+              acquiredHandoutsFromTurn(fullText, eligibleHandoutIds, payload, {
+                playerMessage: continuationPlayerMessage,
+                location: continuationLocation,
+              });
+            const writesAllowed =
+              target.dossierInventoryWritesAllowed === true &&
+              continuationWritesAllowed &&
+              !hasLaterPlayerTurn;
+            const candidate = continuationGate?.candidate;
+            if (!candidate) throw new Error('DOSSIER_FINALIZATION_REQUIRED');
+            const journal = candidate.next.activeCharacter
+              ? appendJournalToParty(
+                  candidate.next.characters,
+                  candidate.next.activeCharacter,
+                  candidate.cleanText,
+                  assistantMessageId,
+                  undefined,
+                  [],
+                  {
+                    scope: loadCampaignMemoryScope() ?? undefined,
+                    binding,
+                    handoutRecordIds: ids,
+                    payload,
+                    sourceContent: candidate.cleanText,
+                    learnedAt: timeManager.formatDateTime?.(locale),
+                  }
+                )
+              : null;
+            const updated = new Map(
+              (journal?.characters ?? candidate.next.characters).map((c) => [
+                c.id,
+                c,
+              ])
+            );
+            const roster = characters.map((c) => updated.get(c.id) ?? c);
+            const journalRosterChanged =
+              candidate.changed.inventory || Boolean(journal?.changed);
+            if (continuationGate?.token && continuationInventory) {
+              const patch = (key: string, value: unknown) => ({
+                key,
+                before: localStorage.getItem(key),
+                after: JSON.stringify(value),
+              });
+              const history = [
+                ...messages.map((msg) =>
+                  msg.id === target.id ? markedTarget : msg
+                ),
+                {
+                  ...assistantMessage,
+                  content: candidate.cleanText,
+                  finishReason: continuationFinishReason,
+                  dossierHandoutBinding: binding,
+                  dossierHandoutRecordIds: ids,
+                  dossierInventoryWritesAllowed: writesAllowed,
+                  ...(continuationMetadata?.timeUpdate != null &&
+                  continuationGate.gameTime
+                    ? { gameTime: continuationGate.gameTime }
+                    : {}),
+                },
+              ];
+              const writes = [
+                patch(
+                  `zew-dossier-inventory:${continuationInventory.playthroughId}`,
+                  candidate.next.inventory
+                ),
+              ];
+              if (candidate.changed.world)
+                writes.push(
+                  patch(
+                    `zew-dossier-world-state:${continuationInventory.playthroughId}`,
+                    candidate.next.world
+                  )
+                );
+              if (candidate.changed.actors)
+                writes.push(patch('gm_npcs', candidate.next.npcs));
+              if (journalRosterChanged)
+                writes.push(patch('characters', stripCharacterImages(roster)));
+              const nextTime =
+                continuationMetadata?.timeUpdate != null
+                  ? continuationGate.gameTime
+                  : undefined;
+              if (nextTime) {
+                const clock = timeManager.getSnapshot();
+                writes.push(
+                  patch('coc7_game_time', {
+                    ...nextTime,
+                    deadline: clock.deadline,
+                    deadlineTotalHours: clock.deadlineTotalHours,
+                  })
+                );
+              }
+              beginDossierTurnTransaction(localStorage, {
+                ...continuationInventory,
+                turnId: `${target.id}.continuation`,
+                token: continuationGate.token,
+                writes,
+                publication: patch(
+                  MESSAGES_STORAGE_KEY,
+                  sanitizeHistoryForApi(history)
+                ),
+              });
+              const memory = await resumeDossierTurnTransaction(
+                localStorage,
+                continuationInventory,
+                {
+                  prepare: prepareDossierTurnOnServer,
+                  accept: (token) => acknowledgeDossierTurn(token, true),
+                  isCurrent: () =>
+                    loadCampaignMemoryScope()?.playthroughId ===
+                    continuationInventory?.playthroughId,
+                }
+              );
+              if (memory) notifyMemoryCommit(memory, locale);
+              if (nextTime) timeManager.setTime(nextTime);
+              if (candidate.codeEvidence?.ending) {
+                setSessionEndStatus('ended');
+                setIsSessionEnded(true);
+              }
+              if (journalRosterChanged) void offloadCharacterImages(roster);
+              setMessages(history);
+              const acceptedLocation = extractLatestCanonicalLocationTag(
+                fullText,
+                adventureContext.id
+              );
+              if (acceptedLocation) rememberAcceptedLocation(acceptedLocation);
+            } else {
+              // Command responses carry no staged narrative or state mutations.
+              if (
+                candidate.changed.world ||
+                candidate.changed.actors ||
+                candidate.changed.inventory
+              )
+                throw new Error('DOSSIER_FINALIZATION_REQUIRED');
+            }
+            if (
+              journalRosterChanged &&
+              (journal?.activeCharacter || candidate.next.activeCharacter)
+            ) {
+              setCharacters(roster);
+              setActiveCharacter(
+                journal?.activeCharacter ?? candidate.next.activeCharacter
+              );
+            }
+          }
+        }
+
+        if (!continuationPayload && activeCharacter) {
+          const journal = appendJournalToParty(
+            characters,
+            activeCharacter,
+            fullText,
+            assistantMessageId,
+            undefined,
+            [],
+            {
+              scope: loadCampaignMemoryScope() ?? undefined,
+              learnedAt: timeManager.formatDateTime?.(locale),
+            }
+          );
+          if (journal.changed) {
+            persistCharacters(journal.characters);
+            setCharacters(journal.characters);
+            setActiveCharacter(journal.activeCharacter);
+          }
+        }
+
+        releaseDossierResponse?.();
       } catch (error) {
+        const isBudgetError =
+          error instanceof Error &&
+          'code' in error &&
+          error.code === CONTEXT_BUDGET_ERROR_CODE;
+        if (isBudgetError) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === target.id
+                ? { ...m, continuationRequested: target.continuationRequested }
+                : m
+            )
+          );
+          contextBudgetNoticeRef.current = toast({
+            title: contextBudgetText('title'),
+            description: contextBudgetText('continuation'),
+            variant: 'destructive',
+            duration: Infinity,
+          });
+        }
         const isAborted =
           abortController.signal.aborted ||
           (error instanceof DOMException && error.name === 'AbortError') ||
           (error instanceof Error &&
             (error.name === 'AbortError' || error.message.includes('aborted')));
 
-        if (!isAborted) {
+        const dossierRejected =
+          error instanceof Error &&
+          /^DOSSIER_(EFFECTS_REJECTED|STATE_CHANGED|STREAM_INCOMPLETE)/.test(
+            error.message
+          );
+        if (!isAborted && !dossierRejected && !isBudgetError) {
           console.error('Błąd kontynuacji narracji:', error);
         }
-        setMessages((prev) =>
-          prev.filter((msg) => msg.id !== assistantMessageId)
-        );
+        if (!hasPendingDossierTurn())
+          setMessages((prev) =>
+            prev.filter((msg) => msg.id !== assistantMessageId)
+          );
       } finally {
         if (abortControllerRef.current === abortController) {
           abortControllerRef.current = null;
@@ -2792,6 +5199,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     },
     [
       isLoading,
+      contextBudgetText,
       messages,
       pdfMemory,
       activeCharacter,
@@ -2800,6 +5208,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       isTTSEnabled,
       generateVoiceForMessage,
       stopCurrentAudio,
+      characters,
+      hotSeatConfig,
+      setCharacters,
+      setActiveCharacter,
+      recoverDossierTurn,
+      rememberAcceptedLocation,
     ]
   );
 
@@ -2979,6 +5393,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         visualTreatment: proposal.visualTreatment,
         imageUrl: undefined,
       };
+      const dossierEvent = buildInvestigatorChangeResolutionContext(recipient, {
+        ...recipient,
+        equipment: [...(recipient.equipment ?? []), item],
+      });
+      if (dossierEvent) reportDossierInvestigatorChange(dossierEvent);
 
       const journalEntry: JournalEntry = {
         id: `journal-${item.id}`,
@@ -3134,6 +5553,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       options.aiSettings?.imageGenerationEnabled,
       setActiveCharacter,
       setCharacters,
+      reportDossierInvestigatorChange,
+      recoverDossierTurn,
     ]
   );
 
@@ -3143,6 +5564,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     newMessage,
     setNewMessage,
     handleSendMessage,
+    pendingDossierSkillRollRetry,
+    retryDossierSkillRoll,
+    reportDossierSanityRecovery,
+    reportDossierMedicalExpense,
+    reportDossierInvestigatorChange,
+    reportDossierFirearmResolution,
+    reportDossierJamClearingResolution,
+    reportDossierVehicleCollisionResolution,
     pendingCombatAttack,
     pendingCombatDefensesUsed,
     combatDefenseWeapons,
@@ -3152,6 +5581,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     generateImages,
     isLoading,
     currentLocation,
+    dossierProtocolFailure,
     // C4 (duet)
     isDuet,
     pendingDeclarations,

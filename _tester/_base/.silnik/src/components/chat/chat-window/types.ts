@@ -18,6 +18,7 @@ import type {
 } from '@/lib/types';
 import type { GameStartError } from '@/hooks/useGameStart';
 import type { DiceRoll } from '@/lib/dice-utils';
+import type { SkillRollResolution } from '@/lib/parsers/types';
 import type { ResolvedEraContext } from '@/lib/era';
 import type { ChaseState } from '@/lib/chase/chase-engine';
 import type {
@@ -30,14 +31,19 @@ import type { CombatDefenseWeaponOption } from '@/lib/combat/weapon-context';
 
 export interface ChatWindowProps {
   // Messages + input
+  dossierProtocolFailure?: { code: 'DOSSIER_PROTOCOL_REJECTED'; declaration: string } | null;
+  pendingDossierSkillRollRetry?: { testIds: string[] } | null;
+  retryDossierSkillRoll?: () => Promise<boolean>;
   messages: Message[];
   newMessage: string;
   setNewMessage: (message: string) => void;
   handleSendMessage: (
     message: string,
     mechanicsContext?: {
-      chase?: ChaseState;
+      starter?: import('@/lib/adventures/starter-runtime').StarterMechanics;
+    chase?: ChaseState;
       combat?: { resolutions: CombatResolution[] };
+      skillRolls?: SkillRollResolution[];
     }
   ) => void;
   pendingCombatAttack?: PendingMeleeAttack | null;

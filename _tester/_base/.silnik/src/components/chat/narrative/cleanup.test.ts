@@ -1,7 +1,23 @@
 import { cleanupContent } from './cleanup';
 import { formatNarrative } from './formatter';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { parseIntoSections } from './parse-sections';
 
 describe('cleanupContent', () => {
+  it('usuwa inline SFX bez pozostawienia nawiasu i bez ucinania dalszej narracji', () => {
+    const input = 'Trzask rozlega się niczym wystrzał z pistoletu [SFX: camera_shutter]\n\nTadeusz: „Co pan robi?”';
+    const cleaned = cleanupContent(input);
+    expect(cleaned).toBe('Trzask rozlega się niczym wystrzał z pistoletu \n\nTadeusz: „Co pan robi?”');
+    const markup = formatNarrative(input).map(node => renderToStaticMarkup(node)).join('');
+    expect(markup).toContain('niczym wystrzał z pistoletu');
+    expect(markup).toContain('Co pan robi?');
+    expect(markup).not.toContain('[');
+  });
+
+  it('usuwa pełny angielski tag SFX i zachowuje tekst po nim w tej samej linii', () => {
+    expect(cleanupContent('A flash. [SFX: camera_shutter] The room falls silent.'))
+      .toBe('A flash.  The room falls silent.');
+  });
   it('wycina tag [KONIEC_SESJI:POTWIERDZENIE] z tekstu narracji', () => {
     const input = 'Fabuła dochodzi do końca. Mrok spowija gabinet.\n\n[KONIEC_SESJI:POTWIERDZENIE]';
     const output = cleanupContent(input);
@@ -111,3 +127,54 @@ Wkraczasz do gabinetu.`;
 });
 
 
+
+test.each([
+ '[THOUGHTS: hidden culprit | NPC_MASK: guarded [calm] | CORRELATION: secret]\nThe door creaks.',
+])('English keeper-only planning never reaches rendered player prose: %s',text=>{
+ expect(cleanupContent(text)).toBe('The door creaks.');
+ const html=formatNarrative(text,undefined,undefined,false).map(node=>renderToStaticMarkup(node)).join('');
+ expect(html).toContain('The door creaks.');expect(html).not.toMatch(/hidden culprit|NPC_MASK|THOUGHTS/);
+});
+
+it('removes the observed closing speech-direction tag without losing visible dialogue',()=>{
+ const result=cleanupContent('Helena mówi: „Muszę wiedzieć, w co się pakujecie [/gasp].”');
+ expect(result).not.toContain('[/gasp]');
+ expect(result).toContain('Muszę wiedzieć, w co się pakujecie');
+});
+
+test.each(['Opis sceny. [MYŚLI','Opis sceny. [MYŚLI_MG: prywatny sekret','Opis sceny. [THOUGHTS: private secret\n[Co robisz?]'])('removes truncated private protocol without exposing its body: %s',text=>{
+ const result=cleanupContent(text);expect(result).not.toMatch(/MYŚLI|THOUGHTS|prywatny sekret|private secret/);expect(result).toContain('Opis sceny.');
+});
+
+test('unclosed private planning cannot assert where public prose resumes',()=>{
+ const text='[THOUGHTS: hidden culprit | NPC_MASK: guarded | ENEMY_RE\n\nPossible secret on another line.';
+ expect(cleanupContent(text)).toBe('');
+});
+
+test('a closing nested audio tag cannot masquerade as the missing private block close',()=>{
+ expect(cleanupContent('Opis jawny. [MYŚLI_MG: sekret [calm]')).toBe('Opis jawny.');
+});
+
+test.each([
+  '[GM_THOUGHTS]Helena Krawczyk: „UKRYTY SEKRET TESTOWY”.[/GM_THOUGHTS]',
+  '[KEEPER_THOUGHTS]Helena Krawczyk: „UKRYTY SEKRET TESTOWY”.[/KEEPER_THOUGHTS]',
+  '[MYŚLI_MG: Helena Krawczyk: „UKRYTY SEKRET TESTOWY”.]',
+  '[GM_THOUGHTS]\n[HANDOUT:private-evidence]\nHelena Krawczyk: „UKRYTY SEKRET TESTOWY”.\n[/GM_THOUGHTS]',
+])('private blocks never become rendered NPC dialogue: %s', hidden => {
+  const input = hidden + '\nHelena Krawczyk: „Dzień dobry”.';
+  const sections = parseIntoSections(cleanupContent(input));
+  expect(sections).toHaveLength(1);
+  expect(sections[0]).toMatchObject({ type: 'dialogue', speaker: 'Helena Krawczyk', content: 'Dzień dobry' });
+  const html = formatNarrative(input).map(node => renderToStaticMarkup(node)).join('');
+  expect(html).toContain('Dzień dobry');
+  expect(html).not.toMatch(/UKRYTY SEKRET|private-evidence|GM_THOUGHTS|KEEPER_THOUGHTS/);
+});
+
+test('private cleanup preserves public handout, roll and ending question sections', () => {
+  const input = '[GM_THOUGHTS]Helena: „UKRYTY SEKRET”.[/GM_THOUGHTS]\n[HANDOUT:public-letter]\nTreść listu.\n[RZUT: 45]\n[Co robisz?]';
+  const sections = parseIntoSections(cleanupContent(input));
+  expect(sections.some(section => section.type === 'handout' && section.handoutSlug === 'public-letter')).toBe(true);
+  expect(sections.some(section => section.type === 'roll' && section.content === '[RZUT: 45]')).toBe(true);
+  expect(sections.some(section => section.type === 'whisper' && section.content === 'Co robisz?')).toBe(true);
+  expect(JSON.stringify(sections)).not.toContain('UKRYTY SEKRET');
+});
