@@ -14,6 +14,8 @@ Wydanie łączy przygotowane prace nad teczkami, narracją, zapisem, dziennikiem
 
 `scripts/package-unified-macos.mjs` w silniku pakuje istniejącą kompilację z własnym Node. Domyślnie aplikacja używa `127.0.0.1:4050` i dotychczasowego katalogu danych `ZewCthulhu`. Klucze, PDF-y, profil przeglądarki i zapisy pozostają poza pakietem. Launcher sprawdza tożsamość buildu i gotowość teczek. Nie wykonuje resetu profilu.
 
+W trybie desktopowym Next.js utrzymuje pamięć podręczną tras w pamięci procesu. Dotyczy to również favicon i pozostałych tras metadanych. Otwarcie okna przeglądarki nie dopisuje plików do podpisanej aplikacji.
+
 Pakiet zapisuje wersję, commit, BUILD_ID i sumę lokalnych materiałów w `build-receipt.json`. Prywatne plansze nie trafiają do Git. Kompilacja czystego repozytorium może używać zastępczego renderu materiałów.
 
 Workflow wydania publicznego uruchamia się wyłącznie ręcznie albo dla tagu. Scalenie zmian do `main` nie publikuje instalatorów. Aktualizacja lokalna nie uruchamia samoczynnej dystrybucji.

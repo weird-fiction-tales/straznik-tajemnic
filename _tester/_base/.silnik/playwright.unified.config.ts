@@ -4,7 +4,7 @@ const baseURL = 'http://127.0.0.1:4068';
 const evidence = process.env.ZEW_UNIFIED_EVIDENCE || path.resolve(__dirname, '../../../../..', '.desktop/unified-macos-20261031/evidence');
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: ['unified-catalog.spec.ts', 'unified-dossier-media.spec.ts', 'showcase-journal-dialogue.spec.ts', 'showcase-save-roundtrip.spec.ts', 'hue-lighting.spec.ts', 'ambilight-settings.spec.ts', 'narration-preset-independence.spec.ts'],
+  testMatch: ['unified-runtime-cache.spec.ts', 'unified-catalog.spec.ts', 'unified-dossier-media.spec.ts', 'showcase-journal-dialogue.spec.ts', 'showcase-save-roundtrip.spec.ts', 'hue-lighting.spec.ts', 'ambilight-settings.spec.ts', 'narration-preset-independence.spec.ts'],
   workers: 1, retries: 0, timeout: 60_000,
   reporter: [['list'], ['json', { outputFile: path.join(evidence, 'e2e-results.json') }]],
   outputDir: path.join(evidence, 'browser'),
