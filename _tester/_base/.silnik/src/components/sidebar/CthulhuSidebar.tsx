@@ -1,5 +1,6 @@
 'use client';
 import { immersion } from '@/lib/hardware/hue/immersion';
+import { DEFAULT_HUE_CONFIG } from '@/lib/hardware/hue/types';
 
 import { SafeImage } from '@/components/ui/safe-image';
 import type { FC } from 'react';
@@ -293,9 +294,10 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
       );
   }, []);
 
-  const [hueConfig, setHueConfig] = useState(loadStoredHueConfig);
+  const [hueConfig, setHueConfig] = useState(DEFAULT_HUE_CONFIG);
 
   useEffect(() => {
+    setHueConfig(loadStoredHueConfig());
     const handleHueChange = (e: Event) => {
       const custom = e as CustomEvent;
       if (custom.detail) {

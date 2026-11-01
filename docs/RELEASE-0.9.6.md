@@ -6,6 +6,7 @@ Wydanie łączy przygotowane prace nad teczkami, narracją, zapisem, dziennikiem
 - Lektor zachowuje przypisanie głosów NPC, czyści prywatne znaczniki i synchronizuje jawne SFX z odtwarzaniem. Źródłowe audio ma stabilne odtwarzanie i pauzę.
 - Dziennik, wyposażenie i pełny zapis zachowują poznane materiały, właścicieli i zaakceptowany stan. Starsze identyfikatory materiałów Startera nadal działają.
 - Hue obsługuje lokalny transport v2, partyturę scen, Entertainment, dzierżawę i przywracanie ustawień. Ambilight obsługuje wykrywanie, PIN oraz przywracanie poprzedniego trybu. Potrzebny jest wybór urządzeń i odbiór na fizycznym sprzęcie.
+- Zapisane włączenie Hue nie powoduje błędu pierwszego renderowania panelu. Odczyt konfiguracji po uruchomieniu interfejsu zachowuje wybrane lampy.
 - Ustawienia narratora są niezależne od presetów AI. Kontekst zachowuje obowiązkowe źródła i granice odbiorców pamięci.
 - Interfejs i testy obejmują PL oraz EN. Materiały wymagające zgody autora zachowują status oczekujący.
 

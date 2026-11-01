@@ -1,3 +1,5 @@
+import { renderToString } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import { CthulhuSidebar } from './CthulhuSidebar';
 import { getAdventureById } from '@/lib/adventures-data';
@@ -405,4 +407,29 @@ describe('local solo Prabuty save and explicit withdrawal',()=>{
   process.env.NEXT_INTL_TEST_LOCALE='pl';const send=jest.fn();render(<CthulhuSidebar {...base} sessionEndStatus="ended" isSessionEnded handleSendMessage={send}/>);
   expect(screen.getByRole('button',{name:'Sesja Zamknięta'})).toBeDisabled();expect(screen.queryByRole('button',{name:'Zakończ lub zapisz'})).not.toBeInTheDocument();expect(send).not.toHaveBeenCalled();
  });
+});
+
+
+it('hydrates a previously enabled Hue profile without replacing server markup', async () => {
+  process.env.NEXT_INTL_TEST_LOCALE = 'en';
+  const storageKey = 'straznik_hue_config';
+  const previous = localStorage.getItem(storageKey);
+  localStorage.removeItem(storageKey);
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  container.innerHTML = renderToString(<CthulhuSidebar />);
+  const saved = JSON.stringify({enabled: true, selectedLightIds: ['chosen-lamp'], mode: 'basic'});
+  localStorage.setItem(storageKey, saved);
+  const recoverable = jest.fn();
+  let root: ReturnType<typeof hydrateRoot> | undefined;
+  try {
+    await act(async () => {root = hydrateRoot(container, <CthulhuSidebar />, {onRecoverableError: recoverable});});
+    expect(recoverable).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Hue Light: On');
+    expect(localStorage.getItem(storageKey)).toBe(saved);
+  } finally {
+    await act(async () => root?.unmount());
+    container.remove();
+    if (previous === null) localStorage.removeItem(storageKey); else localStorage.setItem(storageKey, previous);
+  }
 });
