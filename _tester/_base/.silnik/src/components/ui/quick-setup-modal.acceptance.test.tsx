@@ -23,6 +23,13 @@ describe.each(['pl', 'en'] as const)('Quick Setup desktop acceptance (%s)', (loc
     else process.env.NEXT_INTL_TEST_LOCALE = originalLocale;
   });
 
+  it('shows the investigator introduction before play without the Keeper revelation', () => {
+    render(<QuickSetupModal open onQuickStart={jest.fn()} onOpenChange={jest.fn()} />);
+    const adventure=localizeStrefa11Adventure(getQuickSetupAdventures(locale)[0],locale);
+    expect(screen.getByText(adventure.investigatorIntro!)).toBeVisible();
+    expect(screen.queryByText(adventure.description,{exact:true})).not.toBeInTheDocument();
+  });
+
   it('selects scenarios with Enter and Space and preserves the locale default and start callback', async () => {
     const user = userEvent.setup();
     const onQuickStart = jest.fn();
@@ -100,6 +107,52 @@ describe.each([
     else process.env.NEXT_INTL_TEST_LOCALE = originalLocale;
   });
 
+  it('keeps Helena as the authored Prabuty NPC rather than offering her duplicate as a demo investigator',async()=>{
+    if(locale!=='pl')return;
+    const user=userEvent.setup();
+    render(<QuickSetupModal open onQuickStart={jest.fn()} onOpenChange={jest.fn()} />);
+    await user.click(screen.getByRole('button',{name:/Hot Seat/i}));
+    expect(screen.queryByText('Helena Krawczyk')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Dr Barbara Zawadzka')).toHaveLength(2);
+    expect(getStrefa11CharactersForAdventure(adventureId)).toHaveLength(4);
+  });
+
+  it('allows a pair of distinct investigators in the showcase', async () => {
+    const user = userEvent.setup();
+    const onQuickStart = jest.fn();
+    const characters = getStrefa11CharactersForAdventure(adventureId)
+      .map((character) => localizeStrefa11Character(character, locale));
+    const secondCharacter = characters.find((character) => character.id !== characterId && (locale!=='pl' || character.name!=='Helena Krawczyk'))!;
+    const firstCharacter = characters.find((character) => character.id === characterId)!;
+
+    render(<QuickSetupModal open onQuickStart={onQuickStart} onOpenChange={jest.fn()} />);
+    await user.click(screen.getByRole('button', { name: /Hot Seat/i }));
+    const start = screen.getByRole('button', { name: locale === 'pl' ? /Rozpocznij przygodę/i : /Start adventure/i });
+    expect(start).toBeDisabled();
+    const firstCards = screen.getAllByRole('button', { name: (name) => name.includes(firstCharacter.name) });
+    expect(firstCards[1]).toBeDisabled();
+    const secondCards = screen.getAllByRole('button', { name: (name) => name.includes(secondCharacter.name) });
+    await user.click(secondCards[1]);
+    expect(start).toBeEnabled();
+    await user.click(start);
+    expect(onQuickStart).toHaveBeenCalledWith(adventureId, characterId, 'hot-seat', secondCharacter.id);
+  });
+
+  it('preserves the selected investigator when switching from duet back to solo', async () => {
+    const user = userEvent.setup();
+    const onQuickStart = jest.fn();
+    const other = localizeStrefa11Character(
+      getStrefa11CharactersForAdventure(adventureId).find((character) => character.id !== characterId && (locale!=='pl' || character.name!=='Helena Krawczyk'))!, locale
+    );
+    render(<QuickSetupModal open onQuickStart={onQuickStart} onOpenChange={jest.fn()} />);
+    await user.click(screen.getByRole('button', { name: /Hot Seat/i }));
+    await user.click(screen.getAllByRole('button', { name: (name) => name.includes(other.name) })[0]);
+    await user.click(screen.getByRole('button', { name: /Solo/i }));
+    const start = screen.getByRole('button', { name: locale === 'pl' ? /Rozpocznij przygodę/i : /Start adventure/i });
+    await user.click(start);
+    expect(onQuickStart).toHaveBeenCalledWith(adventureId, other.id, 'solo', undefined);
+  });
+
   it('exposes only the approved pair, preselects solo and starts only after clicking Start', async () => {
     const user = userEvent.setup();
     const onQuickStart = jest.fn();
@@ -127,14 +180,15 @@ describe.each([
       expect(modal).toHaveTextContent('Skonfiguruj sesję z programu Strefa 11.');
     }
     expect(screen.getByRole('button', { name: /Solo/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.queryByRole('button', { name: /Hot Seat/i })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: locale === 'pl' ? /Biografia/i : /Biography/i })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /Hot Seat/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getAllByRole('button', { name: locale === 'pl' ? /Biografia/i : /Biography/i })).toHaveLength(2);
 
     for (const candidate of allAdventures.filter((candidate) => candidate.id !== adventureId)) {
       expect(screen.queryByRole('button', { name: candidate.title })).not.toBeInTheDocument();
       expect(screen.queryByText(candidate.title)).not.toBeInTheDocument();
     }
-    for (const candidate of allCharacters.filter((candidate) => candidate.id !== characterId)) {
+    const companionId = QUICK_SETUP_SHOWCASE_PROFILE.locales[locale].companionCharacterId;
+    for (const candidate of allCharacters.filter((candidate) => candidate.id !== characterId && candidate.id !== companionId)) {
       expect(screen.queryByText(candidate.name)).not.toBeInTheDocument();
     }
     // The profile filters this modal; the underlying scenario and character catalogs remain intact.
@@ -168,7 +222,7 @@ describe.each([
       expect(screen.getByRole('button', { name: adventure.title })).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByRole('button', { name: (name) => name.includes(character.name) })).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByText(character.occupation)).toBeVisible();
-      expect(screen.getAllByRole('button', { name: language === 'pl' ? /Biografia/i : /Biography/i })).toHaveLength(1);
+      expect(screen.getAllByRole('button', { name: language === 'pl' ? /Biografia/i : /Biography/i })).toHaveLength(2);
       expect(screen.getByRole('button', { name: language === 'pl' ? /Rozpocznij przygodę/i : /Start adventure/i })).toBeEnabled();
       const hiddenLocale = language === 'pl' ? 'en' : 'pl';
       expect(screen.queryByText(getQuickSetupAdventures(hiddenLocale)[0].title)).not.toBeInTheDocument();

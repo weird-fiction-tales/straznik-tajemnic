@@ -1,10 +1,19 @@
+import { getGlobalLightDirector } from '@/lib/hardware/hue/light-director-service';
+import { resolveCanonicalAdventureLocation } from '@/lib/canonical-adventure-location';
 import { isAuthoredAdventureId } from '@/lib/adventure-dossier/authored-scenarios';
 import { createDossierOpeningCommit } from '@/lib/adventure-dossier/commit-opening';
 import { loadRuntimeDossierPayload } from '@/lib/adventure-dossier/client-activation';
 import type { SSECallbacks } from '@/lib/sse-parser';
 import { offloadCharacterImages } from '@/lib/character-image-store';
 import { loadNpcSnapshot } from '@/lib/adventure-dossier/actor-initialization';
+import { immersion } from '@/lib/hardware/hue/immersion';
+import {
+  storeStarterState,
+  applyStarterStateToCharacters,
+} from '@/lib/adventures/starter-client';
+import { validateStarterState } from '@/lib/adventures/starter-runtime';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Character,
   Message,
@@ -25,13 +34,18 @@ import { timeManager } from '@/lib/time-manager';
 import { trackEvent } from '@/lib/posthog';
 import { resetSessionTokens } from '@/lib/ai-settings/cost-control';
 import { appendJournalToParty } from '@/lib/journal/apply-journal-tags';
+import { retainPublishedJournalVisual } from '@/lib/journal/published-visuals';
 import { notifyMemoryCommit } from '@/core/memory/commit-client';
 import { persistCharacters } from '@/lib/character-cloud-sync';
 import { persistentMediaCache } from '@/lib/persistent-media-cache';
 import { useEquipmentThumbnails } from './useEquipmentThumbnails';
 import { sanitizeCharacterForApi } from '@/lib/chat-history-sanitizer';
 import { getEraVehicleVisualDescription } from '@/lib/era-visual-style';
-import { resolveGameEraContext, findEraManifest, type ResolvedEraContext } from '@/lib/era';
+import {
+  resolveGameEraContext,
+  findEraManifest,
+  type ResolvedEraContext,
+} from '@/lib/era';
 import { getLocalizedOccupationName } from '@/lib/data/character';
 import {
   hasBlockingSetupFailure,
@@ -49,6 +63,10 @@ import {
 import { isDocumentModelUseBlocked } from '@/lib/document-model-policy';
 import { localizeAdventure } from '@/lib/immersion/strefa-11-localization';
 import { resolvePreparedAdventureVisual } from '@/lib/immersion/prepared-adventure-visuals';
+import {
+  buildAdventureOpeningDirective,
+  resolveAdventureOpening,
+} from '@/lib/adventure-opening';
 
 /**
  * Zadanie 6 (hardening demo-safe): chwilowy blip sieci ≠ crash startu gry.
@@ -83,7 +101,9 @@ async function fetchWithRetry(
         lastResponse = res;
         if (!res.ok && isRetryableHttpStatus(res.status) && attempt < retries) {
           onRetry?.(attempt + 1, `HTTP ${res.status}`);
-          const delay = isTest ? 10 : backoffMs * Math.pow(1.5, attempt) + Math.random() * 200;
+          const delay = isTest
+            ? 10
+            : backoffMs * Math.pow(1.5, attempt) + Math.random() * 200;
           await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }
@@ -93,6 +113,7 @@ async function fetchWithRetry(
       throw new Error('No response received');
     } catch (error) {
       lastError = error;
+      if (options?.signal?.aborted) throw error;
       if (!isNetworkBlip(error) || attempt === retries) throw error;
       onRetry?.(attempt + 1, 'Network blip');
       const delay = isTest ? 10 : backoffMs * (attempt + 1);
@@ -108,6 +129,7 @@ function createPresetWorldSetup(
   eraContext: ResolvedEraContext
 ): WorldSetupBundleV1 {
   const createdAt = new Date().toISOString();
+  const opening = resolveAdventureOpening(adventure);
   const conflicts = (adventure.conflicts ?? []).map((conflict) => ({
     ...conflict,
     factions: conflict.factions.map((faction) => ({ ...faction })),
@@ -144,14 +166,16 @@ function createPresetWorldSetup(
       statsSummary: n.statsSummary,
     })),
     locations: [
-      ...((adventure.graph?.locations ?? []).map((l) => ({
+      ...(adventure.graph?.locations ?? []).map((l) => ({
         id: l.id,
         name: l.name,
         description: l.description,
         atmosphere: l.atmosphere,
-      }))),
+      })),
       ...(adventure.location &&
-      !(adventure.graph?.locations ?? []).some((l) => l.name === adventure.location)
+      !(adventure.graph?.locations ?? []).some(
+        (l) => l.name === adventure.location
+      )
         ? [{ name: adventure.location }]
         : []),
     ],
@@ -162,7 +186,9 @@ function createPresetWorldSetup(
       isRedHerring: c.isRedHerring,
     })),
     events: [],
-    openingScene: { location: adventure.location ?? '' },
+    openingScene: opening
+      ? { ...opening }
+      : { location: adventure.location ?? '' },
     nearestBranches: conflicts,
     adventureContent: JSON.stringify({
       hook: adventure.hook,
@@ -226,13 +252,17 @@ interface UseGameStartProps {
   setActiveCharacter: React.Dispatch<React.SetStateAction<Character | null>>;
   setCharacters: React.Dispatch<React.SetStateAction<Character[]>>;
   pdfMemory: PdfMemory;
-  activateDossierForSession?: (sessionId: string, adventureId: string) => Promise<{
+  activateDossierForSession?: (
+    sessionId: string,
+    adventureId: string
+  ) => Promise<{
     ok: boolean;
     reason?: string;
     adventureDossierFingerprint?: string;
     adventureDossierStatus?: 'ready';
   }>;
   adventureContext: AdventureContext | null;
+  setAdventureContext?: (adventure: AdventureContext) => void;
   hotSeatConfig: { enabled: boolean; players: HotSeatPlayer[] };
   setMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   tts: {
@@ -267,7 +297,13 @@ interface UseGameStartProps {
  */
 export interface GameStartError {
   statusCode?: number;
-  category: 'server_overloaded' | 'quota_exceeded' | 'auth_error' | 'network_error' | 'general_error';
+  category:
+    | 'server_overloaded'
+    | 'quota_exceeded'
+    | 'auth_error'
+    | 'network_error'
+    | 'opening_mismatch'
+    | 'general_error';
   title: string;
   userAdvice: string;
   technicalDetails?: string;
@@ -282,6 +318,7 @@ export function useGameStart({
   pdfMemory,
   activateDossierForSession,
   adventureContext,
+  setAdventureContext,
   hotSeatConfig,
   setMessages,
   tts,
@@ -290,33 +327,43 @@ export function useGameStart({
   requirePlayerConfirmation,
   locale = 'pl',
 }: UseGameStartProps) {
-  const currentAdventureId=useRef(adventureContext?.id);
-  currentAdventureId.current=adventureContext?.id;
+  const currentAdventureId = useRef(adventureContext?.id);
+  currentAdventureId.current = adventureContext?.id;
+  const t = useTranslations('GameStart');
   const [isStarting, setIsStarting] = useState(false);
   const [startProgress, setStartProgress] = useState(0);
   const [startStatus, setStartStatus] = useState('');
   const [isReadyToEnter, setIsReadyToEnter] = useState(false);
   const [startError, setStartError] = useState<GameStartError | null>(null);
 
-  const waitForPlayerConfirmation = useCallback((): Promise<void> => {
-    // W środowisku testowym domyślnie przechodzimy bez blokowania, chyba że test jawnie tego żąda
-    if (process.env.NODE_ENV === 'test' && !requirePlayerConfirmation) {
-      return Promise.resolve();
-    }
-    return new Promise<void>((resolve) => {
-      const handleConfirm = () => {
-        if (typeof window !== 'undefined') {
-          window.removeEventListener('zew:confirm-enter-game', handleConfirm);
-        }
-        resolve();
-      };
-      if (typeof window !== 'undefined') {
-        window.addEventListener('zew:confirm-enter-game', handleConfirm);
-      } else {
-        resolve();
+  const waitForPlayerConfirmation = useCallback(
+    (signal: AbortSignal): Promise<void> => {
+      // W środowisku testowym domyślnie przechodzimy bez blokowania, chyba że test jawnie tego żąda
+      if (process.env.NODE_ENV === 'test' && !requirePlayerConfirmation) {
+        return Promise.resolve();
       }
-    });
-  }, [requirePlayerConfirmation]);
+      return new Promise<void>((resolve) => {
+        const handleConfirm = () => {
+          if (typeof window !== 'undefined') {
+            window.removeEventListener('zew:confirm-enter-game', handleConfirm);
+          }
+          signal.removeEventListener('abort', handleConfirm);
+          resolve();
+        };
+        signal.addEventListener('abort', handleConfirm, { once: true });
+        if (signal.aborted) {
+          handleConfirm();
+          return;
+        }
+        if (typeof window !== 'undefined') {
+          window.addEventListener('zew:confirm-enter-game', handleConfirm);
+        } else {
+          resolve();
+        }
+      });
+    },
+    [requirePlayerConfirmation]
+  );
 
   const confirmEnterGame = useCallback(() => {
     if (typeof window !== 'undefined') {
@@ -373,7 +420,8 @@ export function useGameStart({
     if (english && allPlayerCharacters.length > 1) {
       prompt += `**IMPORTANT: This is a Hot Seat game for ${allPlayerCharacters.length} players.**\n\n--- CHARACTER CONTEXT ---\n`;
       allPlayerCharacters.forEach((char, index) => {
-        const occ = getLocalizedOccupationName(char.occupation, 'en') || 'unknown';
+        const occ =
+          getLocalizedOccupationName(char.occupation, 'en') || 'unknown';
         prompt += `\n**Player ${index + 1} - ${char.name}:**\n- Occupation: ${occ}\n- Age: ${char.age || 'unknown'}\n`;
         if (char.characterConcept)
           prompt += `- Concept: ${char.characterConcept}\n`;
@@ -385,7 +433,8 @@ export function useGameStart({
       prompt += `**UWAGA: Gra toczy się dla ${allPlayerCharacters.length} graczy (Hot Seat mode)!**\n\n`;
       prompt += `--- KONTEKST POSTACI ---\n`;
       allPlayerCharacters.forEach((char, index) => {
-        const occ = getLocalizedOccupationName(char.occupation, 'pl') || 'nieznany';
+        const occ =
+          getLocalizedOccupationName(char.occupation, 'pl') || 'nieznany';
         prompt += `\n**Gracz ${index + 1} - ${char.name}:**\n`;
         prompt += `- Zawód: ${occ}\n`;
         prompt += `- Wiek: ${char.age || 'nieznany'}\n`;
@@ -397,7 +446,9 @@ export function useGameStart({
       prompt +=
         '\n**WAŻNE:** Wprowadzenie MUSI uwzględnić WSZYSTKIE postacie graczy! NIE powtarzaj statystyk ani statycznych opisów postaci z bloku KONTEKST POSTACI w swojej narracji. Wpleć ewentualne nawiązania naturalnie w fabułę.\n\n';
     } else if (english && activeCharacter) {
-      const occ = getLocalizedOccupationName(activeCharacter.occupation, 'en') || 'unknown';
+      const occ =
+        getLocalizedOccupationName(activeCharacter.occupation, 'en') ||
+        'unknown';
       prompt += `--- CHARACTER CONTEXT ---\n**My character:**\n- Name: ${activeCharacter.name}\n- Occupation: ${occ}\n- Age: ${activeCharacter.age || 'unknown'}\n`;
       if (activeCharacter.characterConcept)
         prompt += `- Concept: ${activeCharacter.characterConcept}\n`;
@@ -406,7 +457,9 @@ export function useGameStart({
       prompt +=
         '--- END CHARACTER CONTEXT ---\n\nUse this context only in the background. Do not quote or repeat it.\n\n';
     } else if (activeCharacter) {
-      const occ = getLocalizedOccupationName(activeCharacter.occupation, 'pl') || 'nieznany';
+      const occ =
+        getLocalizedOccupationName(activeCharacter.occupation, 'pl') ||
+        'nieznany';
       prompt += `--- KONTEKST POSTACI ---\n**Moja postać:**\n`;
       prompt += `- Imię: ${activeCharacter.name}\n- Zawód: ${occ}\n- Wiek: ${activeCharacter.age || 'nieznany'}\n`;
       if (activeCharacter.characterConcept)
@@ -420,6 +473,7 @@ export function useGameStart({
       ? localizeAdventure(adventureContext, english ? 'en' : 'pl')
       : null;
     if (effectiveAdv) {
+      const opening = resolveAdventureOpening(effectiveAdv);
       const startDateTimeFormatted =
         typeof timeManager?.formatDateTime === 'function'
           ? timeManager.formatDateTime(english ? 'en' : 'pl')
@@ -429,8 +483,8 @@ export function useGameStart({
           ? timeManager.getWeather()
           : '';
       prompt += english
-        ? `**ADVENTURE CONTEXT:**\n- Title: ${effectiveAdv.title}\n- Location: ${effectiveAdv.location}, ${effectiveAdv.country}${startDateTimeFormatted ? `\n- Starting Time: ${startDateTimeFormatted}` : ''}${startWeather ? `\n- Weather: ${startWeather}` : ''}\n- Hook: ${effectiveAdv.hook}\n\n`
-        : `**KONTEKST PRZYGODY:**\n- Tytuł: ${effectiveAdv.title}\n- Lokalizacja: ${effectiveAdv.location}, ${effectiveAdv.country}${startDateTimeFormatted ? `\n- Czas rozpoczęcia: ${startDateTimeFormatted}` : ''}${startWeather ? `\n- Pogoda: ${startWeather}` : ''}\n- Hook: ${effectiveAdv.hook}\n\n`;
+        ? `**ADVENTURE CONTEXT:**\n- Title: ${effectiveAdv.title}\n- Location: ${opening?.location ?? effectiveAdv.location}, ${effectiveAdv.country}${startDateTimeFormatted ? `\n- Starting Time: ${startDateTimeFormatted}` : ''}${startWeather ? `\n- Weather: ${startWeather}` : ''}\n- Hook: ${effectiveAdv.hook}\n\n`
+        : `**KONTEKST PRZYGODY:**\n- Tytuł: ${effectiveAdv.title}\n- Lokalizacja: ${opening?.location ?? effectiveAdv.location}, ${effectiveAdv.country}${startDateTimeFormatted ? `\n- Czas rozpoczęcia: ${startDateTimeFormatted}` : ''}${startWeather ? `\n- Pogoda: ${startWeather}` : ''}\n- Hook: ${effectiveAdv.hook}\n\n`;
     }
 
     // IND-261: TURA WPROWADZAJĄCA = wyjątek od limitu długości (IND-213). Onboarding
@@ -482,6 +536,9 @@ export function useGameStart({
         '[DZIENNIK:sprawa:Początek śledztwa]1-2 zdania: gdzie jestem i co mnie tu sprowadza.[/DZIENNIK] ' +
         'Zakończ otwartym pytaniem [Co robisz?] w OSOBNEJ linii.\n';
     }
+    const opening = resolveAdventureOpening(effectiveAdv);
+    if (opening)
+      prompt += buildAdventureOpeningDirective(opening, english ? 'en' : 'pl');
     return prompt;
   }, [activeCharacter, characters, hotSeatConfig, adventureContext, locale]);
 
@@ -496,7 +553,9 @@ export function useGameStart({
    */
   const generateIntroImage = useCallback(
     async (messageId: string, sceneDescription?: string) => {
-      if (aiSettings?.imageGenerationEnabled === false || isPureTextMode()) return;
+      const journalScope = loadCampaignMemoryScope();
+      if (aiSettings?.imageGenerationEnabled === false || isPureTextMode())
+        return;
       try {
         if (!adventureContext) {
           throw new Error('Brak kontekstu przygody dla obrazu intro.');
@@ -506,8 +565,10 @@ export function useGameStart({
         });
         const rawEra = String(eraContext.effectiveYear);
         // Wyciągnij porę roku i aurę z aktualnego czasu gry i pogody
-        const gameTime = typeof window !== 'undefined' ? timeManager.getTime() : null;
-        const weather = typeof window !== 'undefined' ? timeManager.getWeather() : '';
+        const gameTime =
+          typeof window !== 'undefined' ? timeManager.getTime() : null;
+        const weather =
+          typeof window !== 'undefined' ? timeManager.getWeather() : '';
 
         const month = gameTime?.month ?? 0;
         const seasonAtmosphere =
@@ -523,7 +584,8 @@ export function useGameStart({
         if (/mgła|mgly|fog|haze/i.test(weather)) {
           weatherAtmosphere = 'misty morning fog, thick haze, eerie gloom';
         } else if (/deszcz|rain/i.test(weather)) {
-          weatherAtmosphere = 'cold rain, wet glistening ground, dark overcast sky';
+          weatherAtmosphere =
+            'cold rain, wet glistening ground, dark overcast sky';
         } else if (/śnieg|snow|mróz|frost/i.test(weather)) {
           weatherAtmosphere = 'frost and snow dusting, freezing cold mist';
         }
@@ -539,7 +601,9 @@ export function useGameStart({
           imagePrompt = `Opening scene illustration: ${cleanDesc}, ${seasonAtmosphere}, ${weatherAtmosphere}, ${rawEra} period-accurate, atmospheric, cinematic, realistic, moody lighting.`;
         } else {
           const locationContext =
-            adventureContext?.location || 'mysterious New England town';
+            resolveAdventureOpening(adventureContext)?.location ||
+            adventureContext?.location ||
+            'mysterious New England town';
           // Pojazd tylko gdy scena/lokacja wyraźnie dotyczy podróży lub drogi
           const isVehicleScene =
             /\b(car|automobile|vehicle|drive|driving|road|highway|szosa|droga|parking)\b/i.test(
@@ -586,7 +650,40 @@ export function useGameStart({
               .catch(() => {});
             if (adventureContext?.location) {
               void persistentMediaCache
-                .setLocationImage(adventureContext.location.trim(), imageData.imageUrl)
+                .setLocationImage(
+                  adventureContext.location.trim(),
+                  imageData.imageUrl
+                )
+                .catch(() => {});
+              void retainPublishedJournalVisual({
+                kind: 'place',
+                name: adventureContext.location,
+                imageUrl: imageData.imageUrl,
+                messageId,
+                context: {
+                  scope: journalScope ?? undefined,
+                  binding: message.dossierHandoutBinding,
+                },
+              })
+                .then((publication) => {
+                  if (!publication) return;
+                  setMessages((current) =>
+                    current.map((item) =>
+                      item.id === messageId &&
+                      item.generatedImages?.includes(imageData.imageUrl)
+                        ? {
+                            ...item,
+                            publicJournalVisuals: [
+                              ...(item.publicJournalVisuals ?? []).filter(
+                                (known) => known.cardId !== publication.cardId
+                              ),
+                              publication,
+                            ],
+                          }
+                        : item
+                    )
+                  );
+                })
                 .catch(() => {});
             }
             return {
@@ -630,10 +727,13 @@ export function useGameStart({
   // generują DWA openingi - setMessages([]) nie chroni, bo oba appendują przez
   // różne assistantMessageId. useRef zamiast state: synchroniczny, bez okna race.
   const isStartingRef = useRef(false);
+  const startRequestRef = useRef<AbortController | null>(null);
 
   const handleStartGame = useCallback(async () => {
     if (isStartingRef.current) return;
     isStartingRef.current = true;
+    const startController = new AbortController();
+    startRequestRef.current = startController;
     setStartError(null);
     setIsStarting(true);
     setStartProgress(15);
@@ -695,8 +795,12 @@ export function useGameStart({
     initializeAdventureNpcVoices(adventureContext);
     const hasStructuredGraph = Boolean(
       adventureContext.graph &&
-      ((adventureContext.graph.npcs && adventureContext.graph.npcs.length > 0) ||
-       (adventureContext.graph.locations && adventureContext.graph.locations.length > 0))
+      ((adventureContext.graph.nodes &&
+        adventureContext.graph.nodes.length > 0) ||
+        (adventureContext.graph.npcs &&
+          adventureContext.graph.npcs.length > 0) ||
+        (adventureContext.graph.locations &&
+          adventureContext.graph.locations.length > 0))
     );
 
     if (!adventureContext.isCustom || hasStructuredGraph) {
@@ -741,7 +845,8 @@ export function useGameStart({
             ).map((character) => ({
               id: character.id,
               name: character.name,
-              occupation: getLocalizedOccupationName(character.occupation, locale) || '',
+              occupation:
+                getLocalizedOccupationName(character.occupation, locale) || '',
               background: character.background || '',
             })),
           }),
@@ -753,7 +858,9 @@ export function useGameStart({
           if (errorCode === 'DOCUMENT_MODEL_USE_BLOCKED') {
             // Bezpieczny fallback Clean Room: gdy polityka blokuje wysyłkę do AI,
             // używamy lokalnego setupu świata zamiast uniemożliwiać grę.
-            storeWorldSetup(createPresetWorldSetup(adventureContext, eraContext));
+            storeWorldSetup(
+              createPresetWorldSetup(adventureContext, eraContext)
+            );
           } else {
             const serverMessage =
               (errorBody as { error?: string }).error ||
@@ -771,7 +878,9 @@ export function useGameStart({
               'Preflight nie zwrócił poprawnego WorldSetupBundleV1.'
             );
           }
-          if (hasBlockingSetupFailure(preflightPayload.worldSetup.phaseResults)) {
+          if (
+            hasBlockingSetupFailure(preflightPayload.worldSetup.phaseResults)
+          ) {
             throw new Error('Preflight wykrył krytyczny błąd setupu.');
           }
           storeWorldSetup(preflightPayload.worldSetup);
@@ -877,25 +986,44 @@ export function useGameStart({
     const effectiveAdv = adventureContext
       ? localizeAdventure(adventureContext, locale === 'en' ? 'en' : 'pl')
       : null;
-    timeManager.resetForAdventure(effectiveAdv || adventureContext, locale === 'en' ? 'en' : 'pl');
+    timeManager.resetForAdventure(
+      effectiveAdv || adventureContext,
+      locale === 'en' ? 'en' : 'pl'
+    );
     setMessages([]); // Wyczyść czat przed startem przygody
 
     const introPrompt = buildIntroPrompt();
+    const opening = resolveAdventureOpening(adventureContext);
+    const startingAdventure = opening
+      ? {
+          ...adventureContext,
+          activeNodeId: opening.nodeId,
+          activeLocationId: opening.locationId,
+        }
+      : adventureContext;
+    setAdventureContext?.(startingAdventure);
+    if (opening && typeof window !== 'undefined') {
+      localStorage.setItem(
+        'adventure_context',
+        JSON.stringify(startingAdventure)
+      );
+    }
     const assistantMessageId = `gm-intro-${crypto.randomUUID()}`;
     const memoryScope = adventureContext
       ? createCampaignMemoryScope(adventureContext)
       : null;
     if (memoryScope) storeCampaignMemoryScope(memoryScope);
 
-    // Wyczyść wyłącznie obrazy generowane dla egzemplarzy fabularnych. Katalogowe
-    // assety są lokalne i muszą przetrwać start bez kosztu ani żądania do API.
+    // Zachowaj gotowe obrazy wyposażenia startowego; obrazy fabularnych
+    // zdobyczy poprzedniej przygody nie przechodzą do świeżego otwarcia.
     let thumbnailCharacter = activeCharacter;
     if (activeCharacter) {
       const resetEquipment = (activeCharacter.equipment ?? []).map((item) => ({
         ...item,
-        ...(item.imageUrl &&
-        item.imageUrl.includes('/equipment/catalog/') &&
-        item.imageUrl.endsWith('.webp')
+        ...(item.source === 'starting' ||
+        item.acquiredFrom === 'starting' ||
+        (item.imageUrl?.startsWith('/equipment/catalog/') &&
+          item.imageUrl.endsWith('.webp'))
           ? {}
           : { imageUrl: undefined, imagePrompt: undefined }),
       }));
@@ -920,15 +1048,32 @@ export function useGameStart({
     generateThumbnailsInBackground(thumbnailCharacter ?? undefined);
 
     try {
-      const activePdfMemory = pdfMemory.adventureId && pdfMemory.adventureId !== adventureContext.id
-        ? Object.fromEntries(Object.entries(pdfMemory).filter(([key]) => !key.startsWith('adventure'))) as PdfMemory
-        : pdfMemory;
+      const activePdfMemory =
+        pdfMemory.adventureId && pdfMemory.adventureId !== adventureContext.id
+          ? (Object.fromEntries(
+              Object.entries(pdfMemory).filter(
+                ([key]) => !key.startsWith('adventure')
+              )
+            ) as PdfMemory)
+          : pdfMemory;
       if (activePdfMemory.adventureDossierStatus === 'unavailable') {
-        throw new Error(locale === 'en' ? 'This edition has no ready adventure dossier.' : 'To wydanie nie ma jeszcze gotowej teczki przygody.');
+        throw new Error(
+          locale === 'en'
+            ? 'This edition has no ready adventure dossier.'
+            : 'To wydanie nie ma jeszcze gotowej teczki przygody.'
+        );
       }
       let startPdfMemory = activePdfMemory;
-      if (activePdfMemory.adventureDossierFingerprint || (isAuthoredAdventureId(adventureContext.id) && activateDossierForSession)) {
-        if (!memoryScope || !adventureContext?.id || !activateDossierForSession) {
+      if (
+        activePdfMemory.adventureDossierFingerprint ||
+        (isAuthoredAdventureId(adventureContext.id) &&
+          activateDossierForSession)
+      ) {
+        if (
+          !memoryScope ||
+          !adventureContext?.id ||
+          !activateDossierForSession
+        ) {
           throw new Error('DOSSIER_SESSION_ACTIVATION_UNAVAILABLE');
         }
         setStartProgress(65);
@@ -939,49 +1084,104 @@ export function useGameStart({
         );
         const activation = await activateDossierForSession(
           memoryScope.playthroughId,
-          adventureContext.id,
+          adventureContext.id
         );
         if (!activation.ok) {
-          throw new Error(activation.reason || 'DOSSIER_SESSION_ACTIVATION_FAILED');
+          throw new Error(
+            activation.reason || 'DOSSIER_SESSION_ACTIVATION_FAILED'
+          );
         }
         if (activation.adventureDossierFingerprint) {
-          startPdfMemory = { ...activePdfMemory, adventureDossierFingerprint: activation.adventureDossierFingerprint, adventureDossierStatus: 'ready' };
+          startPdfMemory = {
+            ...activePdfMemory,
+            adventureDossierFingerprint: activation.adventureDossierFingerprint,
+            adventureDossierStatus: 'ready',
+          };
         }
       }
 
-      const openingPayload = startPdfMemory.adventureDossierFingerprint && adventureContext?.id
-        ? await loadRuntimeDossierPayload(adventureContext.id,startPdfMemory.adventureDossierFingerprint) : undefined;
+      const openingPayload =
+        startPdfMemory.adventureDossierFingerprint && adventureContext?.id
+          ? await loadRuntimeDossierPayload(
+              adventureContext.id,
+              startPdfMemory.adventureDossierFingerprint
+            )
+          : undefined;
+      if (startController.signal.aborted) throw startController.signal.reason;
       const prabutyOpeningAsset = resolvePreparedAdventureVisual(
         'cien-nad-prabutami',
-        { prompt: '', type: 'location', locationName: adventureContext?.location },
+        {
+          prompt: '',
+          type: 'location',
+          locationName: adventureContext?.location,
+        },
         'node-warszawa-redakcja',
-        true,
+        true
       );
-      const prabutyOpeningSceneImage = locale === 'pl' && adventureContext?.id === 'cien-nad-prabutami'
-        ? prabutyOpeningAsset?.imageUrl
-        : undefined;
+      const prabutyOpeningSceneImage =
+        locale === 'pl' && adventureContext?.id === 'cien-nad-prabutami'
+          ? prabutyOpeningAsset?.imageUrl
+          : undefined;
       const englewoodOpeningAsset = resolvePreparedAdventureVisual(
         'englewood-murder-castle-1893',
-        { prompt: '', type: 'location', locationName: adventureContext?.location },
+        {
+          prompt: '',
+          type: 'location',
+          locationName: adventureContext?.location,
+        },
         'node-chicago-precinct',
-        true,
+        true
       );
-      const openingSceneImage = prabutyOpeningSceneImage ?? (
-        locale === 'en' && adventureContext?.id === 'englewood-murder-castle-1893'
+      const openingSceneImage =
+        prabutyOpeningSceneImage ??
+        (locale === 'en' &&
+        adventureContext?.id === 'englewood-murder-castle-1893'
           ? englewoodOpeningAsset?.imageUrl
-          : undefined
-      );
-      const dossierOpening = openingPayload && startPdfMemory.adventureDossierFingerprint && memoryScope && adventureContext?.id
-        ? createDossierOpeningCommit({
-            payload: openingPayload,
-            playthroughId:memoryScope.playthroughId,adventureId:adventureContext.id,
-            editionFingerprint:startPdfMemory.adventureDossierFingerprint,turnId:assistantMessageId,
-            location:adventureContext.activeLocationId || adventureContext.location || '',
-            now:new Date(),gameTime:timeManager.getTime(),era:adventureContext.yearRange || adventureContext.era || '1920s',
-            characters:characters.map(character=>character.id===thumbnailCharacter?.id?thumbnailCharacter:character),
-            activeCharacter:thumbnailCharacter ?? activeCharacter,skillTests:[],skillRolls:[],
-            isCurrent:()=>loadCampaignMemoryScope()?.playthroughId===memoryScope.playthroughId && currentAdventureId.current===adventureContext.id,
-          }, openingSceneImage) : undefined;
+          : undefined);
+      const dossierOpening =
+        openingPayload &&
+        startPdfMemory.adventureDossierFingerprint &&
+        memoryScope &&
+        adventureContext?.id
+          ? createDossierOpeningCommit(
+              {
+                payload: openingPayload,
+                playthroughId: memoryScope.playthroughId,
+                adventureId: adventureContext.id,
+                editionFingerprint: startPdfMemory.adventureDossierFingerprint,
+                turnId: assistantMessageId,
+                location:
+                  resolveCanonicalAdventureLocation(
+                    adventureContext.id,
+                    adventureContext.activeLocationId ||
+                      adventureContext.activeNodeId ||
+                      adventureContext.location ||
+                      ''
+                  )?.locationId ||
+                  adventureContext.activeLocationId ||
+                  adventureContext.location ||
+                  '',
+                now: new Date(),
+                gameTime: timeManager.getTime(),
+                era:
+                  adventureContext.yearRange || adventureContext.era || '1920s',
+                characters: characters.map((character) =>
+                  character.id === thumbnailCharacter?.id
+                    ? thumbnailCharacter
+                    : character
+                ),
+                activeCharacter: thumbnailCharacter ?? activeCharacter,
+                skillTests: [],
+                skillRolls: [],
+                isCurrent: () =>
+                  !startController.signal.aborted &&
+                  loadCampaignMemoryScope()?.playthroughId ===
+                    memoryScope.playthroughId &&
+                  currentAdventureId.current === adventureContext.id,
+              },
+              openingSceneImage
+            )
+          : undefined;
 
       const resolvedHotSeat = hotSeatConfig?.enabled
         ? {
@@ -1010,6 +1210,7 @@ export function useGameStart({
       const response = await fetchWithRetry(
         '/api/chat',
         {
+          signal: startController.signal,
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1022,9 +1223,14 @@ export function useGameStart({
             // Sanityzuj postać (portret + miniatury ekwipunku = base64 ~MB) by nie
             // przekroczyć limitu payloadu /api/chat (regresja B2 28.06).
             character: sanitizeCharacterForApi(activeCharacter),
-            characters: (characters || []).map((c) => sanitizeCharacterForApi(c)),
+            characters: (characters || []).map((c) =>
+              sanitizeCharacterForApi(c)
+            ),
             hotSeatConfig: resolvedHotSeat,
-            adventureContext: adventureContext,
+            adventureContext: startingAdventure,
+            currentLocation: opening?.location,
+            activeNodeId: opening?.nodeId,
+            activeLocationId: opening?.locationId,
             memoryScope,
             assistantMessageId,
             eraContext: loadStoredWorldSetup()?.eraContext,
@@ -1046,6 +1252,8 @@ export function useGameStart({
         }
       );
 
+      if (startController.signal.aborted) throw startController.signal.reason;
+
       // Walidacja HTTP przed strumieniowaniem SSE. Bez tego serwer zwracający
       // JSON z błędem (np. 401 BYOK_KEY_MISSING) jest cicho ignorowany przez
       // parseSSEStream - żaden wiersz nie zaczyna się od "data: ", parser
@@ -1055,7 +1263,10 @@ export function useGameStart({
         const errorBody = await response.json().catch(() => ({}));
         const serverMsg =
           (errorBody as Record<string, string>)?.error || response.statusText;
-        throw new Error(`Chat API ${response.status}: ${serverMsg}`);
+        const code = (errorBody as Record<string, string>)?.code;
+        throw new Error(
+          `Chat API ${response.status}${code ? ` ${code}` : ''}: ${serverMsg}`
+        );
       }
 
       setStartProgress(75);
@@ -1074,7 +1285,10 @@ export function useGameStart({
           content: '',
           timestamp: new Date(),
           ...(openingSceneImage && !dossierOpening
-            ? { generatedImages: [openingSceneImage], generatedImageTypes: ['scene' as const] }
+            ? {
+                generatedImages: [openingSceneImage],
+                generatedImageTypes: ['scene' as const],
+              }
             : {}),
         },
       ]);
@@ -1087,7 +1301,28 @@ export function useGameStart({
           locale === 'en' ? 'Beginning the adventure!' : 'Zaczynamy przygodę!'
         );
         const finalize = () => {
+          if (startController.signal.aborted) return;
+          void immersion.start(adventureContext?.id ?? '').catch(() => {});
           setHasStartedGame(true);
+          const director = getGlobalLightDirector();
+          if (director.getClient().getConfig().enabled) {
+            void director
+              .onSessionStart()
+              .then(() => {
+                if (startController.signal.aborted) return;
+                return director.applyPreset(
+                  director.evaluateEnvironmentMood({
+                    adventureId: adventureContext?.id,
+                    locationText:
+                      adventureContext?.activeLocationId ||
+                      adventureContext?.activeNodeId ||
+                      adventureContext?.location,
+                    hour: timeManager.getTime().hour,
+                  })
+                );
+              })
+              .catch(() => {});
+          }
           if (typeof window !== 'undefined') {
             localStorage.setItem('has_started_game', 'true');
             localStorage.setItem('session_started_at', String(Date.now()));
@@ -1116,20 +1351,28 @@ export function useGameStart({
       // na każdym starcie gry). Ten sam fix co useChat.ts:293.
       let streamedFullText = '';
       let introImageTriggered = Boolean(openingSceneImage);
-      const parseOpeningStream = dossierOpening ? async (stream:Response, callbacks:SSECallbacks) => {
-        const accepted=await dossierOpening(stream);
-        if(accepted.rosterChanged) {
-          setCharacters(accepted.characters);setActiveCharacter(accepted.activeCharacter);
-          void offloadCharacterImages(accepted.characters);
-        }
-        setMessages([accepted.message]);
-        if(accepted.memory) notifyMemoryCommit(accepted.memory,locale);
-        callbacks.onText?.(accepted.text);
-        callbacks.onMetadata?.(accepted.metadata);
-        return accepted.text;
-      } : parseSSEStream;
+      const parseOpeningStream = dossierOpening
+        ? async (stream: Response, callbacks: SSECallbacks) => {
+            const accepted = await dossierOpening(stream);
+            if (accepted.rosterChanged) {
+              setCharacters(accepted.characters);
+              setActiveCharacter(accepted.activeCharacter);
+              void offloadCharacterImages(accepted.characters);
+            }
+            setMessages([accepted.message]);
+            if (accepted.memory) notifyMemoryCommit(accepted.memory, locale);
+            callbacks.onText?.(accepted.text);
+            callbacks.onMetadata?.(accepted.metadata);
+            return accepted.text;
+          }
+        : parseSSEStream;
       const fullText = await parseOpeningStream(response, {
         onText: (text) => {
+          immersion.feed(
+            assistantMessageId,
+            text,
+            tts.voiceEnabled && tts.isTTSEnabled
+          );
           streamedFullText = text;
           setMessages((prev) =>
             prev.map((msg) =>
@@ -1137,7 +1380,10 @@ export function useGameStart({
             )
           );
           // Płynny mikro-postęp 75% -> 95% podczas dopisywania tekstu wstępu przez AI
-          const dynamicProgress = Math.min(95, 75 + Math.floor(text.length / 40));
+          const dynamicProgress = Math.min(
+            95,
+            75 + Math.floor(text.length / 40)
+          );
           setStartProgress((prev) => Math.max(prev, dynamicProgress));
           setStartStatus(
             locale === 'en'
@@ -1151,9 +1397,32 @@ export function useGameStart({
           }
         },
         onMetadata: (metadata) => {
-          if (!dossierOpening) notifyMemoryCommit(metadata,locale);
+          if (!dossierOpening) notifyMemoryCommit(metadata, locale);
+          if (metadata.starterState) {
+            validateStarterState(metadata.starterState);
+            storeStarterState(metadata.starterState);
+            const starterState = metadata.starterState;
+            setCharacters((prev) =>
+              applyStarterStateToCharacters(
+                prev,
+                starterState,
+                locale === 'en' ? 'en' : 'pl'
+              )
+            );
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessageId
+                  ? { ...m, skillTests: starterState.pendingTests }
+                  : m
+              )
+            );
+          }
           // Generowanie obrazu intro na podstawie opisu pierwszej sceny lub wyemitowanego promptu
-          if (!introImageTriggered && aiSettings?.imageGenerationEnabled !== false && !isPureTextMode()) {
+          if (
+            !introImageTriggered &&
+            aiSettings?.imageGenerationEnabled !== false &&
+            !isPureTextMode()
+          ) {
             introImageTriggered = true;
             const illustrations = Array.isArray(metadata.illustrations)
               ? (metadata.illustrations as Array<{ prompt?: string }>)
@@ -1210,9 +1479,16 @@ export function useGameStart({
         }),
       });
 
-      if (!introImageTriggered && aiSettings?.imageGenerationEnabled !== false && !isPureTextMode()) {
+      if (
+        !introImageTriggered &&
+        aiSettings?.imageGenerationEnabled !== false &&
+        !isPureTextMode()
+      ) {
         introImageTriggered = true;
-        void generateIntroImage(assistantMessageId, fullText || streamedFullText);
+        void generateIntroImage(
+          assistantMessageId,
+          fullText || streamedFullText
+        );
       }
 
       // Oczekiwanie na zbuforowanie głosu lektora przed wejściem gracza do sceny (Issue #142)
@@ -1226,6 +1502,8 @@ export function useGameStart({
         await tts.waitForInitialBuffer(15000);
       }
 
+      if (startController.signal.aborted) throw startController.signal.reason;
+
       // Issue #157: Zakończono generowanie pełnego otwarcia i buforowanie głosu lektora (100%)
       setStartProgress(100);
       setStartStatus(
@@ -1236,7 +1514,8 @@ export function useGameStart({
       setIsReadyToEnter(true);
 
       // Czekaj na kliknięcie przycisku CTA przez gracza (bramka akceptacji)
-      await waitForPlayerConfirmation();
+      await waitForPlayerConfirmation(startController.signal);
+      if (startController.signal.aborted) throw startController.signal.reason;
 
       setIsReadyToEnter(false);
 
@@ -1247,6 +1526,7 @@ export function useGameStart({
 
       // Zakończono generowanie pełnego otwarcia: odsłoń czat z gotową sceną (Issue #123)
       await transitionToGame();
+      if (startController.signal.aborted) throw startController.signal.reason;
 
       // IND-201 / Issue #153: auto-dziennik dla openingu (opening idzie tym samym /api/chat
       // z gm-protocol, może nieść [DZIENNIK:] z prefiksem @Imię). Idempotentne (dedup po messageId).
@@ -1255,7 +1535,13 @@ export function useGameStart({
           characters,
           activeCharacter,
           fullText,
-          assistantMessageId
+          assistantMessageId,
+          undefined,
+          [],
+          {
+            scope: memoryScope ?? undefined,
+            learnedAt: timeManager.formatDateTime?.(locale),
+          }
         );
         if (j.changed) {
           setActiveCharacter(j.activeCharacter);
@@ -1266,6 +1552,10 @@ export function useGameStart({
         }
       }
     } catch (error) {
+      if (startController.signal.aborted) {
+        tts.cancelInitialBuffering?.();
+        return;
+      }
       console.error('Game start intro failed:', error);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('zew:stop-music'));
@@ -1280,18 +1570,30 @@ export function useGameStart({
       const errorStr = error instanceof Error ? error.message : String(error);
 
       let statusCode: number | undefined;
-      const statusMatch = errorStr.match(/\b(400|401|403|429|500|502|503|504)\b/);
+      const statusMatch = errorStr.match(
+        /\b(400|401|403|422|429|500|502|503|504)\b/
+      );
       if (statusMatch) {
         statusCode = parseInt(statusMatch[1], 10);
       }
 
-      const is503 = statusCode === 503 || /503|high demand|overloaded|unavailable/i.test(errorStr);
-      const is429 = statusCode === 429 || /429|quota|resource_exhausted|rate limit/i.test(errorStr);
-      const isAuthError = statusCode === 401 || /401|byok_key|api key|unauthorized/i.test(errorStr);
-      const isNetwork = isNetworkBlip(error) || /network|failed to fetch|aborted|econnreset|enotfound/i.test(errorStr);
+      const is503 =
+        statusCode === 503 ||
+        /503|high demand|overloaded|unavailable/i.test(errorStr);
+      const is429 =
+        statusCode === 429 ||
+        /429|quota|resource_exhausted|rate limit/i.test(errorStr);
+      const isAuthError =
+        statusCode === 401 ||
+        /401|byok_key|api key|unauthorized/i.test(errorStr);
+      const isNetwork =
+        isNetworkBlip(error) ||
+        /network|failed to fetch|aborted|econnreset|enotfound/i.test(errorStr);
 
       let category: GameStartError['category'] = 'general_error';
-      if (is503) {
+      if (errorStr.includes('OPENING_LOCATION_MISMATCH')) {
+        category = 'opening_mismatch';
+      } else if (is503) {
         category = 'server_overloaded';
       } else if (is429) {
         category = 'quota_exceeded';
@@ -1301,51 +1603,59 @@ export function useGameStart({
         category = 'network_error';
       }
 
-      const errorTitle = locale === 'en'
-        ? category === 'server_overloaded'
-          ? 'Gemini Servers Overloaded [Error 503]'
-          : category === 'quota_exceeded'
-          ? 'API Quota Exceeded [Error 429]'
-          : category === 'auth_error'
-          ? 'Gemini API Key Required [Error 401]'
-          : category === 'network_error'
-          ? 'Network Connection Problem'
-          : 'Game Start Error'
-        : category === 'server_overloaded'
-          ? 'Przeciążenie darmowych serwerów Gemini [Błąd 503]'
-          : category === 'quota_exceeded'
-          ? 'Wyczerpano limit zapytań Gemini API [Błąd 429]'
-          : category === 'auth_error'
-          ? 'Wymagany poprawny klucz Gemini API [Błąd 401]'
-          : category === 'network_error'
-          ? 'Problem z połączeniem sieciowym'
-          : 'Błąd uruchamiania gry';
+      const errorTitle =
+        locale === 'en'
+          ? category === 'server_overloaded'
+            ? 'Gemini Servers Overloaded [Error 503]'
+            : category === 'quota_exceeded'
+              ? 'API Quota Exceeded [Error 429]'
+              : category === 'auth_error'
+                ? 'Gemini API Key Required [Error 401]'
+                : category === 'network_error'
+                  ? 'Network Connection Problem'
+                  : 'Game Start Error'
+          : category === 'server_overloaded'
+            ? 'Przeciążenie darmowych serwerów Gemini [Błąd 503]'
+            : category === 'quota_exceeded'
+              ? 'Wyczerpano limit zapytań Gemini API [Błąd 429]'
+              : category === 'auth_error'
+                ? 'Wymagany poprawny klucz Gemini API [Błąd 401]'
+                : category === 'network_error'
+                  ? 'Problem z połączeniem sieciowym'
+                  : 'Błąd uruchamiania gry';
 
-      const userAdvice = locale === 'en'
-        ? category === 'server_overloaded'
-          ? 'Google Gemini servers are currently experiencing high demand on the free tier. Wait a minute and click "Try Again", or configure a Pay-as-you-go key in Settings.'
-          : category === 'quota_exceeded'
-          ? 'Your Gemini API quota has been exhausted. Wait for your quota to reset or provide a different API key in Settings.'
-          : category === 'auth_error'
-          ? 'The Gemini API key is missing, invalid or expired. Open API Settings to paste a valid key and try again.'
-          : category === 'network_error'
-          ? 'A network issue interrupted the connection to the Keeper. Check your internet connection and click "Try Again".'
-          : 'An unexpected issue occurred while chronicling the opening scene. Try again or check your API key.'
-        : category === 'server_overloaded'
-          ? 'Serwery Google Gemini przeżywają chwilowe przeciążenie na darmowym planie Free Tier. Odczekaj minutę i kliknij „Spróbuj ponownie” lub podepnij płatny klucz Pay-as-you-go w Ustawieniach.'
-          : category === 'quota_exceeded'
-          ? 'Limit zapytań dla Twojego klucza Gemini został wyczerpany. Odczekaj do odnowienia limitu lub podaj inny klucz w Ustawieniach.'
-          : category === 'auth_error'
-          ? 'Klucz Gemini API jest nieprawidłowy, wygasł lub nie został skonfigurowany. Otwórz Ustawienia API, wklej poprawny klucz i spróbuj ponownie.'
-          : category === 'network_error'
-          ? 'Przerwano połączenie ze Strażnikiem Tajemnic. Sprawdź połączenie z internetem i kliknij „Spróbuj ponownie”.'
-          : 'Wystąpił nieoczekiwany problem przy spisywaniu kroniki otwarcia. Spróbuj ponownie lub sprawdź swój klucz API.';
+      const userAdvice =
+        locale === 'en'
+          ? category === 'server_overloaded'
+            ? 'Google Gemini servers are currently experiencing high demand on the free tier. Wait a minute and click "Try Again", or configure a Pay-as-you-go key in Settings.'
+            : category === 'quota_exceeded'
+              ? 'Your Gemini API quota has been exhausted. Wait for your quota to reset or provide a different API key in Settings.'
+              : category === 'auth_error'
+                ? 'The Gemini API key is missing, invalid or expired. Open API Settings to paste a valid key and try again.'
+                : category === 'network_error'
+                  ? 'A network issue interrupted the connection to the Keeper. Check your internet connection and click "Try Again".'
+                  : 'An unexpected issue occurred while chronicling the opening scene. Try again or check your API key.'
+          : category === 'server_overloaded'
+            ? 'Serwery Google Gemini przeżywają chwilowe przeciążenie na darmowym planie Free Tier. Odczekaj minutę i kliknij „Spróbuj ponownie” lub podepnij płatny klucz Pay-as-you-go w Ustawieniach.'
+            : category === 'quota_exceeded'
+              ? 'Limit zapytań dla Twojego klucza Gemini został wyczerpany. Odczekaj do odnowienia limitu lub podaj inny klucz w Ustawieniach.'
+              : category === 'auth_error'
+                ? 'Klucz Gemini API jest nieprawidłowy, wygasł lub nie został skonfigurowany. Otwórz Ustawienia API, wklej poprawny klucz i spróbuj ponownie.'
+                : category === 'network_error'
+                  ? 'Przerwano połączenie ze Strażnikiem Tajemnic. Sprawdź połączenie z internetem i kliknij „Spróbuj ponownie”.'
+                  : 'Wystąpił nieoczekiwany problem przy spisywaniu kroniki otwarcia. Spróbuj ponownie lub sprawdź swój klucz API.';
 
       setStartError({
         statusCode,
         category,
-        title: errorTitle,
-        userAdvice,
+        title:
+          category === 'opening_mismatch'
+            ? t('openingMismatchTitle')
+            : errorTitle,
+        userAdvice:
+          category === 'opening_mismatch'
+            ? t('openingMismatchAdvice')
+            : userAdvice,
         technicalDetails: errorStr,
       });
 
@@ -1354,8 +1664,12 @@ export function useGameStart({
       }
 
       // Usuń wszelkie puste lub częściowe dymki asystenta z czatu
-      setMessages((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
+      setMessages((prev) =>
+        prev.filter((msg) => msg.id !== assistantMessageId)
+      );
     } finally {
+      if (startRequestRef.current === startController)
+        startRequestRef.current = null;
       isStartingRef.current = false;
       setIsStarting(false);
     }
@@ -1368,6 +1682,8 @@ export function useGameStart({
     pdfMemory,
     activateDossierForSession,
     adventureContext,
+    setAdventureContext,
+    t,
     hotSeatConfig,
     setMessages,
     tts,
@@ -1386,6 +1702,9 @@ export function useGameStart({
   }, [handleStartGame]);
 
   const cancelStartGame = useCallback(() => {
+    startRequestRef.current?.abort();
+    tts.cancelInitialBuffering?.();
+    tts.stopCurrentAudio();
     setStartError(null);
     setIsStarting(false);
     setIsReadyToEnter(false);
@@ -1394,7 +1713,7 @@ export function useGameStart({
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('zew:stop-music'));
     }
-  }, []);
+  }, [tts]);
 
   return {
     handleStartGame,

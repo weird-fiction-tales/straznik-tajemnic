@@ -9,6 +9,7 @@ import { createEquipmentItem } from '../equipment-data';
 import { safeResolveVisualEra } from '../equipment-catalog';
 import { type DossierRagPayload } from './rag-schema';
 import { normalizeDossierLocation, type DossierInventoryState } from './inventory-state';
+import { resolveAuthoredPrabutyMedia } from './authored-media';
 
 /** Typed identity/ownership adapter around the existing equipment resolver; no dice or new item stats. */
 export function applyDossierInventoryTurn(input: {
@@ -56,6 +57,9 @@ export function applyDossierInventoryTurn(input: {
         const atSource = card.tags.scenes.some(s => normalizeDossierLocation(s) === normalizeDossierLocation(input.location));
         const atDrop = before?.placement === 'location' && normalizeDossierLocation(before.location ?? '') === normalizeDossierLocation(input.location);
         if (!input.location || (before ? !atDrop : !atSource || !hasDossierItemAccess(payload, state, card.record_id))) { rejected.push(card.record_id); return ''; }
+        const media = payload.records.find(record => record.record_type === 'media' &&
+          record.links.includes(card.record_id) && isRuntimeAuthorizedDossierRecord(record));
+        const handout = media ? resolveAuthoredPrabutyMedia(payload, media.record_id) : null;
         // Never generate readableContent for a narrative summary or pretend to reproduce a source document.
         const item: EquipmentItem = before ? { ...before.item } : {
           ...createEquipmentItem({ name: def.name, category: def.category,
@@ -63,7 +67,9 @@ export function applyDossierInventoryTurn(input: {
             dossierBinding: { adventureId: state.adventureId, editionFingerprint: state.editionFingerprint, recordId: card.record_id },
           }, 'found', safeResolveVisualEra(input.era)),
           id: `dossier:${state.playthroughId}:${card.record_id}`,
-          dossierBinding: { adventureId: state.adventureId, editionFingerprint: state.editionFingerprint, recordId: card.record_id },
+          ...(handout ? { description: handout.textContent, imageUrl: handout.image, audioUrl: handout.audioUrl } : {}),
+          dossierBinding: { adventureId: state.adventureId, editionFingerprint: state.editionFingerprint, recordId: card.record_id,
+            ...(media ? { handoutRecordId: media.record_id } : {}) },
         };
         takeFromRoster(item.id); owner.equipment.push(item);
         entries.set(card.record_id, { recordId: card.record_id, placement: 'character', holderId: owner.id, location: null, item });

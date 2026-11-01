@@ -124,7 +124,7 @@ export function MedicalCareModal({
               </div>
               <div>
                 <div className="font-special-elite text-[11px] uppercase tracking-[0.35em] text-primary mb-0.5">
-                  MISKATONIC ARCHIVES • 1920s
+                  {t('archiveKicker')}
                 </div>
                 <DialogTitle className="font-special-elite text-2xl text-brass tracking-wider">
                   {t('title')}
@@ -175,10 +175,10 @@ export function MedicalCareModal({
               {t('vitalsLabel')}:
             </span>
             <span className="font-special-elite text-lg text-[#d9685f]">
-              {character.hp} / {maxHp} PŻ
+              {character.hp} / {maxHp} {t('hpUnit')}
             </span>
             <span className="text-xs text-muted-foreground font-sans">
-              ({t('thresholdLabel')}: {threshold} PŻ)
+              ({t('thresholdLabel')}: {threshold} {t('hpUnit')})
             </span>
           </div>
           <div className="flex items-center gap-2 text-sm font-sans text-muted-foreground">
@@ -240,7 +240,7 @@ export function MedicalCareModal({
                       onClick={() => setSelectedPeriod(p)}
                       className={
                         selectedPeriod === p
-                          ? 'bg-primary/20 text-primary font-special-elite border border-primary shadow-glow'
+                          ? 'bg-primary/10 text-foreground font-special-elite border border-primary shadow-glow'
                           : 'border-brass/30 text-brass/80 hover:bg-brass/10 font-special-elite'
                       }
                     >

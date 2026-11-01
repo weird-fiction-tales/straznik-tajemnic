@@ -821,3 +821,5 @@ Never force a plot twist. External attacks, fleeing suspects, and sudden escalat
 The hidden act-transition tag [ACT_TRANSITION: Act N] is a hidden state signal. Emit it only for the immediate next act, and only after at least two revealed Core clues of the current act unlock the gate. Never emit it during an ACT_BLOCK. Never reveal gates or counters in prose or in the Investigator Journal. In a one-shot scenario, this gate prevents premature confrontation and entry into the monster's lair.
 `;
 }
+
+export const LIGHTING_CUE_PROTOCOL = `For the active adventure, use only supplied scene IDs in [SCENA:id] and authored lighting cues in [CUE:id]. Never invent IDs, light parameters or mechanical events. These are hidden direction tags, never spoken.`;

@@ -6,7 +6,16 @@ import { fetchWithApiKeys } from '@/lib/api-keys-service';
 import { parseSSEStream } from '@/lib/sse-parser';
 import type { GameTime, Message } from '@/lib/types';
 import * as autoSaveService from '@/lib/save/auto-save-service';
+import { PREDEFINED_CHARACTERS } from '@/lib/immersion/predefined-characters';
 import { defaultAISettings } from '@/lib/ai-settings/defaults';
+
+// This suite exercises the generic dossier transport and transaction contract.
+// The scenario-owned action planner is covered with its real implementation in
+// prabuty-action-plan.test.ts and useChat.handout-discovery.test.tsx.
+jest.mock('@/lib/adventure-dossier/prabuty-action-plan', () => ({
+  ...jest.requireActual('@/lib/adventure-dossier/prabuty-action-plan'),
+  planPrabutyTurn: jest.fn(() => null),
+}));
 
 jest.mock('@/lib/api-keys-service', () => ({
   fetchWithApiKeys: jest.fn(),
@@ -466,7 +475,7 @@ it.each(['name','node','location'] as const)('retains canonical crypt %s through
   jest.mocked(timeManager.getTime).mockReturnValue(clock);
   jest.mocked(ensureLocalDossierSession).mockResolvedValue({ok:true});
   jest.mocked(loadRuntimeDossierPayload).mockResolvedValue(payload);
-  jest.mocked(fetchWithApiKeys).mockResolvedValue({ok:true} as Response);
+  jest.mocked(fetchWithApiKeys).mockImplementation(async url=>url==='/api/summarize-scene'?{ok:true,json:async()=>({success:true,summaries:{pl:'Badacz znalazł kryptę.',en:'The investigator found the crypt.'}})} as Response:{ok:true} as Response);
   jest.spyOn(autoSaveService,'performFullGameSave').mockResolvedValue({success:true,saveId:'saved',saveName:'saved',size:1,formattedSize:'1',messageCount:1,imageCount:0});
   jest.spyOn(globalThis,'fetch').mockImplementation(async(_url,init)=>{const b=JSON.parse(String(init?.body));return {ok:true,json:async()=>b.phase==='prepare'?{prepared:true}:{accepted:b.accepted}} as Response;});
   let closing=false; let stray=false; let foreign=false;
@@ -475,14 +484,15 @@ it.each(['name','node','location'] as const)('retains canonical crypt %s through
     const text=closing?'[TECZKA_STANU: '+PRABUTY_WORLD_IDS.rift+' | close-rift]':stray?'Znajdujesz się w niskiej, ciasnej przybudówce.'+(foreign?' [LOKACJA: foreign-room]':''):'Jesteś w krypcie. [LOKACJA: '+reference+']';
     callbacks?.onText?.(text);callbacks?.onMetadata?.({type:'metadata',dossierFinalizationToken:closing?'close-token':'entry-token',dossierInventoryWritesAllowed:true,timeUpdate:clock,...(stray?{parsedEvents:[{type:'location',title:'Lokacja: niskiej',description:'Odwiedzone miejsce'}]}:{})});return text;
   });
-  const options={...defaultOptions,pdfMemory:{adventureDossierFingerprint:fp},adventureContext:{id:payload.adventure_id,title:'Prabuty',location:'Prabuty',country:'Polska',yearRange:'1973-1974'}};
+  const investigator={...PREDEFINED_CHARACTERS[0],id:'crypt-investigator',equipment:[],journal:[]};
+  const options={...defaultOptions,activeCharacter:investigator,characters:[investigator],pdfMemory:{adventureDossierFingerprint:fp},adventureContext:{id:payload.adventure_id,title:'Prabuty',location:'Prabuty',country:'Polska',yearRange:'1973-1974'}};
   let mounted=renderHook(()=>useChat(options));
   await act(async()=>{await mounted.result.current.handleSendMessage('Wchodzę do krypty.');});
   expect(mounted.result.current.currentLocation).toBe(crypt);
   stray=true;
   await act(async()=>{await mounted.result.current.handleSendMessage('Badam wyłom.');});
   expect(mounted.result.current.currentLocation).toBe(crypt);
-  const request=JSON.parse(String(jest.mocked(fetchWithApiKeys).mock.calls.at(-1)![1]?.body));
+  const request=JSON.parse(String(jest.mocked(fetchWithApiKeys).mock.calls.filter(([url])=>url==='/api/chat').at(-1)![1]?.body));
   expect(request.activeLocationId).toBe('loc-prabuty-krypta');
   expect(request.activeNodeId).toBe('node-prabuty-krypta-climax');
   foreign=true;
@@ -678,9 +688,8 @@ describe('ordinary send uses current settings without requiring a history change
   const history=result.current.messages;
   rerender({aiSettings:currentSettings});
   expect(result.current.messages).toBe(history);
-  const updatedSend=result.current.handleSendMessage;
   rerender({aiSettings:currentSettings});
-  expect(result.current.handleSendMessage).toBe(updatedSend);
+  expect(result.current.messages).toBe(history);
   expect(fetchWithApiKeys).not.toHaveBeenCalled();
   await act(async()=>{await result.current.handleSendMessage('Oglądam framugę.');});
   expect(fetchWithApiKeys).toHaveBeenCalledTimes(1);

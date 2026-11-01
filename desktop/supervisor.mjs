@@ -9,28 +9,32 @@
  * 4. Obsługę sygnałów systemowych (SIGINT, SIGTERM, SIGHUP) oraz flagi zimnego startu.
  */
 
-import net from 'node:net';
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
-import { spawn, execSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { randomUUID } from "node:crypto";
+import net from "node:net";
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { spawn, execSync } from "node:child_process";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- Ścieżki i Izolacja Środowiska ---
 export function resolvePaths(customAppDir) {
-  let appDir = customAppDir || path.resolve(__dirname, '..');
-  if (!fs.existsSync(path.join(appDir, 'package.json')) && !fs.existsSync(path.join(appDir, '_tester/_base/.silnik/package.json'))) {
-    appDir = path.resolve(__dirname, '..');
+  let appDir = customAppDir || path.resolve(__dirname, "..");
+  if (
+    !fs.existsSync(path.join(appDir, "package.json")) &&
+    !fs.existsSync(path.join(appDir, "_tester/_base/.silnik/package.json"))
+  ) {
+    appDir = path.resolve(__dirname, "..");
   }
 
   let gameDir = appDir;
-  const enginePackage = path.join(appDir, '_tester/_base/.silnik/package.json');
+  const enginePackage = path.join(appDir, "_tester/_base/.silnik/package.json");
   if (fs.existsSync(enginePackage)) {
-    gameDir = path.join(appDir, '_tester/_base/.silnik');
+    gameDir = path.join(appDir, "_tester/_base/.silnik");
   }
 
   const platform = process.platform;
@@ -38,11 +42,11 @@ export function resolvePaths(customAppDir) {
   // Wykrywanie najwyższego korzenia aplikacji (tam gdzie leży główny launcher)
   let launcherRootDir = appDir;
 
-  if (platform === 'darwin') {
+  if (platform === "darwin") {
     // Na macOS jeśli aplikacja działa z bundle'a .app (np. /Applications/Straznik.app lub ~/Desktop/Straznik.app)
     // lub ze źródeł, logs tworzymy w nadrzędnym folderze obok launchera / .app albo w root repo
-    if (appDir.includes('.app/Contents/Resources/runtime')) {
-      const appIndex = appDir.indexOf('.app');
+    if (appDir.includes(".app/Contents/Resources/runtime")) {
+      const appIndex = appDir.indexOf(".app");
       const appBundleDir = path.dirname(appDir.substring(0, appIndex + 4));
       launcherRootDir = appBundleDir;
     } else {
@@ -56,17 +60,17 @@ export function resolvePaths(customAppDir) {
     // Sprawdzamy nadrzędne katalogi aż trafimy na Graj - Strażnik Tajemnic.cmd
     let cur = appDir;
     for (let i = 0; i < 3; i++) {
-      const p = path.resolve(cur, '..');
+      const p = path.resolve(cur, "..");
       if (
-        fs.existsSync(path.join(cur, 'Graj - Strażnik Tajemnic.cmd')) ||
-        fs.existsSync(path.join(cur, 'INSTRUKCJA-WINDOWS.txt'))
+        fs.existsSync(path.join(cur, "Graj - Strażnik Tajemnic.cmd")) ||
+        fs.existsSync(path.join(cur, "INSTRUKCJA-WINDOWS.txt"))
       ) {
         launcherRootDir = cur;
         break;
       }
       if (
-        fs.existsSync(path.join(p, 'Graj - Strażnik Tajemnic.cmd')) ||
-        fs.existsSync(path.join(p, 'INSTRUKCJA-WINDOWS.txt'))
+        fs.existsSync(path.join(p, "Graj - Strażnik Tajemnic.cmd")) ||
+        fs.existsSync(path.join(p, "INSTRUKCJA-WINDOWS.txt"))
       ) {
         launcherRootDir = p;
         break;
@@ -76,30 +80,44 @@ export function resolvePaths(customAppDir) {
   }
 
   let defaultDataRoot;
-  if (platform === 'darwin') {
-    defaultDataRoot = path.join(os.homedir(), 'Library', 'Application Support', 'ZewCthulhu');
-  } else if (platform === 'win32') {
+  if (platform === "darwin") {
+    defaultDataRoot = path.join(
+      os.homedir(),
+      "Library",
+      "Application Support",
+      "ZewCthulhu",
+    );
+  } else if (platform === "win32") {
     // Portable Zero-Setup: Wszystkie dane sesji, sejwy, SQLite i profil Chrome żyją wewnątrz paczki gry
-    defaultDataRoot = path.join(launcherRootDir, 'data');
+    defaultDataRoot = path.join(launcherRootDir, "data");
   } else {
-    defaultDataRoot = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'ZewCthulhu');
+    defaultDataRoot = path.join(
+      process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share"),
+      "ZewCthulhu",
+    );
   }
 
   const dataRoot = process.env.ZEW_DATA_DIR || defaultDataRoot;
-  const runtimeDir = path.join(dataRoot, 'desktop');
-  const profileDir = path.join(runtimeDir, 'chrome-profile');
-  const pidFile = path.join(runtimeDir, 'server.pid');
-  const coldStartFlag = path.join(runtimeDir, 'cold-start-requested');
+  const runtimeDir = path.join(dataRoot, "desktop");
+  const profileDir = path.join(runtimeDir, "chrome-profile");
+  const pidFile = path.join(runtimeDir, "server.pid");
+  const coldStartFlag = path.join(runtimeDir, "cold-start-requested");
 
-  const logsDir = process.env.ZEW_LOGS_DIR || path.join(launcherRootDir, 'logs');
+  const logsDir =
+    process.env.ZEW_LOGS_DIR || path.join(launcherRootDir, "logs");
 
   let defaultLog;
-  if (platform === 'darwin') {
-    defaultLog = path.join(os.homedir(), 'Library', 'Logs', 'straznik-tajemnic-ai.log');
-  } else if (platform === 'win32') {
-    defaultLog = path.join(logsDir, 'straznik-tajemnic-ai.log');
+  if (platform === "darwin") {
+    defaultLog = path.join(
+      os.homedir(),
+      "Library",
+      "Logs",
+      "straznik-tajemnic-ai.log",
+    );
+  } else if (platform === "win32") {
+    defaultLog = path.join(logsDir, "straznik-tajemnic-ai.log");
   } else {
-    defaultLog = path.join(dataRoot, 'logs', 'straznik-tajemnic-ai.log');
+    defaultLog = path.join(dataRoot, "logs", "straznik-tajemnic-ai.log");
   }
   const logFile = process.env.ZEW_LOG_FILE || defaultLog;
 
@@ -113,7 +131,7 @@ export function resolvePaths(customAppDir) {
     coldStartFlag,
     logFile,
     logsDir,
-    launcherRootDir
+    launcherRootDir,
   };
 }
 
@@ -126,22 +144,28 @@ export function initSessionLogger(logsDir) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
     const now = new Date();
-    const stamp = now.toISOString().replace(/[:.]/g, '-');
+    const stamp = now.toISOString().replace(/[:.]/g, "-");
     const sessionLogFile = path.join(logsDir, `session-${stamp}.log`);
 
     // Retencja do 5 plików sesyjnych
-    const existing = fs.readdirSync(logsDir)
-      .filter((f) => f.startsWith('session-') && f.endsWith('.log'))
+    const existing = fs
+      .readdirSync(logsDir)
+      .filter((f) => f.startsWith("session-") && f.endsWith(".log"))
       .sort()
       .map((f) => path.join(logsDir, f));
 
     if (existing.length >= 5) {
       const toDelete = existing.slice(0, existing.length - 4);
       for (const f of toDelete) {
-        try { fs.unlinkSync(f); } catch (_) {}
+        try {
+          fs.unlinkSync(f);
+        } catch (_) {}
       }
     }
-    fs.writeFileSync(sessionLogFile, `[${now.toISOString()}] === Session log started ===\n`);
+    fs.writeFileSync(
+      sessionLogFile,
+      `[${now.toISOString()}] === Session log started ===\n`,
+    );
     return sessionLogFile;
   } catch (_) {
     return null;
@@ -153,11 +177,11 @@ export function initSessionLogger(logsDir) {
 /**
  * Sprawdza czy dany port jest wolny do nasłuchiwania.
  */
-export function isPortAvailable(port, host = '127.0.0.1') {
+export function isPortAvailable(port, host = "127.0.0.1") {
   return new Promise((resolve) => {
     const server = net.createServer();
     server.unref();
-    server.on('error', () => {
+    server.on("error", () => {
       resolve(false);
     });
     server.listen({ port, host }, () => {
@@ -179,7 +203,9 @@ export async function findAvailablePort(startPort = 4050, maxAttempts = 30) {
       return port;
     }
   }
-  throw new Error(`Nie znaleziono wolnego portu w zakresie ${startPort} - ${startPort + maxAttempts - 1}`);
+  throw new Error(
+    `Nie znaleziono wolnego portu w zakresie ${startPort} - ${startPort + maxAttempts - 1}`,
+  );
 }
 
 /**
@@ -189,17 +215,17 @@ export function checkExistingInstance(port, timeoutMs = 800) {
   return new Promise((resolve) => {
     const req = http.get(
       {
-        hostname: '127.0.0.1',
+        hostname: "127.0.0.1",
         port,
-        path: '/api/desktop/cold-start',
-        timeout: timeoutMs
+        path: "/api/desktop/cold-start",
+        timeout: timeoutMs,
       },
       (res) => {
-        let rawData = '';
-        res.on('data', (chunk) => {
+        let rawData = "";
+        res.on("data", (chunk) => {
           rawData += chunk;
         });
-        res.on('end', () => {
+        res.on("end", () => {
           try {
             const parsed = JSON.parse(rawData);
             if (parsed && parsed.available === true) {
@@ -209,15 +235,15 @@ export function checkExistingInstance(port, timeoutMs = 800) {
           // Jeśli odpowiedź HTTP 200/300 ale nie json zimnego startu, sprawdź nagłówki
           resolve({ running: true, isStraznik: false });
         });
-      }
+      },
     );
 
-    req.on('timeout', () => {
+    req.on("timeout", () => {
       req.destroy();
       resolve({ running: false, isStraznik: false });
     });
 
-    req.on('error', () => {
+    req.on("error", () => {
       resolve({ running: false, isStraznik: false });
     });
   });
@@ -226,10 +252,10 @@ export function checkExistingInstance(port, timeoutMs = 800) {
 /**
  * Kaskadowe ubijanie grupy procesów (Tree Kill) zapobiegające powstawaniu zombie.
  */
-export function killProcessTree(pid, signal = 'SIGTERM') {
+export function killProcessTree(pid, signal = "SIGTERM") {
   if (!pid) return;
 
-  if (process.platform === 'win32') {
+  if (process.platform === "win32") {
     try {
       execSync(`taskkill /PID ${pid} /T /F 2>nul`);
     } catch (_) {}
@@ -278,14 +304,18 @@ export async function runSupervisor(options = {}) {
   };
 
   // Przechwytywanie nieobsłużonych wyjątków procesu supervisora
-  process.on('uncaughtException', (err) => {
+  process.on("uncaughtException", (err) => {
     log(`[FATAL UNCAUGHT EXCEPTION] ${err?.stack || err?.message || err}`);
   });
-  process.on('unhandledRejection', (reason) => {
-    log(`[FATAL UNHANDLED REJECTION] ${reason?.stack || reason?.message || reason}`);
+  process.on("unhandledRejection", (reason) => {
+    log(
+      `[FATAL UNHANDLED REJECTION] ${reason?.stack || reason?.message || reason}`,
+    );
   });
 
-  log(`=== Supervisor start (PID: ${process.pid}, platform: ${process.platform}) ===`);
+  log(
+    `=== Supervisor start (PID: ${process.pid}, platform: ${process.platform}) ===`,
+  );
   log(`Aktywny plik sesji logowania: ${sessionLogFile}`);
 
   // Przygotowanie katalogów
@@ -302,15 +332,19 @@ export async function runSupervisor(options = {}) {
   const instanceCheck = await checkExistingInstance(basePort);
 
   if (instanceCheck.running && instanceCheck.isStraznik) {
-    log(`Strażnik Tajemnic AI już działa na porcie ${basePort}. Aktywuję istniejące okno.`);
+    log(
+      `Strażnik Tajemnic AI już działa na porcie ${basePort}. Aktywuję istniejące okno.`,
+    );
     activateExistingWindow(paths, `http://127.0.0.1:${basePort}`);
-    return { status: 'reused_existing', port: basePort };
+    return { status: "reused_existing", port: basePort };
   }
 
   // 2. Jeśli port bazowy jest zajęty przez obcy proces -> szukaj wolnego portu
   const baseAvailable = await isPortAvailable(basePort);
   if (!baseAvailable) {
-    log(`Port ${basePort} jest zajęty przez inny proces. Wyszukuję wolny port...`);
+    log(
+      `Port ${basePort} jest zajęty przez inny proces. Wyszukuję wolny port...`,
+    );
     targetPort = await findAvailablePort(basePort + 1);
     log(`Przydzielono alternatywny port: ${targetPort}`);
   } else {
@@ -319,49 +353,62 @@ export async function runSupervisor(options = {}) {
   }
 
   // 3. Uruchomienie serwera Next.js
-  log(`Uruchamiam serwer Next.js w katalogu: ${paths.gameDir} na porcie ${targetPort}...`);
+  log(
+    `Uruchamiam serwer Next.js w katalogu: ${paths.gameDir} na porcie ${targetPort}...`,
+  );
 
   let serverProcess = null;
   let serverStartedByUs = false;
 
-  const defaultManifestUrl = 'https://github.com/InduPhantom-hash/straznik-tajemnic/releases/latest/download/update-manifest.json';
+  const defaultManifestUrl =
+    "https://github.com/InduPhantom-hash/straznik-tajemnic/releases/latest/download/update-manifest.json";
   let defaultSelfUpdate = process.env.ZEW_DESKTOP_SELF_UPDATE;
   if (defaultSelfUpdate === undefined) {
-    if (process.platform === 'darwin') {
+    if (process.platform === "darwin") {
       const appBundle = process.env.ZEW_APP_BUNDLE;
-      if ((appBundle && appBundle.endsWith('.app')) || paths.appDir.includes('.app/Contents/')) {
-        defaultSelfUpdate = '1';
-      }
-    } else if (process.platform === 'win32') {
-      const parentDir = path.resolve(paths.gameDir, '..');
       if (
-        fs.existsSync(path.join(paths.appDir, 'Graj - Strażnik Tajemnic.cmd')) ||
-        fs.existsSync(path.join(parentDir, 'Graj - Strażnik Tajemnic.cmd'))
+        (appBundle && appBundle.endsWith(".app")) ||
+        paths.appDir.includes(".app/Contents/")
       ) {
-        defaultSelfUpdate = '1';
+        defaultSelfUpdate = "1";
+      }
+    } else if (process.platform === "win32") {
+      const parentDir = path.resolve(paths.gameDir, "..");
+      if (
+        fs.existsSync(
+          path.join(paths.appDir, "Graj - Strażnik Tajemnic.cmd"),
+        ) ||
+        fs.existsSync(path.join(parentDir, "Graj - Strażnik Tajemnic.cmd"))
+      ) {
+        defaultSelfUpdate = "1";
       }
     }
   }
 
+  const hueShutdownToken = randomUUID();
   const env = {
+    HUE_SHUTDOWN_TOKEN: hueShutdownToken,
     ...process.env,
     PORT: String(targetPort),
     ZEW_APP_PORT: String(targetPort),
-    HOSTNAME: '127.0.0.1',
+    HOSTNAME: "127.0.0.1",
     ZEW_DATA_DIR: paths.dataRoot,
-    RAG_DATA_DIR: path.join(paths.dataRoot, 'rag'),
-    STRAZNIK_DESKTOP_COLD_START: '1',
-    STRAZNIK_DESKTOP_UPDATE: process.env.STRAZNIK_DESKTOP_UPDATE || '1',
-    ZEW_UPDATE_MANIFEST_URL: process.env.ZEW_UPDATE_MANIFEST_URL || defaultManifestUrl,
+    RAG_DATA_DIR: path.join(paths.dataRoot, "rag"),
+    STRAZNIK_DESKTOP_COLD_START: "1",
+    STRAZNIK_DESKTOP_UPDATE: process.env.STRAZNIK_DESKTOP_UPDATE || "1",
+    ZEW_UPDATE_MANIFEST_URL:
+      process.env.ZEW_UPDATE_MANIFEST_URL || defaultManifestUrl,
     ZEW_SESSION_LOG_FILE: sessionLogFile,
-    NODE_OPTIONS: process.env.NODE_OPTIONS || '--max-old-space-size=4096',
-    ...(defaultSelfUpdate !== undefined ? { ZEW_DESKTOP_SELF_UPDATE: defaultSelfUpdate } : {})
+    NODE_OPTIONS: process.env.NODE_OPTIONS || "--max-old-space-size=4096",
+    ...(defaultSelfUpdate !== undefined
+      ? { ZEW_DESKTOP_SELF_UPDATE: defaultSelfUpdate }
+      : {}),
   };
 
-  let serverStdio = 'ignore';
+  let serverStdio = "ignore";
   try {
-    const logFd = fs.openSync(sessionLogFile || paths.logFile, 'a');
-    serverStdio = ['ignore', logFd, logFd];
+    const logFd = fs.openSync(sessionLogFile || paths.logFile, "a");
+    serverStdio = ["ignore", logFd, logFd];
   } catch (err) {
     log(`Nie udało się otworzyć pliku logów serwera: ${err.message}`);
   }
@@ -369,42 +416,92 @@ export async function runSupervisor(options = {}) {
   // Uruchomienie jako osobna grupa procesów (detached)
   // Jeśli w katalogu gry znajduje się binarka Next.js, uruchamiamy ją bezpośrednio przez bieżący proces node (process.execPath),
   // co eliminuje zależność od obecności npm w systemie gracza (Zero-Setup portable runtime).
-  const nextBin = path.join(paths.gameDir, 'node_modules', 'next', 'dist', 'bin', 'next');
+  const nextBin = path.join(
+    paths.gameDir,
+    "node_modules",
+    "next",
+    "dist",
+    "bin",
+    "next",
+  );
   const hasDirectNext = fs.existsSync(nextBin);
 
-  if (process.platform === 'win32') {
+  if (process.platform === "win32") {
     if (hasDirectNext) {
-      log(`Uruchamiam Next.js bezpośrednio przez ${process.execPath} (127.0.0.1:${targetPort})...`);
-      serverProcess = spawn(process.execPath, [nextBin, 'start', '--hostname', '127.0.0.1', '--port', String(targetPort)], {
-        cwd: paths.gameDir,
-        env,
-        detached: false,
-        stdio: serverStdio
-      });
+      log(
+        `Uruchamiam Next.js bezpośrednio przez ${process.execPath} (127.0.0.1:${targetPort})...`,
+      );
+      serverProcess = spawn(
+        process.execPath,
+        [
+          nextBin,
+          "start",
+          "--hostname",
+          "127.0.0.1",
+          "--port",
+          String(targetPort),
+        ],
+        {
+          cwd: paths.gameDir,
+          env,
+          detached: false,
+          stdio: serverStdio,
+        },
+      );
     } else {
-      serverProcess = spawn('cmd.exe', ['/c', 'npm', 'start', '--', '-H', '127.0.0.1', '-p', String(targetPort)], {
-        cwd: paths.gameDir,
-        env,
-        detached: false,
-        stdio: serverStdio
-      });
+      serverProcess = spawn(
+        "cmd.exe",
+        [
+          "/c",
+          "npm",
+          "start",
+          "--",
+          "-H",
+          "127.0.0.1",
+          "-p",
+          String(targetPort),
+        ],
+        {
+          cwd: paths.gameDir,
+          env,
+          detached: false,
+          stdio: serverStdio,
+        },
+      );
     }
   } else {
     if (hasDirectNext) {
-      log(`Uruchamiam Next.js bezpośrednio przez ${process.execPath} (127.0.0.1:${targetPort})...`);
-      serverProcess = spawn(process.execPath, [nextBin, 'start', '--hostname', '127.0.0.1', '--port', String(targetPort)], {
-        cwd: paths.gameDir,
-        env,
-        detached: true,
-        stdio: serverStdio
-      });
+      log(
+        `Uruchamiam Next.js bezpośrednio przez ${process.execPath} (127.0.0.1:${targetPort})...`,
+      );
+      serverProcess = spawn(
+        process.execPath,
+        [
+          nextBin,
+          "start",
+          "--hostname",
+          "127.0.0.1",
+          "--port",
+          String(targetPort),
+        ],
+        {
+          cwd: paths.gameDir,
+          env,
+          detached: true,
+          stdio: serverStdio,
+        },
+      );
     } else {
-      serverProcess = spawn('npm', ['start', '--', '-H', '127.0.0.1', '-p', String(targetPort)], {
-        cwd: paths.gameDir,
-        env,
-        detached: true,
-        stdio: serverStdio
-      });
+      serverProcess = spawn(
+        "npm",
+        ["start", "--", "-H", "127.0.0.1", "-p", String(targetPort)],
+        {
+          cwd: paths.gameDir,
+          env,
+          detached: true,
+          stdio: serverStdio,
+        },
+      );
     }
   }
 
@@ -415,9 +512,13 @@ export async function runSupervisor(options = {}) {
   // 4. Oczekiwanie na gotowość serwera (Health Check)
   const isHealthy = await waitForServerReady(targetPort, 45000);
   if (!isHealthy) {
-    log(`BŁĄD: Serwer nie odpowiedział w wyznaczonym czasie. Zatrzymuję proces.`);
+    log(
+      `BŁĄD: Serwer nie odpowiedział w wyznaczonym czasie. Zatrzymuję proces.`,
+    );
     killProcessTree(serverProcess.pid);
-    try { fs.unlinkSync(paths.pidFile); } catch (_) {}
+    try {
+      fs.unlinkSync(paths.pidFile);
+    } catch (_) {}
     process.exit(1);
   }
   log(`Serwer odpowiada pod adresem http://127.0.0.1:${targetPort}`);
@@ -435,9 +536,9 @@ export async function runSupervisor(options = {}) {
 
     if (serverStartedByUs && serverProcess && serverProcess.pid) {
       log(`Zabijam grupę procesów serwera (PID: ${serverProcess.pid})...`);
-      killProcessTree(serverProcess.pid, 'SIGTERM');
+      killProcessTree(serverProcess.pid, "SIGTERM");
       setTimeout(() => {
-        killProcessTree(serverProcess.pid, 'SIGKILL');
+        killProcessTree(serverProcess.pid, "SIGKILL");
       }, 1500);
     }
 
@@ -450,20 +551,45 @@ export async function runSupervisor(options = {}) {
     log(`=== Supervisor zakończony ===`);
   };
 
+  const gracefulExit = async (reason) => {
+    try {
+      const origin = `http://127.0.0.1:${targetPort}`;
+      await fetch(`${origin}/api/hue`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: origin,
+          "x-hue-shutdown": hueShutdownToken,
+        },
+        body: JSON.stringify({ action: "shutdown", owner: "desktop-shutdown" }),
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch {
+      /* Persisted snapshot is retried on next start if the bridge is offline. */
+    }
+    cleanup(reason);
+    process.exit(0);
+  };
   // Przechwytywanie sygnałów systemowych
-  process.on('SIGINT', () => { cleanup('SIGINT'); process.exit(0); });
-  process.on('SIGTERM', () => { cleanup('SIGTERM'); process.exit(0); });
-  if (process.platform !== 'win32') {
-    process.on('SIGHUP', () => { cleanup('SIGHUP'); process.exit(0); });
+  process.on("SIGINT", () => {
+    void gracefulExit("SIGINT");
+  });
+  process.on("SIGTERM", () => {
+    void gracefulExit("SIGTERM");
+  });
+  if (process.platform !== "win32") {
+    process.on("SIGHUP", () => {
+      cleanup("SIGHUP");
+      process.exit(0);
+    });
   }
-  process.on('exit', () => cleanup('exit'));
+  process.on("exit", () => cleanup("exit"));
 
   // 7. Monitorowanie cyklu życia okna
   if (windowProc) {
-    windowProc.on('exit', (code) => {
+    windowProc.on("exit", (code) => {
       log(`Okno aplikacji zostało zamknięte (kod: ${code}).`);
-      cleanup('window_closed');
-      process.exit(0);
+      void gracefulExit("window_closed");
     });
   } else {
     // Jeśli użyto systemowego 'open'/'start', monitorujemy okresowo procesy profilu
@@ -472,14 +598,16 @@ export async function runSupervisor(options = {}) {
       // Sprawdzanie czy flaga zimnego startu została podniesiona
       if (fs.existsSync(paths.coldStartFlag)) {
         log(`Wykryto flagę zimnego startu.`);
-        try { fs.unlinkSync(paths.coldStartFlag); } catch (_) {}
+        try {
+          fs.unlinkSync(paths.coldStartFlag);
+        } catch (_) {}
         // restart
       }
     }, 1000);
     interval.unref();
   }
 
-  return { status: 'running', port: targetPort, pid: serverProcess?.pid };
+  return { status: "running", port: targetPort, pid: serverProcess?.pid };
 }
 
 /**
@@ -493,7 +621,7 @@ function waitForServerReady(port, timeoutMs = 30000) {
         res.resume();
         resolve(true);
       });
-      req.on('error', () => {
+      req.on("error", () => {
         if (Date.now() - start > timeoutMs) {
           resolve(false);
         } else {
@@ -517,15 +645,17 @@ function waitForServerReady(port, timeoutMs = 30000) {
  * Aktywuje okno jeśli aplikacja już działa.
  */
 function activateExistingWindow(paths, url) {
-  if (process.platform === 'darwin') {
+  if (process.platform === "darwin") {
     try {
-      execSync(`osascript -e 'tell application "Google Chrome" to activate' 2>/dev/null`);
+      execSync(
+        `osascript -e 'tell application "Google Chrome" to activate' 2>/dev/null`,
+      );
     } catch (_) {
       try {
         execSync(`open "${url}"`);
       } catch (_) {}
     }
-  } else if (process.platform === 'win32') {
+  } else if (process.platform === "win32") {
     try {
       execSync(`start "" "${url}"`);
     } catch (_) {}
@@ -540,11 +670,32 @@ function activateExistingWindow(paths, url) {
  * Pobiera listę potencjalnych ścieżek instalacji Google Chrome na Windows.
  * Celowo wyklucza Microsoft Edge zgodnie z zasadą Chrome-only.
  */
-export function getWindowsBrowserCandidates(customEnv = process.env, customHome = os.homedir()) {
+export function getWindowsBrowserCandidates(
+  customEnv = process.env,
+  customHome = os.homedir(),
+) {
   return [
-    path.join(customEnv.ProgramFiles || 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    path.join(customEnv['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    path.join(customEnv.LocalAppData || path.join(customHome, 'AppData', 'Local'), 'Google', 'Chrome', 'Application', 'chrome.exe')
+    path.join(
+      customEnv.ProgramFiles || "C:\\Program Files",
+      "Google",
+      "Chrome",
+      "Application",
+      "chrome.exe",
+    ),
+    path.join(
+      customEnv["ProgramFiles(x86)"] || "C:\\Program Files (x86)",
+      "Google",
+      "Chrome",
+      "Application",
+      "chrome.exe",
+    ),
+    path.join(
+      customEnv.LocalAppData || path.join(customHome, "AppData", "Local"),
+      "Google",
+      "Chrome",
+      "Application",
+      "chrome.exe",
+    ),
   ];
 }
 
@@ -554,21 +705,22 @@ export function getWindowsBrowserCandidates(customEnv = process.env, customHome 
 export function launchAppWindow(paths, url, log = () => {}) {
   const platform = process.platform;
 
-  if (platform === 'darwin') {
-    const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  if (platform === "darwin") {
+    const chromePath =
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
     if (fs.existsSync(chromePath)) {
       log(`Otwieram okno Google Chrome w trybie --app...`);
       return spawn(
         chromePath,
         [
           `--app=${url}`,
-          '--start-fullscreen',
-          '--autoplay-policy=no-user-gesture-required',
+          "--start-fullscreen",
+          "--autoplay-policy=no-user-gesture-required",
           `--user-data-dir=${paths.profileDir}`,
-          '--no-first-run',
-          '--no-default-browser-check'
+          "--no-first-run",
+          "--no-default-browser-check",
         ],
-        { stdio: 'ignore', detached: false }
+        { stdio: "ignore", detached: false },
       );
     }
     log(`Brak Chrome pod ${chromePath}, używam systemowego open.`);
@@ -576,23 +728,25 @@ export function launchAppWindow(paths, url, log = () => {}) {
     return null;
   }
 
-  if (platform === 'win32') {
+  if (platform === "win32") {
     const chromePaths = getWindowsBrowserCandidates();
     const browserCandidate = chromePaths.find((p) => fs.existsSync(p));
 
     if (browserCandidate) {
-      log(`Otwieram okno Google Chrome (${browserCandidate}) w trybie --app...`);
+      log(
+        `Otwieram okno Google Chrome (${browserCandidate}) w trybie --app...`,
+      );
       return spawn(
         browserCandidate,
         [
           `--app=${url}`,
-          '--start-maximized',
-          '--autoplay-policy=no-user-gesture-required',
+          "--start-maximized",
+          "--autoplay-policy=no-user-gesture-required",
           `--user-data-dir=${paths.profileDir}`,
-          '--no-first-run',
-          '--no-default-browser-check'
+          "--no-first-run",
+          "--no-default-browser-check",
         ],
-        { stdio: 'ignore', detached: false }
+        { stdio: "ignore", detached: false },
       );
     }
 
@@ -611,7 +765,7 @@ export function launchAppWindow(paths, url, log = () => {}) {
 // Jeśli uruchomiono bezpośrednio:
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   runSupervisor().catch((err) => {
-    console.error('Błąd krytyczny supervisora:', err);
+    console.error("Błąd krytyczny supervisora:", err);
     process.exit(1);
   });
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import '@/components/ui/deco-window.css';
+
 import { useTranslations } from 'next-intl';
 import { Button } from './button';
 
@@ -44,7 +46,7 @@ export function FullResetDialog({
       }}
     >
       <div
-        className="bg-card border-2 border-red-500 rounded-lg p-6 w-full max-w-lg mx-4 shadow-2xl"
+        className="deco-window bg-card border-2 border-red-500 rounded-lg p-6 w-full max-w-lg mx-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {step === 1 && (
@@ -82,7 +84,7 @@ export function FullResetDialog({
               <Button
                 onClick={onConfirmStep1}
                 variant="destructive"
-                className="flex-1 bg-red-600 hover:bg-red-700"
+                className="flex-1 bg-destructive hover:bg-destructive/90"
               >
                 {t('understandContinue')}
               </Button>

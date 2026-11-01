@@ -12,6 +12,8 @@ const withBundleAnalyzer = bundleAnalyzer({
 });
 
 const nextConfig: NextConfig = {
+  // Desktop serves original local files and never writes an image cache into the signed app.
+  images: { unoptimized: process.env.NEXT_PUBLIC_LOCAL_MODE === 'true' || process.env.STRAZNIK_DESKTOP_UPDATE === '1' },
   // PDF-y przygód są wysyłane jako multipart/form-data do Route Handlera.
   // Domyślny limit proxy Next.js (10 MB) ucinał większe startery przed endpointem.
   experimental: {
@@ -20,7 +22,7 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '100mb',
     },
   },
-  serverExternalPackages: ['pdf-parse', 'better-sqlite3'],
+  serverExternalPackages: ['pdf-parse', 'better-sqlite3', 'node-dtls-client'],
   async headers() {
     return [
       {

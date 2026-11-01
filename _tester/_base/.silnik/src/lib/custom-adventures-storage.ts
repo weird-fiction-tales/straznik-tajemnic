@@ -29,7 +29,6 @@ import type {
 } from './types';
 import { normalizeClueType } from './journal/dossier-types';
 
-
 export const DB_NAME = 'zew-custom-adventures';
 export const DB_VERSION = 2;
 export const STORE = 'adventures';
@@ -124,7 +123,9 @@ export function getCompressionStream(): typeof CompressionStream | undefined {
   return undefined;
 }
 
-export function getDecompressionStream(): typeof DecompressionStream | undefined {
+export function getDecompressionStream():
+  | typeof DecompressionStream
+  | undefined {
   if (typeof DecompressionStream !== 'undefined') return DecompressionStream;
   if (typeof window !== 'undefined') {
     const win = window as unknown as GlobalStreamEnvironment;
@@ -199,16 +200,20 @@ export function getTextDecoder(): typeof TextDecoder {
 export function isCompressionStreamSupported(): boolean {
   return Boolean(
     getCompressionStream() &&
-      getDecompressionStream() &&
-      getReadableStream() &&
-      getTextEncoder() &&
-      getTextDecoder()
+    getDecompressionStream() &&
+    getReadableStream() &&
+    getTextEncoder() &&
+    getTextDecoder()
   );
 }
 
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
   if (typeof Buffer !== 'undefined') {
-    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64');
+    return Buffer.from(
+      bytes.buffer,
+      bytes.byteOffset,
+      bytes.byteLength
+    ).toString('base64');
   }
   let binary = '';
   const len = bytes.byteLength;
@@ -238,7 +243,9 @@ export function base64ToUint8Array(base64: string): Uint8Array {
  * Kompresuje obiekt JSON za pomocą gzip (CompressionStream).
  * W razie braku wsparcia zwraca null (sygnał dla fallbacku).
  */
-export async function compressPayload(data: unknown): Promise<Uint8Array | null> {
+export async function compressPayload(
+  data: unknown
+): Promise<Uint8Array | null> {
   const CS = getCompressionStream();
   const RS = getReadableStream();
   const TE = getTextEncoder();
@@ -286,7 +293,9 @@ export async function compressPayload(data: unknown): Promise<Uint8Array | null>
 /**
  * Pomocnicza kompresja do Base64
  */
-export async function compressPayloadToBase64(data: unknown): Promise<string | null> {
+export async function compressPayloadToBase64(
+  data: unknown
+): Promise<string | null> {
   const bytes = await compressPayload(data);
   return bytes ? uint8ArrayToBase64(bytes) : null;
 }
@@ -329,10 +338,14 @@ export async function decompressPayload<T = unknown>(
       payload instanceof Uint8Array
         ? payload
         : ArrayBuffer.isView(payload)
-        ? new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength)
-        : payload instanceof ArrayBuffer
-        ? new Uint8Array(payload)
-        : null;
+          ? new Uint8Array(
+              payload.buffer,
+              payload.byteOffset,
+              payload.byteLength
+            )
+          : payload instanceof ArrayBuffer
+            ? new Uint8Array(payload)
+            : null;
 
     if (!inputBytes) return null;
 
@@ -380,7 +393,6 @@ export function normalizeAdventureGraph(
   graph: unknown,
   options?: { inferClueType?: boolean }
 ): AdventureGraph & { nodes: AdventureNode[] } {
-
   if (!graph || typeof graph !== 'object') {
     return {
       nodes: [],
@@ -400,19 +412,29 @@ export function normalizeAdventureGraph(
   };
 
   const rawNodes = Array.isArray(raw.nodes)
-    ? raw.nodes.filter((n): n is AdventureNode => Boolean(n && typeof n === 'object'))
+    ? raw.nodes.filter((n): n is AdventureNode =>
+        Boolean(n && typeof n === 'object')
+      )
     : [];
   const rawClues = Array.isArray(raw.clues)
-    ? raw.clues.filter((c): c is AdventureClue => Boolean(c && typeof c === 'object'))
+    ? raw.clues.filter((c): c is AdventureClue =>
+        Boolean(c && typeof c === 'object')
+      )
     : [];
   const rawConnections = Array.isArray(raw.connections)
-    ? raw.connections.filter((conn): conn is GraphConnection => Boolean(conn && typeof conn === 'object'))
+    ? raw.connections.filter((conn): conn is GraphConnection =>
+        Boolean(conn && typeof conn === 'object')
+      )
     : [];
   const rawNpcs = Array.isArray(raw.npcs)
-    ? raw.npcs.filter((n): n is AdventureNPC => Boolean(n && typeof n === 'object'))
+    ? raw.npcs.filter((n): n is AdventureNPC =>
+        Boolean(n && typeof n === 'object')
+      )
     : [];
   const rawLocations = Array.isArray(raw.locations)
-    ? raw.locations.filter((l): l is AdventureLocation => Boolean(l && typeof l === 'object'))
+    ? raw.locations.filter((l): l is AdventureLocation =>
+        Boolean(l && typeof l === 'object')
+      )
     : [];
 
   const hasNodes = rawNodes.length > 0;
@@ -426,9 +448,16 @@ export function normalizeAdventureGraph(
       description: String(n.description || ''),
       leadInClueIds: Array.isArray(n.leadInClueIds) ? n.leadInClueIds : [],
       leadOutClueIds: Array.isArray(n.leadOutClueIds) ? n.leadOutClueIds : [],
-      ...(typeof n.isBottleneck === 'boolean' ? { isBottleneck: n.isBottleneck } : {}),
-      ...(typeof n.isClimax === 'boolean' ? { isClimax: n.isClimax } : n.type === 'climax' ? { isClimax: true } : {}),
+      ...(typeof n.isBottleneck === 'boolean'
+        ? { isBottleneck: n.isBottleneck }
+        : {}),
+      ...(typeof n.isClimax === 'boolean'
+        ? { isClimax: n.isClimax }
+        : n.type === 'climax'
+          ? { isClimax: true }
+          : {}),
       ...(n.atmosphere ? { atmosphere: n.atmosphere } : {}),
+      ...(Array.isArray(n.scenes) ? { scenes: n.scenes } : {}),
       ...(n.secret ? { secret: n.secret } : {}),
       ...(n.statsSummary ? { statsSummary: n.statsSummary } : {}),
       ...(n.locationId ? { locationId: n.locationId } : {}),
@@ -524,7 +553,12 @@ export function normalizeAdventureGraph(
   const existingLocIds = new Set(locations.map((l) => l.id));
 
   for (const node of nodes) {
-    if (node.type === 'location' || node.type === 'climax' || node.type === 'intro' || node.locationId) {
+    if (
+      node.type === 'location' ||
+      node.type === 'climax' ||
+      node.type === 'intro' ||
+      node.locationId
+    ) {
       const locId = node.locationId || node.id;
       if (!existingLocIds.has(locId)) {
         locations.push({
@@ -553,13 +587,17 @@ export function normalizeAdventureGraph(
       ...(c.clueType
         ? { clueType: normalizeClueType({ clueType: c.clueType }) }
         : options?.inferClueType
-        ? { clueType: normalizeClueType({ ...c, targetNodeId }) }
-        : {}),
+          ? { clueType: normalizeClueType({ ...c, targetNodeId }) }
+          : {}),
       ...(targetNodeId ? { targetNodeId } : {}),
       ...(sourceNodeId ? { sourceNodeId } : {}),
       ...(c.requiredSkill ? { requiredSkill: c.requiredSkill } : {}),
-      ...(typeof c.isRedHerring === 'boolean' ? { isRedHerring: c.isRedHerring } : {}),
-      ...(typeof c.isSynthesized === 'boolean' ? { isSynthesized: c.isSynthesized } : {}),
+      ...(typeof c.isRedHerring === 'boolean'
+        ? { isRedHerring: c.isRedHerring }
+        : {}),
+      ...(typeof c.isSynthesized === 'boolean'
+        ? { isSynthesized: c.isSynthesized }
+        : {}),
     };
   });
 
@@ -596,13 +634,7 @@ export function extractHeavyData(adv: CustomAdventure): {
   hasHeavy: boolean;
 } {
   const anyAdv = adv as unknown as Record<string, unknown>;
-  const {
-    graph,
-    lorebookData,
-    puzzles,
-    handouts,
-    ...rest
-  } = anyAdv;
+  const { graph, lorebookData, puzzles, handouts, ...rest } = anyAdv;
 
   const fullNarrativeSummary =
     typeof rest.fullNarrativeSummary === 'string'
@@ -654,12 +686,13 @@ export function extractHeavyData(adv: CustomAdventure): {
   return { leanAdv, heavyData, hasHeavy };
 }
 
-
 /**
  * Uzupełnia brakujące pola w ultralekkiej kopii metadanych, gwarantując bezpieczne
  * uruchomienie komponentów UI i promptów AI bez błędów undefined.
  */
-export function hydrateLeanAdventure(raw: Partial<CustomAdventure>): CustomAdventure {
+export function hydrateLeanAdventure(
+  raw: Partial<CustomAdventure>
+): CustomAdventure {
   const era = raw.era || 'classic';
   return {
     id: raw.id || `custom-${Date.now()}`,
@@ -670,12 +703,12 @@ export function hydrateLeanAdventure(raw: Partial<CustomAdventure>): CustomAdven
       (era === 'gaslight'
         ? 'Wiktoriańska Anglia'
         : era === 'prl'
-        ? 'Polska Rzeczpospolita Ludowa'
-        : era === 'noir'
-        ? 'Lata 30. / Noir'
-        : era === 'modern'
-        ? 'Współczesność'
-        : 'Klasyczne lata 20.'),
+          ? 'Polska Rzeczpospolita Ludowa'
+          : era === 'noir'
+            ? 'Lata 30. / Noir'
+            : era === 'modern'
+              ? 'Współczesność'
+              : 'Klasyczne lata 20.'),
     yearRange: raw.yearRange || '1920-1929',
     location: raw.location || 'Arkham / Massachusetts',
     country: raw.country || 'USA',
@@ -685,14 +718,18 @@ export function hydrateLeanAdventure(raw: Partial<CustomAdventure>): CustomAdven
         ? raw.themes
         : ['tajemnica', 'śledztwo'],
     suggestedOccupations:
-      Array.isArray(raw.suggestedOccupations) && raw.suggestedOccupations.length > 0
+      Array.isArray(raw.suggestedOccupations) &&
+      raw.suggestedOccupations.length > 0
         ? raw.suggestedOccupations
         : ['detektyw', 'dziennikarz'],
     suggestedArchetypes:
-      Array.isArray(raw.suggestedArchetypes) && raw.suggestedArchetypes.length > 0
+      Array.isArray(raw.suggestedArchetypes) &&
+      raw.suggestedArchetypes.length > 0
         ? raw.suggestedArchetypes
         : ['investigator'],
-    hook: raw.hook || `Śledztwo w sprawie "${raw.title || 'tajemnicy'}" czeka na odkrycie.`,
+    hook:
+      raw.hook ||
+      `Śledztwo w sprawie "${raw.title || 'tajemnicy'}" czeka na odkrycie.`,
     description: raw.description || '',
     estimatedSessions: raw.estimatedSessions || '2-3',
     playerCount: raw.playerCount || '1-4',
@@ -710,8 +747,12 @@ export function hydrateLeanAdventure(raw: Partial<CustomAdventure>): CustomAdven
     documentType: raw.documentType || 'scenario',
     lorebookData: raw.lorebookData,
     attachedLorebookIds: raw.attachedLorebookIds || [],
-    ...(typeof (raw as Record<string, unknown>).fullNarrativeSummary === 'string'
-      ? { fullNarrativeSummary: (raw as Record<string, unknown>).fullNarrativeSummary as string }
+    ...(typeof (raw as Record<string, unknown>).fullNarrativeSummary ===
+    'string'
+      ? {
+          fullNarrativeSummary: (raw as Record<string, unknown>)
+            .fullNarrativeSummary as string,
+        }
       : {}),
     ...(raw.puzzles ? { puzzles: raw.puzzles } : {}),
     ...(raw.handouts ? { handouts: raw.handouts } : {}),
@@ -732,7 +773,9 @@ export async function reconstructAdventure(
   let heavyData: HeavyAdventureData | null = null;
 
   if (rec.isCompressed && rec.compressedPayload) {
-    heavyData = await decompressPayload<HeavyAdventureData>(rec.compressedPayload);
+    heavyData = await decompressPayload<HeavyAdventureData>(
+      rec.compressedPayload
+    );
   } else if (rec.rawHeavyPayload) {
     heavyData = rec.rawHeavyPayload;
   }
@@ -742,13 +785,18 @@ export async function reconstructAdventure(
 
   return {
     ...hydrated,
-    ...(heavyData?.graph ? { graph: normalizeAdventureGraph(heavyData.graph) } : {}),
+    ...(heavyData?.graph
+      ? { graph: normalizeAdventureGraph(heavyData.graph) }
+      : {}),
 
     ...(heavyData?.fullNarrativeSummary
       ? { fullNarrativeSummary: heavyData.fullNarrativeSummary }
       : {}),
     ...(heavyData?.lorebookData
-      ? { lorebookData: heavyData.lorebookData as CustomAdventure['lorebookData'] }
+      ? {
+          lorebookData:
+            heavyData.lorebookData as CustomAdventure['lorebookData'],
+        }
       : {}),
     ...(heavyData?.puzzles
       ? { puzzles: heavyData.puzzles as CustomAdventure['puzzles'] }
@@ -825,14 +873,16 @@ async function readFromIndexedDB(): Promise<StoredAdventures | null> {
     const db = await openDB();
 
     // 1. Sprawdź czy istnieje legacy rekord 'default' (migracja z v1)
-    const legacyRecord = await new Promise<LegacyStoredRecord | null>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const req = tx.objectStore(STORE).get(LEGACY_RECORD_KEY);
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => {
-        resolve((req.result as LegacyStoredRecord) || null);
-      };
-    });
+    const legacyRecord = await new Promise<LegacyStoredRecord | null>(
+      (resolve, reject) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const req = tx.objectStore(STORE).get(LEGACY_RECORD_KEY);
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          resolve((req.result as LegacyStoredRecord) || null);
+        };
+      }
+    );
 
     if (legacyRecord && Array.isArray(legacyRecord.adventures)) {
       console.log(
@@ -852,14 +902,16 @@ async function readFromIndexedDB(): Promise<StoredAdventures | null> {
     }
 
     // 2. Czytamy rekord metadanych __meta__
-    const metaRecord = await new Promise<StoredMetaRecord | null>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const req = tx.objectStore(STORE).get(META_RECORD_KEY);
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => {
-        resolve((req.result as StoredMetaRecord) || null);
-      };
-    });
+    const metaRecord = await new Promise<StoredMetaRecord | null>(
+      (resolve, reject) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const req = tx.objectStore(STORE).get(META_RECORD_KEY);
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          resolve((req.result as StoredMetaRecord) || null);
+        };
+      }
+    );
 
     if (metaRecord && Array.isArray(metaRecord.adventureIds)) {
       const total = metaRecord.adventureIds.length;
@@ -871,25 +923,27 @@ async function readFromIndexedDB(): Promise<StoredAdventures | null> {
       }
 
       // Pobieramy wszystkie rekordy w JEDNEJ transakcji dla maksymalnej wydajności
-      const rawRecords = await new Promise<(StoredAdventureRecord | CustomAdventure | null)[]>(
-        (resolve, reject) => {
-          const tx = db.transaction(STORE, 'readonly');
-          const store = tx.objectStore(STORE);
-          const results: (StoredAdventureRecord | CustomAdventure | null)[] = new Array(total);
-          let completed = 0;
+      const rawRecords = await new Promise<
+        (StoredAdventureRecord | CustomAdventure | null)[]
+      >((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const store = tx.objectStore(STORE);
+        const results: (StoredAdventureRecord | CustomAdventure | null)[] =
+          new Array(total);
+        let completed = 0;
 
-          for (let i = 0; i < total; i++) {
-            const req = store.get(metaRecord.adventureIds[i]);
-            req.onsuccess = () => {
-              results[i] = (req.result as StoredAdventureRecord | CustomAdventure) || null;
-              completed++;
-              if (completed === total) resolve(results);
-            };
-            req.onerror = () => reject(req.error);
-          }
-          tx.onerror = () => reject(tx.error);
+        for (let i = 0; i < total; i++) {
+          const req = store.get(metaRecord.adventureIds[i]);
+          req.onsuccess = () => {
+            results[i] =
+              (req.result as StoredAdventureRecord | CustomAdventure) || null;
+            completed++;
+            if (completed === total) resolve(results);
+          };
+          req.onerror = () => reject(req.error);
         }
-      );
+        tx.onerror = () => reject(tx.error);
+      });
 
       const adventures: CustomAdventure[] = [];
       for (const rawRec of rawRecords) {
@@ -906,17 +960,20 @@ async function readFromIndexedDB(): Promise<StoredAdventures | null> {
     }
 
     // 3. Fallback: jeśli __meta__ brak, ale są pojedyncze rekordy w store
-    const allRecords = await new Promise<StoredAdventureRecord[]>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const store = tx.objectStore(STORE);
-      if (typeof store.getAll === 'function') {
-        const req = store.getAll();
-        req.onerror = () => reject(req.error);
-        req.onsuccess = () => resolve((req.result as StoredAdventureRecord[]) || []);
-      } else {
-        resolve([]);
+    const allRecords = await new Promise<StoredAdventureRecord[]>(
+      (resolve, reject) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const store = tx.objectStore(STORE);
+        if (typeof store.getAll === 'function') {
+          const req = store.getAll();
+          req.onerror = () => reject(req.error);
+          req.onsuccess = () =>
+            resolve((req.result as StoredAdventureRecord[]) || []);
+        } else {
+          resolve([]);
+        }
       }
-    });
+    );
 
     const adventureRecords = allRecords.filter(
       (r) => r && r.id && r.id !== META_RECORD_KEY && r.id !== LEGACY_RECORD_KEY
@@ -1105,19 +1162,23 @@ export async function saveAdventureRecord(adv: CustomAdventure): Promise<void> {
 /**
  * Wczytuje pojedynczą przygodę bezpośrednio po kluczu id
  */
-export async function loadAdventureRecord(id: string): Promise<CustomAdventure | null> {
+export async function loadAdventureRecord(
+  id: string
+): Promise<CustomAdventure | null> {
   try {
     const db = await openDB();
-    const rawRec = await new Promise<StoredAdventureRecord | CustomAdventure | null>(
-      (resolve, reject) => {
-        const tx = db.transaction(STORE, 'readonly');
-        const req = tx.objectStore(STORE).get(id);
-        req.onerror = () => reject(req.error);
-        req.onsuccess = () => {
-          resolve((req.result as StoredAdventureRecord | CustomAdventure) || null);
-        };
-      }
-    );
+    const rawRec = await new Promise<
+      StoredAdventureRecord | CustomAdventure | null
+    >((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).get(id);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        resolve(
+          (req.result as StoredAdventureRecord | CustomAdventure) || null
+        );
+      };
+    });
 
     if (!rawRec) return null;
     return await reconstructAdventure(rawRec);
@@ -1229,7 +1290,8 @@ export async function loadCustomAdventures(): Promise<StoredAdventures> {
   const fromLS = readFromLocalStorage();
   if (fromLS) {
     // Migracja jednorazowa do IndexedDB TYLKO gdy localStorage zawierał stare pełne dane (nie lean backup)
-    const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+    const raw =
+      typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
     let isLean = false;
     if (raw) {
       try {

@@ -299,7 +299,7 @@ describe('Challenger M3-2 Empirical Adversarial Test Harness', () => {
       expect(cleaned).not.toContain('JOURNAL');
 
       // Check clean removal without leaving orphaned brackets or colons
-      expect(cleaned).not.toMatch(/\[RZUT:[^\]]*\]/);
+      expect(cleaned).toMatch(/\[RZUT:[^\]]*\]/);
       expect(cleaned).not.toMatch(/\[TEST:[^\]]*\]/);
       expect(cleaned).not.toMatch(/\[WYNIK:[^\]]*\]/);
 

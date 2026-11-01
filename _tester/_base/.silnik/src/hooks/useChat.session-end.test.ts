@@ -1,4 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
+import { makePublicJournalFixture } from '@/tests/fixtures/public-journal';
+import { buildPublicJournal } from '@/lib/journal/public-journal';
 import { TextEncoder, TextDecoder } from 'util';
 import type { Character } from '@/lib/types';
 import { storeCampaignMemoryScope } from '@/core/memory/campaign-scope';
@@ -87,6 +89,43 @@ describe('useChat - sessionEndStatus (LOG-01)', () => {
       },
     } as unknown as Response;
   }
+
+  it('persists new public knowledge disclosed only by a continuation', async () => {
+    const fixture = makePublicJournalFixture('pl');
+    storeCampaignMemoryScope({ ...fixture.chapter, schemaVersion: 1, kind: 'scenario' });
+    const text = 'Podpis należy do Leona. [JOURNAL:clue:Podpis|source_quote:Podpis należy do Leona.]Podpis należy do Leona.[/JOURNAL]';
+    global.fetch = jest.fn().mockResolvedValue(createMockStreamResponse(text));
+    const setCharacters = jest.fn();
+    const { result } = renderHook(() => useChat({ ...defaultOptions, activeCharacter: fixture.characters[0], characters: fixture.characters, setCharacters }));
+    act(() => result.current.setMessages([{ id: 'partial', role: 'assistant', content: 'Urwany zapis', timestamp: new Date(), finishReason: 'MAX_TOKENS' }]));
+    await act(async () => { await result.current.handleContinueNarration!('partial'); });
+    expect(setCharacters).toHaveBeenCalled();
+    const saved = setCharacters.mock.calls.at(-1)![0];
+    const model = buildPublicJournal({ characters: saved, chapter: fixture.chapter, locale: 'pl' });
+    expect(model.cards.find(card => card.title === 'Podpis')?.sources[0].excerpt).toBe('Podpis należy do Leona.');
+    const restored = JSON.parse(localStorage.getItem('characters') || '[]');
+    expect(buildPublicJournal({ characters: restored, chapter: fixture.chapter, locale: 'pl' }).cards.some(card => card.title === 'Podpis')).toBe(true);
+  });
+
+  it('defers late public image metadata until the active request has finished', async () => {
+    const fixture = makePublicJournalFixture('pl');
+    const setCharacters = jest.fn();
+    let finishFetch: (value: Response) => void = () => {};
+    global.fetch = jest.fn(() => new Promise<Response>(resolve => { finishFetch = resolve; }));
+    const { result } = renderHook(() => useChat({ ...defaultOptions, characters: fixture.characters, activeCharacter: fixture.characters[0], setCharacters }));
+    act(() => result.current.setMessages([{ id: 'partial', role: 'assistant', content: 'Urwany zapis', timestamp: new Date(), finishReason: 'MAX_TOKENS' }]));
+    let continuation: Promise<void> | undefined;
+    act(() => { continuation = result.current.handleContinueNarration!('partial'); });
+    expect(result.current.isLoading).toBe(true);
+    const publication = { ...fixture.messages[0].publicJournalVisuals![0], visual: { imageUrl: '/published-late.svg' } };
+    act(() => result.current.setMessages(messages => messages.map(message => message.id === 'partial' ? { ...message, publicJournalVisuals: [publication] } : message)));
+    expect(setCharacters).not.toHaveBeenCalled();
+    await act(async () => { finishFetch(createMockStreamResponse('Koniec zdania.')); await continuation; });
+    expect(setCharacters).toHaveBeenCalled();
+    const saved = setCharacters.mock.calls.at(-1)![0];
+    const model = buildPublicJournal({ characters: saved, chapter: fixture.chapter, binding: fixture.binding, locale: 'pl' });
+    expect(model.cards.find(card => card.title === fixture.labels.person)?.imageUrl).toBe('/published-late.svg');
+  });
 
   it('przechodzi do stanu awaiting_player_closure po wysłaniu sygnału [KONIEC_SESJI]', async () => {
     global.fetch = jest.fn().mockResolvedValue(createMockStreamResponse('Zamykasz historię...'));

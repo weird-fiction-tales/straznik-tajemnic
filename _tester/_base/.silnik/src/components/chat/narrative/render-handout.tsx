@@ -25,14 +25,21 @@ import {
 import { AudioReelPlayer } from '@/components/ui/audio-reel-player';
 import { DocumentViewer } from '@/components/ui/document-viewer';
 import type { AnyAdventureContext } from '@/lib/handout-resolver';
-import { isDossierHandoutReference, resolveHandoutBySlug } from '@/lib/handout-resolver';
+import {
+  isDossierHandoutReference,
+  resolveHandoutBySlug,
+} from '@/lib/handout-resolver';
 import { useSettingsSubscription } from '@/hooks/use-settings-subscription';
 
 const LOCALIZED_AUDIO_SLUGS = [
-  'audio-sb-wiretap-elblag', 'audio-broken-brakes-log',
-  'audio-stilon-c60-interview', 'audio-vhs-broadcast-anomaly',
-  'audio-edison-wax-cylinder', 'audio-crowe-interrogation-disc',
-  'audio-gillespie-1977-wiretap', 'audio-voicemail-in-a-field',
+  'audio-sb-wiretap-elblag',
+  'audio-broken-brakes-log',
+  'audio-stilon-c60-interview',
+  'audio-vhs-broadcast-anomaly',
+  'audio-edison-wax-cylinder',
+  'audio-crowe-interrogation-disc',
+  'audio-gillespie-1977-wiretap',
+  'audio-voicemail-in-a-field',
 ] as const;
 
 export function HandoutAudioPlayer({ audioUrl }: { audioUrl: string }) {
@@ -133,15 +140,27 @@ function HandoutCard({
   }
 
   const resolved = section.handoutSlug
-    ? resolveHandoutBySlug(section.handoutSlug, adventureContext, allowedDossierHandoutRecordIds)
+    ? resolveHandoutBySlug(
+        section.handoutSlug,
+        adventureContext,
+        allowedDossierHandoutRecordIds,
+        locale
+      )
     : null;
 
   const localizedAudio = resolved?.audioUrl
-    ? LOCALIZED_AUDIO_SLUGS.find(slug => slug === resolved.slug)
+    ? LOCALIZED_AUDIO_SLUGS.find((slug) => slug === resolved.slug)
     : undefined;
-  const effectiveTitle = localizedAudio ? tAudio(`${localizedAudio}-title`) : resolved?.title || section.title || (section.handoutSlug ? section.handoutSlug : undefined);
-  const effectiveContent = localizedAudio ? tAudio(`${localizedAudio}-summary`) : resolved?.textContent || section.content || '';
-  const effectiveType: HandoutType = resolved?.handoutType || section.handoutType || 'note';
+  const effectiveTitle = localizedAudio
+    ? tAudio(`${localizedAudio}-title`)
+    : resolved?.title ||
+      section.title ||
+      (section.handoutSlug ? section.handoutSlug : undefined);
+  const effectiveContent = localizedAudio
+    ? tAudio(`${localizedAudio}-summary`)
+    : resolved?.textContent || section.content || '';
+  const effectiveType: HandoutType =
+    resolved?.handoutType || section.handoutType || 'note';
   const effectiveImageUrl = resolved?.image || section.imageUrl;
 
   // Wielojęzyczny dobór ścieżki audio (PL vs EN) z graceful fallbackiem
@@ -166,7 +185,8 @@ function HandoutCard({
     section.handoutSlug &&
     isDossierHandoutReference(section.handoutSlug, adventureContext) &&
     !resolved
-  ) return null;
+  )
+    return null;
 
   if (settings.qualityPreset === 'low') {
     const displayTitle =
@@ -368,13 +388,23 @@ export function renderHandout(
   key: number,
   adventureContext?: AnyAdventureContext | null,
   allowedDossierHandoutRecordIds?: string[],
-  dossierHandoutBinding?: DossierHandoutBinding,
+  dossierHandoutBinding?: DossierHandoutBinding
 ): ReactNode {
   // Active dossier handouts have no public asset fallback, including while the stream is incomplete.
   if (dossierHandoutBinding) {
-    if (!section.handoutSlug || adventureContext?.id !== dossierHandoutBinding.adventureId) return null;
-    return <RuntimeDossierHandout key={key} recordId={section.handoutSlug} binding={dossierHandoutBinding}
-      allowedIds={allowedDossierHandoutRecordIds ?? []} />;
+    if (
+      !section.handoutSlug ||
+      adventureContext?.id !== dossierHandoutBinding.adventureId
+    )
+      return null;
+    return (
+      <RuntimeDossierHandout
+        key={key}
+        recordId={section.handoutSlug}
+        binding={dossierHandoutBinding}
+        allowedIds={allowedDossierHandoutRecordIds ?? []}
+      />
+    );
   }
   if (section.handoutSlug?.startsWith('auto.')) return null;
   return (

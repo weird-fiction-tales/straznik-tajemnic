@@ -1,10 +1,19 @@
+import * as sfxCatalog from '@/lib/audio/sfx-catalog';
 import { renderHook, act } from '@testing-library/react';
+import { isPureTextMode } from '@/lib/api-keys-service';
+import { hasLocalPlaytestTransport } from '@/lib/local-playtest-transport';
 import { useTTS } from '@/hooks/useTTS';
 
 const mockSaveAISettings = jest.fn();
 let currentMockSettings = {
   qualityPreset: 'high',
-  voiceSettings: { voiceId: 'Kore', volume: 75, provider: 'gemini', narratorOnly: false },
+  voiceSettings: {
+    voiceId: 'Kore',
+    volume: 75,
+    provider: 'gemini',
+    narratorOnly: false,
+    speed: undefined as number | undefined,
+  },
 };
 
 jest.mock('@/lib/ai-settings', () => ({
@@ -15,6 +24,10 @@ jest.mock('@/lib/ai-settings', () => ({
   }),
 }));
 
+jest.mock('@/lib/local-playtest-transport', () => ({
+  hasLocalPlaytestTransport: jest.fn(() => false),
+}));
+
 jest.mock('@/lib/api-keys-service', () => ({
   getApiKeyHeaders: jest.fn(() => ({})),
   isPureTextMode: jest.fn(() => false),
@@ -23,26 +36,41 @@ jest.mock('@/lib/api-keys-service', () => ({
 describe('useTTS First-Chunk Streaming & Buffering', () => {
   let originalFetch: typeof global.fetch;
   let originalAudio: typeof global.Audio;
+  let createdAudio: Array<{
+    playbackRate: number;
+    onplaying?: (() => void) | null;
+  }>;
 
   beforeEach(() => {
+    jest.mocked(isPureTextMode).mockReturnValue(false);
+    jest.mocked(hasLocalPlaytestTransport).mockReturnValue(false);
     currentMockSettings = {
       qualityPreset: 'high',
-      voiceSettings: { voiceId: 'Kore', volume: 75, provider: 'gemini', narratorOnly: false },
+      voiceSettings: {
+        voiceId: 'Kore',
+        volume: 75,
+        provider: 'gemini',
+        narratorOnly: false,
+        speed: undefined,
+      },
     };
     originalFetch = global.fetch;
     originalAudio = global.Audio;
+    createdAudio = [];
 
     class MockAudio {
       src = '';
       volume = 1;
       currentTime = 0;
       paused = true;
+      playbackRate = 1;
       play = jest.fn().mockResolvedValue(undefined);
       pause = jest.fn();
       onended: (() => void) | null = null;
       onerror: (() => void) | null = null;
       constructor(src?: string) {
         if (src) this.src = src;
+        createdAudio.push(this);
       }
     }
     global.Audio = MockAudio as unknown as typeof Audio;
@@ -50,8 +78,49 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ success: true, audioUrl: 'blob:mock-audio-chunk-1' }),
+      json: async () => ({
+        success: true,
+        audioUrl: 'blob:mock-audio-chunk-1',
+      }),
     } as Response);
+  });
+
+  it.each([undefined, 0.9, 1.0, 1.3])(
+    'uses natural playback speed unless saved speed is %s',
+    async (speed) => {
+      currentMockSettings.voiceSettings.speed = speed;
+      const { result } = renderHook(() => useTTS('pl'));
+      await act(async () => {
+        result.current.addToQueue(
+          'Deszcz za oknem cichnie, gdy redaktorka zamyka teczkę z dokumentami.',
+          'speed-check',
+          true
+        );
+      });
+      expect(createdAudio).not.toHaveLength(0);
+      expect(
+        createdAudio.every((audio) => audio.playbackRate === (speed ?? 1.0))
+      ).toBe(true);
+    }
+  );
+
+  it('separates directed recordings from old plain-text TTS cache entries', async () => {
+    const { persistentMediaCache } =
+      await import('@/lib/persistent-media-cache');
+    const keySpy = jest.spyOn(persistentMediaCache, 'generateTtsCacheKey');
+    const { result } = renderHook(() => useTTS('pl'));
+    await act(async () => {
+      result.current.addToQueue(
+        'Na stole leży zamknięta teczka, a redaktorka czeka na twoją odpowiedź.',
+        'cache-version',
+        true
+      );
+    });
+    expect(keySpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining('directed-speech-v1')
+    );
+    keySpy.mockRestore();
   });
 
   afterEach(() => {
@@ -59,6 +128,37 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     global.Audio = originalAudio;
     jest.clearAllMocks();
   });
+
+  it.each([true, false])(
+    'allows cloud narration for confirmed local server credentials=%s while preserving text-only profiles',
+    async (configured) => {
+      jest.mocked(isPureTextMode).mockReturnValue(true);
+      jest.mocked(hasLocalPlaytestTransport).mockReturnValue(configured);
+      global.fetch = jest.fn(
+        async (_url, init) =>
+          ({
+            ok: true,
+            status: 200,
+            json: async () =>
+              init?.method === 'GET'
+                ? { provider: 'gemini' }
+                : { success: true, audioUrl: 'blob:voice' },
+          }) as Response
+      );
+      const { result } = renderHook(() => useTTS('pl'));
+      await act(async () => {
+        result.current.addToQueue(
+          'Helena kładzie na biurku zamkniętą teczkę i odsuwa się od okna.',
+          'local-server-voice',
+          true
+        );
+      });
+      const posts = jest
+        .mocked(fetch)
+        .mock.calls.filter(([, init]) => init?.method === 'POST');
+      expect(posts).toHaveLength(configured ? 1 : 0);
+    }
+  );
 
   it('wypycha pierwsze zdanie narracji natychmiast na presecie HIGH bez czekania na flush', async () => {
     const { result } = renderHook(() => useTTS('pl'));
@@ -109,8 +209,7 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     expect(result.current.isInitialBuffering).toBe(true);
 
     // 2. zdanie: przekracza STREAMING_SEGMENT_TARGET_CHARS (100 znaków) -> segment 1
-    const sentence2 =
-      `${sentence1} Ciężkie dębowe drzwi zatrzasnęły się za tobą z głuchym, niepokojącym łomotem echującym w pustych korytarzach biblioteki.`;
+    const sentence2 = `${sentence1} Ciężkie dębowe drzwi zatrzasnęły się za tobą z głuchym, niepokojącym łomotem echującym w pustych korytarzach biblioteki.`;
     await act(async () => {
       result.current.addToQueue(sentence2, 'msg-intro-2', false);
     });
@@ -119,8 +218,7 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     expect(result.current.isInitialBuffering).toBe(true);
 
     // 3. zdanie: segment 2 (osiągamy 3 segmenty w buforze)
-    const sentence3 =
-      `${sentence2} Na marmurowej posadzce dostrzegasz zaschnięte ślady stóp prowadzące w stronę zakazanego działu rzadkich ksiąg.`;
+    const sentence3 = `${sentence2} Na marmurowej posadzce dostrzegasz zaschnięte ślady stóp prowadzące w stronę zakazanego działu rzadkich ksiąg.`;
     await act(async () => {
       result.current.addToQueue(sentence3, 'msg-intro-2', false);
     });
@@ -204,7 +302,9 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     const payload = JSON.parse(fetchArgs[1].body);
 
     expect(payload.audioDirection).toBeDefined();
-    expect(payload.audioDirection).toContain('natural, character-driven dramatic');
+    expect(payload.audioDirection).toContain(
+      'natural, character-driven dramatic'
+    );
     expect(payload.text).toContain('Słyszycie ten nieustanny chrobot');
   });
 
@@ -222,7 +322,8 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     // Dodaj 3 segmenty (osiągnięcie progu buforowania)
-    const introPart1 = 'Cień kładzie się na starych dachach portowego miasteczka. Wiatr niesie zapach soli i zgnilizny.';
+    const introPart1 =
+      'Cień kładzie się na starych dachach portowego miasteczka. Wiatr niesie zapach soli i zgnilizny.';
     await act(async () => {
       result.current.addToQueue(introPart1, 'msg-intro-cta', true);
     });
@@ -237,7 +338,11 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
 
     // Dodaj kolejną treść
     await act(async () => {
-      result.current.addToQueue('Kolejne zdanie w trakcie oczekiwania.', 'msg-intro-cta-2', true);
+      result.current.addToQueue(
+        'Kolejne zdanie w trakcie oczekiwania.',
+        'msg-intro-cta-2',
+        true
+      );
     });
 
     // Audio nadal nie może grać bez CTA
@@ -270,19 +375,27 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     // Powinny być dokładnie 2 wywołania fetch: 1 scalony segment NPC + 1 segment Narratora
     expect(global.fetch).toHaveBeenCalledTimes(2);
 
-    const firstCallPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const secondCallPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const firstCallPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const secondCallPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
 
     // Segment 1: Walter Gilman (cały 3-zdaniowy dialog aktorski scalony w jeden segment)
     expect(firstCallPayload.voice).toBe('Puck');
     expect(firstCallPayload.text).toContain('Nie schodź tam!');
     expect(firstCallPayload.text).toContain('To czyste szaleństwo.');
     expect(firstCallPayload.text).toContain('Coś tam czeka w mroku!');
-    expect(firstCallPayload.audioDirection).toContain('natural, character-driven dramatic');
+    expect(firstCallPayload.audioDirection).toContain(
+      'natural, character-driven dramatic'
+    );
 
     // Segment 2: Narrator (powrót do lektora po nowej linii \n\n)
     expect(secondCallPayload.voice).toBe('Kore');
-    expect(secondCallPayload.text).toBe('Nagle rozlega się zgrzyt klucza w zamku.');
+    expect(secondCallPayload.text).toBe(
+      'Nagle rozlega się zgrzyt klucza w zamku.'
+    );
     expect(secondCallPayload.audioDirection).not.toContain('character-driven');
   });
 
@@ -303,7 +416,9 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    const payload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    const payload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
     expect(payload.voice).toBe('Kore');
     expect(payload.text).toContain('Nie schodź tam!');
   });
@@ -353,9 +468,15 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
 
     // Oczekujemy 3 wywołań: segment 0 (Puck, wczesny start), segment 1 (Puck, domknięcie dialogu), segment 2 (Kore, narrator)
     expect(global.fetch).toHaveBeenCalledTimes(3);
-    const call0Payload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const call1Payload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
-    const call2Payload = JSON.parse((global.fetch as jest.Mock).mock.calls[2][1].body);
+    const call0Payload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const call1Payload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
+    const call2Payload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[2][1].body
+    );
 
     // Segmenty dialogu NPC - oba mają głos Waltera Gilmana (Puck)
     expect(call0Payload.voice).toBe('Puck');
@@ -395,9 +516,14 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
   });
 
   it('Issue #78: potwierdza dostawcę i odzyskuje audio z cache bez POST syntezy (Cache Hit)', async () => {
-    const { persistentMediaCache } = await import('@/lib/persistent-media-cache');
-    const isAvailableSpy = jest.spyOn(persistentMediaCache, 'isAvailable').mockReturnValue(true);
-    const getTtsAudioSpy = jest.spyOn(persistentMediaCache, 'getTtsAudio').mockResolvedValue('data:audio/wav;base64,mock-cached-audio');
+    const { persistentMediaCache } =
+      await import('@/lib/persistent-media-cache');
+    const isAvailableSpy = jest
+      .spyOn(persistentMediaCache, 'isAvailable')
+      .mockReturnValue(true);
+    const getTtsAudioSpy = jest
+      .spyOn(persistentMediaCache, 'getTtsAudio')
+      .mockResolvedValue('data:audio/wav;base64,mock-cached-audio');
 
     const { result } = renderHook(() => useTTS('pl'));
 
@@ -407,12 +533,23 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     await act(async () => {
-      result.current.addToQueue('Zapach stęchłego papieru unosi się w bibliotece.', 'msg-cache-hit', true);
+      result.current.addToQueue(
+        'Zapach stęchłego papieru unosi się w bibliotece.',
+        'msg-cache-hit',
+        true
+      );
     });
 
     expect(getTtsAudioSpy).toHaveBeenCalled();
-    expect(global.fetch).toHaveBeenCalledWith('/api/tts/gemini?languageCode=pl-PL', expect.objectContaining({ method: 'GET' }));
-    expect((global.fetch as jest.Mock).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/tts/gemini?languageCode=pl-PL',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(
+      (global.fetch as jest.Mock).mock.calls.filter(
+        ([, init]) => init?.method === 'POST'
+      )
+    ).toHaveLength(0);
 
     isAvailableSpy.mockRestore();
     getTtsAudioSpy.mockRestore();
@@ -435,7 +572,9 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
 
     // Wszystkie 3 zdania narracji mają ten sam wygładzony ton sceny i trafiają jako 1 wspólny run TTS
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    const payload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    const payload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
     expect(payload.voice).toBe('Kore');
     expect(payload.text).toContain('Wchodzisz do starego pokoju');
     expect(payload.text).toContain('Wstrzymujesz oddech na palcach');
@@ -460,8 +599,12 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    const npcPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const narratorPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const npcPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const narratorPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
 
     expect(npcPayload.voice).toBe('Puck');
     expect(npcPayload.text).toBe('Nie schodź tam! To czyste szaleństwo.');
@@ -488,14 +631,20 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    const npcPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const narratorPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const npcPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const narratorPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
 
     expect(npcPayload.voice).toBe('Puck');
     expect(npcPayload.text).toBe('Nie schodź tam');
 
     expect(narratorPayload.voice).toBe('Kore');
-    expect(narratorPayload.text).toBe('po czym odwraca wzrok w stronę ciemnego okna.');
+    expect(narratorPayload.text).toBe(
+      'po czym odwraca wzrok w stronę ciemnego okna.'
+    );
   });
 
   it('Issue #562: ekstrahuje polskie i angielskie tagi emocji ([szept], [panika]) do audioDirection i całkowicie wycina je z tekstu TTS', async () => {
@@ -506,15 +655,16 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
       result.current.setIsTTSEnabled(true);
     });
 
-    const taggedMessage =
-      'Walter Gilman: [szept] „Ktoś stoi za drzwiami.”';
+    const taggedMessage = 'Walter Gilman: [szept] „Ktoś stoi za drzwiami.”';
 
     await act(async () => {
       result.current.addToQueue(taggedMessage, 'msg-562-emotion', true);
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    const payload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    const payload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
 
     expect(payload.voice).toBe('Puck');
     expect(payload.text).toBe('Ktoś stoi za drzwiami.');
@@ -539,9 +689,15 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(3);
-    const npcNormalPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const npcWhisperPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
-    const narratorPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[2][1].body);
+    const npcNormalPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const npcWhisperPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
+    const narratorPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[2][1].body
+    );
 
     expect(npcNormalPayload.voice).toBe('Puck');
     expect(npcNormalPayload.text).toBe('Uważaj na schody!');
@@ -570,12 +726,20 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
       '[SFX: door_slam] Walter Gilman: «Nie schodź tam! [szept]» Odwraca wzrok w stronę okna.';
 
     await act(async () => {
-      result.current.addToQueue(sfxAndGuillemetScene, 'msg-562-sfx-guillemet', true);
+      result.current.addToQueue(
+        sfxAndGuillemetScene,
+        'msg-562-sfx-guillemet',
+        true
+      );
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    const npcPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const narratorPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const npcPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const narratorPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
 
     expect(npcPayload.voice).toBe('Puck');
     expect(npcPayload.text).toBe('Nie schodź tam!');
@@ -604,8 +768,12 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    const npcPayloadA = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const narratorPayloadA = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const npcPayloadA = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const narratorPayloadA = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
 
     expect(npcPayloadA.voice).toBe('Puck');
     expect(npcPayloadA.text).toBe('Nie schodź tam!');
@@ -619,12 +787,20 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     const tagBeforeQuote =
       'Walter Gilman: [szept] „Nie schodź tam!” Odwraca wzrok.';
     await act(async () => {
-      result.current.addToQueue(tagBeforeQuote, 'msg-562-tag-before-quote', true);
+      result.current.addToQueue(
+        tagBeforeQuote,
+        'msg-562-tag-before-quote',
+        true
+      );
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(4);
-    const npcPayloadB = JSON.parse((global.fetch as jest.Mock).mock.calls[2][1].body);
-    const narratorPayloadB = JSON.parse((global.fetch as jest.Mock).mock.calls[3][1].body);
+    const npcPayloadB = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[2][1].body
+    );
+    const narratorPayloadB = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[3][1].body
+    );
 
     expect(npcPayloadB.voice).toBe('Puck');
     expect(npcPayloadB.text).toBe('Nie schodź tam!');
@@ -656,15 +832,21 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    const npcPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const narratorPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const npcPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const narratorPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
 
     expect(npcPayload.voice).toBe('Puck');
     expect(npcPayload.text).toContain('Nie schodź tam!');
     expect(npcPayload.text).toContain('To czyste szaleństwo.');
 
     expect(narratorPayload.voice).toBe('Kore');
-    expect(narratorPayload.text).toBe('Nagle rozlega się zgrzyt klucza w zamku.');
+    expect(narratorPayload.text).toBe(
+      'Nagle rozlega się zgrzyt klucza w zamku.'
+    );
   });
 
   it('Issue #561: aktywuje tryb action dla jawnego tagu [WALKA_ATAK: ...] oraz tryb whisper dla [SANITY: -1d10: ...] przed ich wycięciem przez stripMultilineArtifacts', async () => {
@@ -682,9 +864,15 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    const combatPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    expect(combatPayload.audioDirection).toContain('intense, thrilling cadence');
-    expect(combatPayload.text).toBe('Kultysta rzuca się z nożem! Ostrze błyszczy w ciemności.');
+    const combatPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    expect(combatPayload.audioDirection).toContain(
+      'intense, thrilling cadence'
+    );
+    expect(combatPayload.text).toBe(
+      'Kultysta rzuca się z nożem! Ostrze błyszczy w ciemności.'
+    );
 
     const sanityDiceTurn =
       '[NASTRÓJ: tajemniczy]\n[SANITY: -1d10: manifestacja Przedwiecznego]\nZasłona rzeczywistości pęka na twoich oczach.';
@@ -693,8 +881,12 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    const sanityPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
-    expect(sanityPayload.audioDirection).toContain('urgent, tense, and paranoid whisper');
+    const sanityPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
+    expect(sanityPayload.audioDirection).toContain(
+      'urgent, tense, and paranoid whisper'
+    );
   });
 
   it('Issue #562: zachowuje tag emocji przed zamknięciem cudzysłowu, gdy tag spływa rozcięty na granicy chunków SSE ([szep + t]”)', async () => {
@@ -719,8 +911,12 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    const npcPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const narratorPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const npcPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const narratorPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
 
     expect(npcPayload.voice).toBe('Puck');
     expect(npcPayload.text).toBe('Nie schodź tam, bo w ciemności czeka zguba!');
@@ -742,12 +938,20 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     const asciiOpeningAfterTag =
       'Detektyw patrzy w mrok. [szept] "Kto tam jest?"';
     await act(async () => {
-      result.current.addToQueue(asciiOpeningAfterTag, 'msg-562-ascii-open-after-tag', true);
+      result.current.addToQueue(
+        asciiOpeningAfterTag,
+        'msg-562-ascii-open-after-tag',
+        true
+      );
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    const firstSentencePayload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const secondSentencePayload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const firstSentencePayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const secondSentencePayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
 
     expect(firstSentencePayload.text).toBe('Detektyw patrzy w mrok.');
     expect(firstSentencePayload.audioDirection).not.toContain('whisper');
@@ -759,12 +963,20 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     const standaloneNewlineTag =
       'Walter Gilman: „Nie schodź tam!” [szept]\nOdwraca wzrok w stronę okna.';
     await act(async () => {
-      result.current.addToQueue(standaloneNewlineTag, 'msg-562-standalone-newline-tag', true);
+      result.current.addToQueue(
+        standaloneNewlineTag,
+        'msg-562-standalone-newline-tag',
+        true
+      );
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(4);
-    const npcPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[2][1].body);
-    const narratorPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[3][1].body);
+    const npcPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[2][1].body
+    );
+    const narratorPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[3][1].body
+    );
 
     expect(npcPayload.voice).toBe('Puck');
     expect(npcPayload.text).toBe('Nie schodź tam!');
@@ -792,18 +1004,26 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    const npcPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    const narratorPayload = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const npcPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
+    const narratorPayload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[1][1].body
+    );
 
     // Kwestia Abigail Vance: głos żeński (Aoede/Leda), szept
     expect(['Aoede', 'Leda', 'Gacrux']).toContain(npcPayload.voice);
     expect(npcPayload.voice).not.toBe('Puck');
-    expect(npcPayload.text).toContain('Panie Sterling, rejestry są zabezpieczone.');
+    expect(npcPayload.text).toContain(
+      'Panie Sterling, rejestry są zabezpieczone.'
+    );
     expect(npcPayload.audioDirection).toContain('whisper');
 
     // Narracja o dzwonku: głos lektora (Kore), zerowany mówca, brak szeptu
     expect(narratorPayload.voice).toBe('Kore');
-    expect(narratorPayload.text).toContain('Zanim pada odpowiedź, mosiężny dzwonek');
+    expect(narratorPayload.text).toContain(
+      'Zanim pada odpowiedź, mosiężny dzwonek'
+    );
     expect(narratorPayload.audioDirection).not.toContain('whisper');
   });
 
@@ -815,7 +1035,8 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
       result.current.setIsTTSEnabled(true);
     });
 
-    const text = 'Rosalia:\n„Czego tu po nocy szukacie? Wracajcie do swoich domów!”';
+    const text =
+      'Rosalia:\n„Czego tu po nocy szukacie? Wracajcie do swoich domów!”';
 
     await act(async () => {
       result.current.addToQueue(text, 'msg-735-rosalia-newline', true);
@@ -823,13 +1044,17 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
 
     // Dokładnie 1 wywołanie TTS z kwestią Rosalii - sama etykieta "Rosalia:" nie może być czytana na głos
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    const payload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    const payload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
 
     expect(['Aoede', 'Leda', 'Gacrux']).toContain(payload.voice);
     expect(payload.voice).not.toBe('Kore');
     expect(payload.voice).not.toBe('Algenib');
     expect(payload.voice).not.toBe('Puck');
-    expect(payload.text).toBe('Czego tu po nocy szukacie? Wracajcie do swoich domów!');
+    expect(payload.text).toBe(
+      'Czego tu po nocy szukacie? Wracajcie do swoich domów!'
+    );
     expect(payload.audioDirection).toContain('female');
   });
 
@@ -841,7 +1066,8 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
       result.current.setIsTTSEnabled(true);
     });
 
-    const text = '„Kto tam stoi za drzwiami?” – rzekła Rosalia, cofając się w głąb korytarza.';
+    const text =
+      '„Kto tam stoi za drzwiami?” – rzekła Rosalia, cofając się w głąb korytarza.';
 
     await act(async () => {
       result.current.addToQueue(text, 'msg-735-trailing-rosalia', true);
@@ -849,10 +1075,51 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
 
     // Powinno zakolejkować kwestię głosem Rosalii
     expect(global.fetch).toHaveBeenCalled();
-    const payload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    const payload = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body
+    );
 
     expect(['Aoede', 'Leda', 'Gacrux']).toContain(payload.voice);
     expect(payload.voice).not.toBe('Puck');
     expect(payload.voice).not.toBe('Kore');
+  });
+  it('does not turn mentions of a church, clock and whispers into sound effects', async () => {
+    const effect = jest
+      .spyOn(sfxCatalog, 'playSFX')
+      .mockImplementation(() => {});
+    const { result } = renderHook(() => useTTS('pl'));
+    try {
+      await act(async () => {
+        result.current.addToQueue(
+          'Kościół widnieje na starej fotografii. Zegar leży w szufladzie. Helena wspomina szept z dawnego nagrania.',
+          'mentioned-props',
+          true
+        );
+      });
+      await act(async () => {
+        createdAudio[0]?.onplaying?.();
+      });
+      expect(createdAudio.length).toBeGreaterThan(0);
+      expect(effect).not.toHaveBeenCalled();
+    } finally {
+      effect.mockRestore();
+    }
+  });
+  it('keeps separate playback segments for two explicit cues in one narrator paragraph', async () => {
+    const { result } = renderHook(() => useTTS('pl'));
+    await act(async () => {
+      result.current.addToQueue(
+        '[SFX: paper_dossier_turn] Otwierasz teczkę na stole. [SFX: tape_mechanism] Naciskasz przycisk magnetofonu.',
+        'authored-cues',
+        true
+      );
+    });
+    const texts = jest
+      .mocked(fetch)
+      .mock.calls.filter(([, options]) => options?.method === 'POST')
+      .map(([, options]) => JSON.parse(String(options?.body)).text as string);
+    expect(texts).toHaveLength(2);
+    expect(texts[0]).toContain('Otwierasz teczkę');
+    expect(texts[1]).toContain('Naciskasz przycisk');
   });
 });

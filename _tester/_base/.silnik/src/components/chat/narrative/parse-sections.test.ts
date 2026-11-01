@@ -402,5 +402,54 @@ describe('parseIntoSections (Handouty, obrazy i nagrania audio)', () => {
       punctuationAfterQuote: '.',
     });
   });
+
+  it('oddziela pełną kwestię od narracji przed i po niej w tym samym wierszu', () => {
+    const sections = parseIntoSections('Zamyka teczkę. Helena Krawczyk: „To raport dr. Nowaka. Przeczytaj go uważnie”. Odkłada okulary.');
+
+    expect(sections).toEqual([
+      { type: 'narrative', content: 'Zamyka teczkę.' },
+      { type: 'dialogue', speaker: 'Helena Krawczyk', content: 'To raport dr. Nowaka. Przeczytaj go uważnie', punctuationAfterQuote: '.', openingQuote: '„', closingQuote: '”' },
+      { type: 'narrative', content: 'Odkłada okulary.' },
+    ]);
+  });
+
+  it.each([
+    ['“', '”'], ['"', '"'], ['«', '»'],
+  ])('zachowuje cudzysłowy %s%s i kolejność dwóch rozmówców', (opening, closing) => {
+    const sections = parseIntoSections(`**Helena:** ${opening}First sentence. Second sentence${closing}. Dr Smith: ${opening}I understand${closing}! The door closes.`);
+
+    expect(sections).toEqual([
+      { type: 'dialogue', speaker: 'Helena', content: 'First sentence. Second sentence', punctuationAfterQuote: '.', openingQuote: opening, closingQuote: closing },
+      { type: 'dialogue', speaker: 'Dr Smith', content: 'I understand', punctuationAfterQuote: '!', openingQuote: opening, closingQuote: closing },
+      { type: 'narrative', content: 'The door closes.' },
+    ]);
+  });
+
+  it('nie zamienia cytowanego tytułu w środku narracji w wypowiedź NPC', () => {
+    expect(parseIntoSections('Na stole leży gazeta „Wieczór”. Helena zamyka drzwi.')).toEqual([
+      { type: 'narrative', content: 'Na stole leży gazeta „Wieczór”. Helena zamyka drzwi.' },
+    ]);
+  });
+
+  it('zachowuje cytat zagnieżdżony w wypowiedzi i nie gubi niedomkniętej kwestii', () => {
+    expect(parseIntoSections('Helena: „Powiedział: "Wrócę". Poczekaj”.')).toEqual([
+      { type: 'dialogue', speaker: 'Helena', content: 'Powiedział: "Wrócę". Poczekaj', punctuationAfterQuote: '.', openingQuote: '„', closingQuote: '”' },
+    ]);
+    expect(parseIntoSections('Helena: „Niedokończona wypowiedź')).toEqual([
+      { type: 'narrative', content: 'Helena: „Niedokończona wypowiedź' },
+    ]);
+  });
+
+  it('nie kończy cytatu ASCII na escapowanych cudzysłowach wewnętrznych', () => {
+    expect(parseIntoSections(String.raw`Helena: "He said \"Wait\". Keep going". Rain falls.`)).toEqual([
+      { type: 'dialogue', speaker: 'Helena', content: String.raw`He said \"Wait\". Keep going`, punctuationAfterQuote: '.', openingQuote: '"', closingQuote: '"' },
+      { type: 'narrative', content: 'Rain falls.' },
+    ]);
+  });
+
+  it('przy niejednoznacznych nieescapowanych cytatach ASCII zachowuje całą wypowiedź', () => {
+    const sections = parseIntoSections('Helena: "He said "Wait". Keep going".');
+    expect(sections.find(section => section.type === 'dialogue')?.content).toBe('He said "Wait". Keep going');
+  });
 });
 

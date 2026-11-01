@@ -19,11 +19,16 @@ export function GMStyleGrid({ settings, setSettings }: GMStyleGridProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label className="flex items-center gap-2 text-[14px] font-special-elite uppercase tracking-[0.16em] text-brass mb-2">
+        <label
+          htmlFor="gm-response-length"
+          className="flex items-center gap-2 text-[14px] font-special-elite uppercase tracking-[0.16em] text-brass mb-2"
+        >
           {t('responseLengthLabel')}
           <HelpIcon content={t('responseLengthHelp')} />
         </label>
         <select
+          id="gm-response-length"
+          data-testid="gm-response-length"
           value={settings.gameMasterNarration.style.responseLength}
           onChange={(e) =>
             setSettings({
@@ -46,11 +51,16 @@ export function GMStyleGrid({ settings, setSettings }: GMStyleGridProps) {
       </div>
 
       <div>
-        <label className="flex items-center gap-2 text-[14px] font-special-elite uppercase tracking-[0.16em] text-brass mb-2">
+        <label
+          htmlFor="gm-detail-level"
+          className="flex items-center gap-2 text-[14px] font-special-elite uppercase tracking-[0.16em] text-brass mb-2"
+        >
           {t('detailLevelLabel')}
           <HelpIcon content={t('detailLevelHelp')} />
         </label>
         <select
+          id="gm-detail-level"
+          data-testid="gm-detail-level"
           value={settings.gameMasterNarration.style.detailLevel}
           onChange={(e) =>
             setSettings({
@@ -73,11 +83,16 @@ export function GMStyleGrid({ settings, setSettings }: GMStyleGridProps) {
       </div>
 
       <div>
-        <label className="flex items-center gap-2 text-[14px] font-special-elite uppercase tracking-[0.16em] text-brass mb-2">
+        <label
+          htmlFor="gm-creativity"
+          className="flex items-center gap-2 text-[14px] font-special-elite uppercase tracking-[0.16em] text-brass mb-2"
+        >
           {t('creativityLabel')}
           <HelpIcon content={t('creativityHelp')} />
         </label>
         <select
+          id="gm-creativity"
+          data-testid="gm-creativity"
           value={settings.gameMasterNarration.behavior.creativity}
           onChange={(e) =>
             setSettings({

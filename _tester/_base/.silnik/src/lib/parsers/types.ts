@@ -1,5 +1,20 @@
-import type { EquipmentCategory, HazardEventData, HazardType, OpposedMagicEventData, OpposedMeleeEventData, SpellCastEventData, TomeStudyEventData } from '../types';
-export type { HazardEventData, HazardType, OpposedMagicEventData, OpposedMeleeEventData, SpellCastEventData, TomeStudyEventData };
+import type {
+  EquipmentCategory,
+  HazardEventData,
+  HazardType,
+  OpposedMagicEventData,
+  OpposedMeleeEventData,
+  SpellCastEventData,
+  TomeStudyEventData,
+} from '../types';
+export type {
+  HazardEventData,
+  HazardType,
+  OpposedMagicEventData,
+  OpposedMeleeEventData,
+  SpellCastEventData,
+  TomeStudyEventData,
+};
 
 export type EquipmentEventAction = 'use' | 'remove' | 'add';
 
@@ -55,11 +70,24 @@ export interface DialogueLine {
   audioTags?: string; // audio tags dla ElevenLabs v3 ([whispers], [angrily], etc.)
 }
 
-export type ImageType = 'portrait' | 'scene' | 'location' | 'item' | 'monster' | 'vision';
+export type ImageType =
+  | 'portrait'
+  | 'scene'
+  | 'location'
+  | 'item'
+  | 'monster'
+  | 'vision';
 
 export interface ImageRequest {
   prompt: string;
-  style?: 'horror' | 'vintage' | 'realistic' | 'artistic' | 'portrait' | 'item' | 'location';
+  style?:
+    | 'horror'
+    | 'vintage'
+    | 'realistic'
+    | 'artistic'
+    | 'portrait'
+    | 'item'
+    | 'location';
   priority?: 'high' | 'normal';
   isMythos?: boolean;
   type?: ImageType;
@@ -83,6 +111,10 @@ export interface SFXRequest {
 }
 
 export interface JournalTagEntry {
+  occurredAt?: string;
+  sourceQuote?: string;
+  sourceMaterialId?: string;
+  knowledge?: 'mentioned' | 'encountered' | 'visited';
   type:
     | 'case'
     | 'combat'
@@ -140,6 +172,7 @@ export interface SkillRollResolution {
 export interface SkillTestData {
   /** Proposal only. The local dossier validates this ID before binding the test. */
   dossierConditionId?: string;
+  starter?: { checkId: string; sceneId: string; pushed: boolean };
   id: string;
   skillName: string;
   skillValue: number;
@@ -171,7 +204,13 @@ export interface PushedRollResolutionContext {
   originalTestId: string;
   pushedRollId: string;
   skillName: string;
-  initialOutcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble';
+  initialOutcome:
+    | 'critical'
+    | 'extreme'
+    | 'hard'
+    | 'regular'
+    | 'fail'
+    | 'fumble';
   initialTestFailed: true;
   outcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble';
   requiredDifficulty: 'regular' | 'hard' | 'extreme';
@@ -186,7 +225,13 @@ export interface PushedRollStakeRequestContext {
   source: 'chat_skill_test';
   testId: string;
   skillName: string;
-  initialOutcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble';
+  initialOutcome:
+    | 'critical'
+    | 'extreme'
+    | 'hard'
+    | 'regular'
+    | 'fail'
+    | 'fumble';
   initialTestFailed: true;
   initialRoll: number;
   targetValue: number;
@@ -199,7 +244,15 @@ export interface SanityRecoveryResolutionContext {
   resolutionId: string;
   characterId: string;
   procedure: 'anchor' | 'self_help' | 'hospitalization';
-  outcome: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble' | 'success' | 'failure';
+  outcome:
+    | 'critical'
+    | 'extreme'
+    | 'hard'
+    | 'regular'
+    | 'fail'
+    | 'fumble'
+    | 'success'
+    | 'failure';
   sanityDelta: number;
 }
 
@@ -221,7 +274,15 @@ export interface InvestigatorChangeResolutionContext {
   resolutionId: string;
   characterId: string;
   operation: 'created' | 'updated';
-  changedFields: Array<'characteristics' | 'age' | 'occupation' | 'skills' | 'wealth' | 'alternate_creation' | 'weapons'>;
+  changedFields: Array<
+    | 'characteristics'
+    | 'age'
+    | 'occupation'
+    | 'skills'
+    | 'wealth'
+    | 'alternate_creation'
+    | 'weapons'
+  >;
 }
 
 /** Local firearm resolver output used to select adventure-specific weapon guidance. */
@@ -233,8 +294,18 @@ export interface FirearmResolutionContext {
   weaponName: string;
   roll: number;
   distanceMeters?: number;
-  distanceCategory?: 'point_blank' | 'base_range' | 'long_range' | 'extreme_range' | 'out_of_range';
-  requiredDifficulty?: 'regular' | 'hard' | 'extreme' | 'critical' | 'impossible';
+  distanceCategory?:
+    | 'point_blank'
+    | 'base_range'
+    | 'long_range'
+    | 'extreme_range'
+    | 'out_of_range';
+  requiredDifficulty?:
+    | 'regular'
+    | 'hard'
+    | 'extreme'
+    | 'critical'
+    | 'impossible';
   malfunctionThreshold: number;
   isMalfunction: boolean;
   malfunctionEffect?: 'dud_round' | 'jam';
@@ -259,7 +330,13 @@ export interface JamClearingResolutionContext {
   skillName?: string;
   skillValue?: number;
   skillRoll?: number;
-  skillOutcome?: 'critical' | 'extreme' | 'hard' | 'regular' | 'fail' | 'fumble';
+  skillOutcome?:
+    | 'critical'
+    | 'extreme'
+    | 'hard'
+    | 'regular'
+    | 'fail'
+    | 'fumble';
   cleared: boolean;
 }
 
@@ -344,6 +421,8 @@ export interface ParsedResponse {
   equipmentEvents: EquipmentEvent[];
   timeUpdate: TimeUpdate | null;
   gmMetadata?: { thoughts?: string; mood?: string; narrativeGoal?: string };
-  locationGuardianEvent?: import('./journal-parser').ExtractedLocationGuardian | null;
+  locationGuardianEvent?:
+    | import('./journal-parser').ExtractedLocationGuardian
+    | null;
   rawText: string;
 }

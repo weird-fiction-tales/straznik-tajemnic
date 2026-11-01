@@ -16,12 +16,17 @@
 // skrajne przypadki (samotny niezamknięty `[`).
 
 import { timeManager } from '@/lib/time-manager';
+import { stripIncompletePrivateMarkers } from '@/lib/parsers/text-cleaner';
+import { parseRevealedTags } from '@/core/memory/revealed-facts';
 
 export const NESTED_TAG_BODY = '(?:[^\\[\\]]|\\[[^\\]]*\\])*';
 
 export function cleanupContent(content: string): string {
   // Usuń prefiksy AI z początku tekstu (MG: Assistant:, GM:, itp.)
-  content = content.replace(/\[PRZEJŚCIE_AKTU\s*:[^\]]*(?:\]|$)/gi, '');
+  // Reuse the public-memory boundary before any private body can become a
+  // dialogue, handout or other visible section. Public protocol remains intact.
+  content = parseRevealedTags(stripIncompletePrivateMarkers(content)).text
+    .replace(/\[PRZEJŚCIE_AKTU\s*:[^\]]*(?:\]|$)/gi, '');
   let cleanContent = content
     .replace(
       /^(MG|GM|AI|Assistant|Mistrz Gry|Game Master):\s*(Assistant:\s*)?/gi,
@@ -125,7 +130,7 @@ export function cleanupContent(content: string): string {
     // NIE łapie legitimate `[Skill check: X]` ani `[handout: list]` bo nie pasują
     // do whitelisty pojedynczego lowercase słowa lub fraz typu "very fast".
     .replace(
-      /\[(?:whispers|trembling|panicked|serious|curious|sarcastic|tired|crying|amazed|excited|mischievously|sighs|gasp|giggles|laughs|shouting|very fast|very slow|sarcastically)\]/gi,
+      /\[\/?(?:whispers|trembling|panicked|serious|curious|sarcastic|tired|crying|amazed|excited|mischievously|sighs|gasp|giggles|laughs|shouting|very fast|very slow|sarcastically)\]/gi,
       ''
     )
     // Pełny inline tag audio musi zniknąć przed wariantem bez nawiasów,
@@ -143,7 +148,7 @@ export function cleanupContent(content: string): string {
     // to domyka asymetrię display vs lektor. NESTED_TAG_BODY: też gdy halucynowany
     // tag ma w środku zagnieżdżony [...].
     .replace(
-      new RegExp(`\\[(?!(?:NOTATKA_BADACZA|STICKY_NOTE|INVESTIGATOR_NOTE|HANDOUT)\\b)[A-ZŁŚŻŹĆŃ_]{3,}\\s*:${NESTED_TAG_BODY}\\]`, 'g'),
+      new RegExp(`\\[(?!(?:NOTATKA_BADACZA|STICKY_NOTE|INVESTIGATOR_NOTE|HANDOUT|RZUT)\\b)[A-ZŁŚŻŹĆŃ_]{3,}\\s*:${NESTED_TAG_BODY}\\]`, 'g'),
       ''
     )
     .trim();

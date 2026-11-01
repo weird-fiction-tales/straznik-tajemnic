@@ -21,10 +21,13 @@ export function unsupportedDocumentQuotes(text:string,payload:Documents):string[
  for(const paragraph of narrative.split(/\n\s*\n/)){
   if(!documentary.test(paragraph))continue;
   for(const match of paragraph.matchAll(/[„“"]([^"”\n]{12,2000})[”"]/gu)){
-   const prefix=paragraph.slice(Math.max(0,(match.index??0)-240),match.index);
-   const introduces=/(?:odwroci|rewers|awers|adnotacj|inskrypcj|napis|zapisano|widnieje|brzmi|tekst|reverse|verso|inscription|reads?|written|inscribed|wording|states?)/iu;
+   // An NPC speaking beside a document is not reading that document aloud.
+   const prefix=paragraph.slice(Math.max(0,(match.index??0)-240),match.index)
+     .split(/[.!?]\s+/).at(-1)?.split(/(?:^|\s)(?:mówi|powiedziała|powiedział|odpowiada|dodaje|szepcze|says|said|asks|replies|adds|whispers)\b/iu).at(-1) ?? '';
+   const introduces=/(?:zapisano|napisano|widnieje|brzmi|czyta|odczytuje|tekst|transkrypcj|reads?|written|inscribed|wording|states?)/iu;
+   const quotedReading=/(?:zapisano|napisano|widnieje|brzmi|czyta|odczytuje|reads?|written|inscribed|states?)\s*:\s*\S/iu;
    const literalClaim=(documentary.test(prefix)&&introduces.test(prefix))||
-     (documentary.test(match[1])&&introduces.test(match[1]));
+     (documentary.test(match[1])&&quotedReading.test(match[1]));
    if(literalClaim&&!transcripts.some(source=>source.includes(normalize(match[1]))))return ['DOSSIER_DOCUMENT_QUOTE_UNSUPPORTED'];
   }
  }

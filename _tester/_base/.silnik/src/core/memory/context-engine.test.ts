@@ -242,16 +242,14 @@ describe('CampaignContextEngine', () => {
     expect(fixture.generateContent).toHaveBeenCalledTimes(1);
   });
 
-  it.each([false, true])('bounds outbound context on compressor failure (cooldown=%s) without changing history', async (cooldown) => {
+  it.each([false, true])('rejects overflow on compressor failure (cooldown=%s) without changing history', async (cooldown) => {
     const generateContent = jest.fn(async () => { throw new Error('offline'); });
     (getGeminiClient as jest.Mock).mockReturnValue({ models: { generateContent } });
     if (cooldown) ledger.recordCompressionFailure(scope.playthroughId);
     const input = messages(12);
     const before = JSON.stringify(input);
-    const result = await new CampaignContextEngine(ledger).compactIfNeeded({ ...base, messages: input, availableContextTokens: 150 });
+    await expect(new CampaignContextEngine(ledger).compactIfNeeded({ ...base, messages: input, availableContextTokens: 150 })).rejects.toBeInstanceOf(CampaignContextBudgetError);
     expect(JSON.stringify(input)).toBe(before);
-    expect(result.messages.slice(-2)).toEqual(input.slice(-2));
-    expect(result.messages.reduce((sum, message) => sum + Math.ceil(message.content.length / 4) + 8, 0)).toBeLessThanOrEqual(150);
     expect(ledger.getLatestCheckpoint(scope.playthroughId)).toBeNull();
     expect(generateContent).toHaveBeenCalledTimes(cooldown ? 0 : 1);
   });

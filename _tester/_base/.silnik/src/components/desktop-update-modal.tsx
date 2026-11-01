@@ -57,7 +57,7 @@ export function DesktopUpdateModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         data-testid="desktop-update-modal"
-        className="w-[min(94vw,480px)] max-h-[85vh] flex flex-col items-center border border-brass/60 bg-[#0B0C0F] p-4 sm:p-6 text-foreground shadow-2xl rounded-xl overflow-y-auto journal-scroll z-[9999]"
+        className="w-[min(94vw,480px)] max-h-[85vh] flex flex-col items-center border border-brass/60 bg-[#0B0C0F] p-4 sm:p-6 text-foreground shadow-2xl rounded-lg overflow-y-auto journal-scroll z-[9999]"
       >
         {/* Dekoracyjne złote linie narożne Art Déco */}
         <div className="pointer-events-none absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-brass/70" />
@@ -93,7 +93,7 @@ export function DesktopUpdateModal({
             )}
 
             {/* Boks z changelogiem w ramce monospaced / typewriter */}
-            <div className="w-full max-h-36 sm:max-h-44 overflow-y-auto text-left rounded border border-brass/30 bg-black/60 p-3 text-xs text-foreground/90 font-mono space-y-2">
+            <div className="w-full max-h-36 sm:max-h-44 overflow-y-auto text-left rounded border border-brass/30 bg-black/60 p-3 text-sm text-foreground/90 font-mono space-y-2">
               <div className="text-brass/70 uppercase tracking-widest text-[10px] border-b border-brass/20 pb-1">
                 {t('changelogHeader')}
               </div>
@@ -127,7 +127,7 @@ export function DesktopUpdateModal({
               </Button>
               {update.canSelfUpdate ? (
                 <Button
-                  className="flex-1 bg-brass hover:bg-brass/90 text-black font-semibold tracking-wider uppercase h-9 text-xs sm:text-sm"
+                  className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold tracking-wider uppercase h-9 text-xs sm:text-sm"
                   onClick={handleStartUpdate}
                 >
                   {t('updateNow')}

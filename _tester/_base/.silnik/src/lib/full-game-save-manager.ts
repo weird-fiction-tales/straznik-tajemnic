@@ -1,3 +1,5 @@
+import type { StarterState } from './adventures/starter-runtime';
+import { immersion } from './hardware/hue/immersion';
 import { InvestigatorBoardState } from '@/types/investigator-board';
 import type { DossierInventoryState } from './adventure-dossier/inventory-state';
 import type { DossierWorldState } from './adventure-dossier/world-object-state';
@@ -18,7 +20,10 @@ import type { WorldSetupBundleV1 } from './world-setup';
 import { isWorldSetupBundle } from './world-setup';
 import { ensureCharacterDossier } from './journal/dossier-migration';
 import type { ChaseState } from './chase/chase-engine';
-import type { CampaignMemoryScope, CampaignMemorySnapshot } from '@/core/memory/types';
+import type {
+  CampaignMemoryScope,
+  CampaignMemorySnapshot,
+} from '@/core/memory/types';
 
 // Lokalnie zdefiniowany interfejs Message (podzbiór @/lib/types Message -
 // pola istotne dla save'a). finishReason/continuationRequested odtwarzają
@@ -35,6 +40,7 @@ interface Message {
   generatedImages?: string[];
   generatedImageTypes?: RuntimeMessage['generatedImageTypes'];
   generatedImageCacheIds?: string[];
+  publicJournalVisuals?: RuntimeMessage['publicJournalVisuals'];
   skillTests?: RuntimeMessage['skillTests'];
   finishReason?: string;
   continuationRequested?: boolean;
@@ -49,6 +55,8 @@ interface Message {
  * Zawiera wszystkie dane potrzebne do przywrócenia stanu gry
  */
 export interface FullGameSave {
+  dossierState?: StarterState;
+  adventureContext?: import('./adventures-data').AdventureContext;
   // === Metadata ===
   id: string;
   name: string;
@@ -119,6 +127,7 @@ export interface FullGameSave {
 
   // === Stan aktywnej gry ===
   activeGameState: {
+    lighting?: import('./hardware/hue/immersion').LightingSaveState;
     currentScene?: string;
     storyProgress?: Record<string, unknown>;
     gameTime?: string;
@@ -202,6 +211,8 @@ export class FullGameSaveManager {
     dossierInventory?: DossierInventoryState;
     dossierWorldState?: DossierWorldState;
     clockState?: CampaignClockSnapshot;
+    dossierState?: StarterState;
+    adventureContext?: FullGameSave['adventureContext'];
     npcs: NPC[];
     locations: Location[];
     currentLocationId?: string;
@@ -226,9 +237,7 @@ export class FullGameSaveManager {
       lastUpdated: now,
       userId: data.userId,
       locale:
-        data.locale === 'pl' || data.locale === 'en'
-          ? data.locale
-          : undefined,
+        data.locale === 'pl' || data.locale === 'en' ? data.locale : undefined,
 
       // Historia
       messages: data.messages,
@@ -251,6 +260,9 @@ export class FullGameSaveManager {
       hotSeatConfig: data.hotSeatConfig,
       investigatorBoard: data.investigatorBoard,
 
+      dossierState: data.dossierState,
+      adventureContext: data.adventureContext,
+
       // Kampanie
       campaigns: data.campaigns,
       activeCampaignId: data.activeCampaignId,
@@ -268,7 +280,10 @@ export class FullGameSaveManager {
       currentLocationId: data.currentLocationId,
 
       // Stan gry
-      activeGameState: data.activeGameState || {},
+      activeGameState: {
+        ...(data.activeGameState || {}),
+        lighting: immersion.snapshot(),
+      },
 
       // PDF Memory
       pdfMemory: data.pdfMemory || {},
@@ -360,9 +375,7 @@ export class FullGameSaveManager {
       messageCount: save.sessionMetadata.messageCount,
       imageCount: save.sessionMetadata.imageCount,
       locale:
-        save.locale === 'pl' || save.locale === 'en'
-          ? save.locale
-          : undefined,
+        save.locale === 'pl' || save.locale === 'en' ? save.locale : undefined,
     };
 
     // Usuń stary save o tym samym ID (jeśli istnieje)
@@ -413,7 +426,10 @@ export class FullGameSaveManager {
     }
 
     const candidate = save as Partial<FullGameSave>;
-    if (candidate.worldSetup !== undefined && !isWorldSetupBundle(candidate.worldSetup)) {
+    if (
+      candidate.worldSetup !== undefined &&
+      !isWorldSetupBundle(candidate.worldSetup)
+    ) {
       console.warn('Niepoprawny WorldSetupBundleV1 w save');
       return false;
     }
@@ -457,7 +473,9 @@ export class FullGameSaveManager {
         gameSettings: {
           aiSettings: legacy.aiSettings || ({} as AISettings),
         },
-        characters: (legacy.characters || []).map((c) => ensureCharacterDossier(c)),
+        characters: (legacy.characters || []).map((c) =>
+          ensureCharacterDossier(c)
+        ),
         activeCharacterId: legacy.activeCharacterId,
         hotSeatConfig: legacy.hotSeatConfig,
         investigatorBoard: legacy.investigatorBoard,

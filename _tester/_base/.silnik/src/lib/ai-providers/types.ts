@@ -89,6 +89,9 @@ export interface GeminiExtraOptions {
 }
 
 export interface ChatCompletionRequest {
+  /** Total provider budget across model attempts; cancellation must not start a fallback. */
+  timeoutMs?: number;
+  signal?: AbortSignal;
   systemPrompt: string;
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
   userMessage: string;

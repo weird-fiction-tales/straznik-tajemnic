@@ -1,4 +1,5 @@
 'use client';
+import { immersion } from '@/lib/hardware/hue/immersion';
 
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
@@ -22,7 +23,7 @@ import { CharacterWizardV2 } from '@/components/ui/character-wizard';
 
 // === HOOKI ===
 import { useTTS } from '@/hooks/useTTS';
-import {resetActiveAdventure} from '@/lib/new-adventure-reset';
+import { resetActiveAdventure } from '@/lib/new-adventure-reset';
 import { usePdfMemory } from '@/hooks/usePdfMemory';
 import { useCharacterManagement } from '@/hooks/useCharacterManagement';
 import { useFullSave } from '@/hooks/useFullSave';
@@ -42,7 +43,12 @@ import { normalizeStoredCharacters } from '@/lib/character-storage-normalizer';
 import { useSkillMarking } from '@/hooks/useSkillMarking';
 import { useFullReset } from '@/hooks/useFullReset';
 import { toast } from '@/components/ui/use-toast';
-import { BUILT_IN_ADVENTURES, STREFA_11_ADVENTURES, AMERICAN_COLD_CASES_ADVENTURES, getAdventureById } from '@/lib/adventures-data';
+import {
+  BUILT_IN_ADVENTURES,
+  STREFA_11_ADVENTURES,
+  AMERICAN_COLD_CASES_ADVENTURES,
+  getAdventureById,
+} from '@/lib/adventures-data';
 import { PREDEFINED_CHARACTERS } from '@/lib/immersion/predefined-characters';
 import { getStrefa11CharactersForAdventure } from '@/lib/immersion/strefa-11-characters';
 import { buildPredefinedEquipment } from '@/lib/immersion/predefined-equipment';
@@ -153,7 +159,8 @@ export default function Home() {
     charMgmt.handleCharactersChange
   );
   const [showDevelopmentModal, setShowDevelopmentModal] = useState(false);
-  const [pendingDirectorEvent, setPendingDirectorEvent] = useState<RandomEvent | null>(null);
+  const [pendingDirectorEvent, setPendingDirectorEvent] =
+    useState<RandomEvent | null>(null);
 
   const [hasStartedGame, setHasStartedGame] = useState(false);
   const hotSeat = useHotSeat(charMgmt.characters);
@@ -296,7 +303,9 @@ export default function Home() {
   // a guard C2 może wymagać jawnego przypisania 2 RÓŻNYCH postaci po imieniu.
   // Solo: zachowanie bez zmian (zero setItem).
   const [showCharacterWizard, setShowCharacterWizard] = useState(false);
-  const [duetCreatingPlayerName, setDuetCreatingPlayerName] = useState<string | null>(null);
+  const [duetCreatingPlayerName, setDuetCreatingPlayerName] = useState<
+    string | null
+  >(null);
 
   const stampDuetTargetPlayer = useCallback(
     (explicitPlayerName?: string) => {
@@ -355,8 +364,15 @@ export default function Home() {
       }
       setDuetCreatingPlayerName(null);
 
-      const updated = charMgmt.characters.map((c) => ({ ...c, isActive: false }));
-      const newChar: Character = { ...character, isActive: true, lastUsed: new Date() };
+      const updated = charMgmt.characters.map((c) => ({
+        ...c,
+        isActive: false,
+      }));
+      const newChar: Character = {
+        ...character,
+        isActive: true,
+        lastUsed: new Date(),
+      };
       const updatedList = [...updated, newChar];
 
       charMgmt.setCharacters(updatedList);
@@ -375,39 +391,42 @@ export default function Home() {
 
   const [showPredefinedSelector, setShowPredefinedSelector] = useState(false);
 
-  const handleSelectPredefinedCharacter = useCallback((character: Character) => {
-    const stamped: Character = {
-      ...character,
-      id: `${character.id}_${Date.now()}`,
-      sourcePresetId: character.sourcePresetId || character.id,
-    };
-    
-    // Obsługa Hot Seat
-    const targetPlayer = localStorage.getItem('hotSeatCreatingPlayerName');
-    if (targetPlayer) {
-      stamped.playerName = targetPlayer;
-      localStorage.removeItem('hotSeatCreatingPlayerName');
-    }
+  const handleSelectPredefinedCharacter = useCallback(
+    (character: Character) => {
+      const stamped: Character = {
+        ...character,
+        id: `${character.id}_${Date.now()}`,
+        sourcePresetId: character.sourcePresetId || character.id,
+      };
 
-    const withoutPreset = charMgmt.characters.filter(
-      (c) =>
-        c.sourcePresetId !== character.id &&
-        c.sourcePresetId !== character.sourcePresetId &&
-        c.id !== character.id
-    );
-    const existingCharacters = [...withoutPreset, stamped];
-    
-    // Zapisz przez charMgmt i zaktualizuj aktywnego badacza
-    charMgmt.setCharacters(existingCharacters);
-    charMgmt.setActiveCharacter(stamped);
-    
-    // Persystencja
-    void import('@/lib/character-cloud-sync').then(({ persistCharacters }) =>
-      persistCharacters(existingCharacters)
-    );
-    
-    setShowPredefinedSelector(false);
-  }, [charMgmt]);
+      // Obsługa Hot Seat
+      const targetPlayer = localStorage.getItem('hotSeatCreatingPlayerName');
+      if (targetPlayer) {
+        stamped.playerName = targetPlayer;
+        localStorage.removeItem('hotSeatCreatingPlayerName');
+      }
+
+      const withoutPreset = charMgmt.characters.filter(
+        (c) =>
+          c.sourcePresetId !== character.id &&
+          c.sourcePresetId !== character.sourcePresetId &&
+          c.id !== character.id
+      );
+      const existingCharacters = [...withoutPreset, stamped];
+
+      // Zapisz przez charMgmt i zaktualizuj aktywnego badacza
+      charMgmt.setCharacters(existingCharacters);
+      charMgmt.setActiveCharacter(stamped);
+
+      // Persystencja
+      void import('@/lib/character-cloud-sync').then(({ persistCharacters }) =>
+        persistCharacters(existingCharacters)
+      );
+
+      setShowPredefinedSelector(false);
+    },
+    [charMgmt]
+  );
 
   // Faza 4 + C2: guard startu duetu. TWARDY wymóg - każdy gracz musi mieć
   // WŁASNĄ, jawnie przypisaną postać (po imieniu gracza), i muszą to być 2
@@ -504,11 +523,16 @@ export default function Home() {
   }, [runHealthCheck]);
 
   useEffect(() => {
-    if (!localTransport.loading && !(hasRequiredKeys() || hasLocalPlaytestTransport())) setShowApiKeysModal(true);
+    if (
+      !localTransport.loading &&
+      !(hasRequiredKeys() || hasLocalPlaytestTransport())
+    )
+      setShowApiKeysModal(true);
 
     const handleOpenModal = () => setShowApiKeysModal(true);
     window.addEventListener('open-api-keys-modal', handleOpenModal);
-    return () => window.removeEventListener('open-api-keys-modal', handleOpenModal);
+    return () =>
+      window.removeEventListener('open-api-keys-modal', handleOpenModal);
   }, [localTransport.loading, localTransport.serverConfigured]);
 
   // 1a-bis. IND-273 T5b: auto-odświeżenie cennika Gemini (TTL 24h po stronie
@@ -529,12 +553,18 @@ export default function Home() {
   }, [pendingQuickStart, charMgmt.characters, handleStartGameGuarded]);
 
   const handleQuickStartOnboarding = useCallback(
-    async (adventureId: string, characterId: string, mode?: 'solo' | 'hot-seat', player2CharacterId?: string) => {
+    async (
+      adventureId: string,
+      characterId: string,
+      mode?: 'solo' | 'hot-seat',
+      player2CharacterId?: string
+    ) => {
       // 1. Ustaw przygodę i postać z presetów
       let adv = getAdventureById(adventureId);
-      const allCharacters = adv?.isStrefa11 || adv?.isAmericanColdCase
-        ? getStrefa11CharactersForAdventure(adv.id)
-        : PREDEFINED_CHARACTERS;
+      const allCharacters =
+        adv?.isStrefa11 || adv?.isAmericanColdCase
+          ? getStrefa11CharactersForAdventure(adv.id)
+          : PREDEFINED_CHARACTERS;
       const preset = allCharacters.find((c) => c.id === characterId);
 
       if (adv && preset?.startingNodeId) {
@@ -575,11 +605,15 @@ export default function Home() {
 
         if (mode === 'hot-seat') {
           // dobierz drugą postać (płci przeciwnej do wybranej lub przekazaną)
-          let preset2 = player2CharacterId ? allCharacters.find((c) => c.id === player2CharacterId) : undefined;
+          let preset2 = player2CharacterId
+            ? allCharacters.find((c) => c.id === player2CharacterId)
+            : undefined;
           if (!preset2) {
-            preset2 = allCharacters.find((c) => c.gender !== preset.gender) || allCharacters[1];
+            preset2 =
+              allCharacters.find((c) => c.gender !== preset.gender) ||
+              allCharacters[1];
           }
-          
+
           if (preset2) {
             const stamped2: Character = {
               ...preset2,
@@ -596,32 +630,53 @@ export default function Home() {
             finalWithoutPreset2.push(stamped2);
             charMgmt.setCharacters(finalWithoutPreset2);
             charMgmt.setActiveCharacter(stamped);
-            
-            hotSeat.restoreConfig({
-              enabled: true,
-              players: [
-                { id: `p1_${Date.now()}`, name: 'Gracz 1', color: '#4ade80', characterId: stamped.id, isActive: true, turnCount: 0 },
-                { id: `p2_${Date.now()}`, name: 'Gracz 2', color: '#f472b6', characterId: stamped2.id, isActive: false, turnCount: 0 },
-              ],
-              activePlayerIndex: 0,
-              allowInterruptions: true,
-              showPlayerIndicator: true,
-            }, finalWithoutPreset2);
+
+            hotSeat.restoreConfig(
+              {
+                enabled: true,
+                players: [
+                  {
+                    id: `p1_${Date.now()}`,
+                    name: 'Gracz 1',
+                    color: '#4ade80',
+                    characterId: stamped.id,
+                    isActive: true,
+                    turnCount: 0,
+                  },
+                  {
+                    id: `p2_${Date.now()}`,
+                    name: 'Gracz 2',
+                    color: '#f472b6',
+                    characterId: stamped2.id,
+                    isActive: false,
+                    turnCount: 0,
+                  },
+                ],
+                activePlayerIndex: 0,
+                allowInterruptions: true,
+                showPlayerIndicator: true,
+              },
+              finalWithoutPreset2
+            );
           }
         } else {
           charMgmt.setCharacters(updatedList);
           charMgmt.setActiveCharacter(stamped);
-          hotSeat.restoreConfig({
-            enabled: false,
-            players: [],
-            activePlayerIndex: 0,
-            allowInterruptions: true,
-            showPlayerIndicator: false,
-          }, updatedList);
+          hotSeat.restoreConfig(
+            {
+              enabled: false,
+              players: [],
+              activePlayerIndex: 0,
+              allowInterruptions: true,
+              showPlayerIndicator: false,
+            },
+            updatedList
+          );
         }
 
         try {
-          const { persistCharacters } = await import('@/lib/character-cloud-sync');
+          const { persistCharacters } =
+            await import('@/lib/character-cloud-sync');
           persistCharacters(updatedList);
         } catch {
           // fallback lokalny
@@ -637,6 +692,7 @@ export default function Home() {
   // pierwszy render klienta zgadza się z serwerem (brak hydration mismatch).
   useEffect(() => {
     if (localStorage.getItem('has_started_game') === 'true') {
+      void immersion.start(adventureContext?.id ?? '').catch(() => {});
       setHasStartedGame(true);
     }
     if (localStorage.getItem('session_zero_completed') === 'true') {
@@ -669,8 +725,10 @@ export default function Home() {
   // 2. Load localStorage data (chat / characters / campaigns / pdf)
   useEffect(() => {
     // useChat owns the complete history. Legacy is a fallback only, never an overwrite.
-    const savedChat = localStorage.getItem('zew_chat_messages') === null
-      ? localStorage.getItem('chat-messages') : null;
+    const savedChat =
+      localStorage.getItem('zew_chat_messages') === null
+        ? localStorage.getItem('chat-messages')
+        : null;
     if (savedChat) {
       try {
         const loadedMessages = (
@@ -795,6 +853,7 @@ export default function Home() {
       session: null,
       players: [],
     });
+    void immersion.end('reset-' + Date.now()).catch(() => {});
     setHasStartedGame(false);
     localStorage.setItem('has_started_game', 'false');
     setSessionZeroCompleted(false);
@@ -826,6 +885,15 @@ export default function Home() {
       sidebar={
         <CthulhuSidebar
           adventureContext={adventureContext}
+          messages={chat.messages}
+          dossierHandoutBinding={
+            adventureContext?.id && pdf.pdfMemory.adventureDossierFingerprint
+              ? {
+                  adventureId: adventureContext.id,
+                  editionFingerprint: pdf.pdfMemory.adventureDossierFingerprint,
+                }
+              : undefined
+          }
           hideSidebarPanel={!hasStartedGame}
           activeCharacter={charMgmt.activeCharacter || undefined}
           characters={sessionCharacters}
@@ -886,7 +954,6 @@ export default function Home() {
           loadingStatusAdventure={customAdventures.loadingStatus}
           uploadErrorAdventure={customAdventures.uploadError}
           onClearUploadErrorAdventure={customAdventures.clearUploadError}
-
           hotSeatConfig={hotSeat.config}
           onSwitchPlayer={handleSwitchPlayer}
           onDisableHotSeat={hotSeat.disableHotSeat}
@@ -918,17 +985,22 @@ export default function Home() {
                       messages: chat.messages,
                       locale: 'pl',
                       aiSettings: aiSettings || loadAISettings(),
-                      equipmentVisualEra: resolveEraVisualProfile(resolvedEraContext || '1920s'),
+                      equipmentVisualEra: resolveEraVisualProfile(
+                        resolvedEraContext || '1920s'
+                      ),
                       characters: charMgmt.characters,
                       activeCharacterId: charMgmt.activeCharacter?.id,
                       hotSeatConfig: hotSeat.config,
-                      investigatorBoard: charMgmt.activeCharacter?.investigatorBoard,
+                      investigatorBoard:
+                        charMgmt.activeCharacter?.investigatorBoard,
                       campaigns: campaigns,
                       activeCampaignId: charMgmt.activeGameState.campaign?.id,
                       npcs: (() => {
                         if (typeof window === 'undefined') return [];
                         try {
-                          return JSON.parse(localStorage.getItem('gm_npcs') || '[]');
+                          return JSON.parse(
+                            localStorage.getItem('gm_npcs') || '[]'
+                          );
                         } catch {
                           return [];
                         }
@@ -936,7 +1008,9 @@ export default function Home() {
                       locations: (() => {
                         if (typeof window === 'undefined') return [];
                         try {
-                          return JSON.parse(localStorage.getItem('gm_locations') || '[]');
+                          return JSON.parse(
+                            localStorage.getItem('gm_locations') || '[]'
+                          );
                         } catch {
                           return [];
                         }
@@ -1089,7 +1163,10 @@ export default function Home() {
           save.setShowFullSaveModal(true);
         }}
         onColdStart={fullReset.handleFullReset}
-        hasRules={!!pdf.pdfMemory.rulesUrl || (localTransport.serverConfigured && localTransport.serverHasBaseRules)}
+        hasRules={
+          !!pdf.pdfMemory.rulesUrl ||
+          (localTransport.serverConfigured && localTransport.serverHasBaseRules)
+        }
         hasSessionZero={sessionZeroCompleted}
         hasStartedGame={hasStartedGame}
         onOpenApiKeys={() => setShowApiKeysModal(true)}
@@ -1105,8 +1182,8 @@ export default function Home() {
         sessionSaveStatus={chat.sessionSaveStatus}
         onRetrySessionSave={chat.retrySessionSave}
         dossierProtocolFailure={chat.dossierProtocolFailure}
-          pendingDossierSkillRollRetry={chat.pendingDossierSkillRollRetry}
-          retryDossierSkillRoll={chat.retryDossierSkillRoll}
+        pendingDossierSkillRollRetry={chat.pendingDossierSkillRollRetry}
+        retryDossierSkillRoll={chat.retryDossierSkillRoll}
         onConfirmAcquiredItem={chat.confirmAcquiredItem}
         onDismissAcquiredItem={chat.dismissAcquiredItem}
         onCharacterUpdate={charMgmt.handleUpdateCharacter}
@@ -1138,16 +1215,24 @@ export default function Home() {
           onSelectCharacter={handleSelectPredefinedCharacter}
           characters={
             adventureContext?.id &&
-            (STREFA_11_ADVENTURES.some((adventure) => adventure.id === adventureContext.id) ||
-              AMERICAN_COLD_CASES_ADVENTURES.some((adventure) => adventure.id === adventureContext.id))
+            (STREFA_11_ADVENTURES.some(
+              (adventure) => adventure.id === adventureContext.id
+            ) ||
+              AMERICAN_COLD_CASES_ADVENTURES.some(
+                (adventure) => adventure.id === adventureContext.id
+              ))
               ? getStrefa11CharactersForAdventure(adventureContext.id)
               : PREDEFINED_CHARACTERS
           }
           currentEra={adventureContext?.era || 'classic'}
           filterByEra={
             !adventureContext?.id ||
-            (!STREFA_11_ADVENTURES.some((adventure) => adventure.id === adventureContext.id) &&
-              !AMERICAN_COLD_CASES_ADVENTURES.some((adventure) => adventure.id === adventureContext.id))
+            (!STREFA_11_ADVENTURES.some(
+              (adventure) => adventure.id === adventureContext.id
+            ) &&
+              !AMERICAN_COLD_CASES_ADVENTURES.some(
+                (adventure) => adventure.id === adventureContext.id
+              ))
           }
         />
       )}

@@ -20,6 +20,7 @@ import {
   sanitizeLocationName,
 } from '@/lib/parsers/event-parser';
 import { normalizeEntityTitle } from '@/lib/journal/entity-visual-resolver';
+import { buildPublicJournal, capturePublicJournalTurn, type PublicJournalContext } from './public-journal';
 import { cleanResponseText } from '@/lib/parsers/text-cleaner';
 import {
   ensureCharacterDossier,
@@ -256,13 +257,12 @@ export function processCharacterJournalAndDossier(
   allowedDossierRecordIds: string[] = []
 ): { character: Character; changed: boolean } {
   const charWithDossier = ensureCharacterDossier(character);
-  const dossier: InvestigatorDossier = {
-    ...charWithDossier.investigatorDossier,
-    clues: [...charWithDossier.investigatorDossier.clues],
-    npcs: [...charWithDossier.investigatorDossier.npcs],
-    locations: [...charWithDossier.investigatorDossier.locations],
-    notes: [...charWithDossier.investigatorDossier.notes],
-  };
+  // Dossier entries are persisted JSON data. Stage their nested relations too:
+  // updating a witness or linking a clue must not mutate the accepted roster
+  // before the turn transaction checks its original snapshot and commits.
+  const dossier: InvestigatorDossier = JSON.parse(
+    JSON.stringify(charWithDossier.investigatorDossier)
+  );
   const allowedDossierRecordIdSet = new Set(
     allowedDossierRecordIds.map((id) => id.trim()).filter(Boolean),
   );
@@ -1595,11 +1595,11 @@ export function appendJournalFromText(
   rawText: string,
   messageId: string
 ): Character {
-  return appendJournalFromTextWithoutActTag(
+  return capturePublicJournalTurn(appendJournalFromTextWithoutActTag(
     advanceNarrativeAct(character, rawText),
     stripNarrativeActTags(rawText),
     messageId
-  );
+  ), rawText, messageId);
 }
 
 export function appendJournalToParty(
@@ -1608,7 +1608,8 @@ export function appendJournalToParty(
   rawText: string,
   messageId: string,
   clueAcquisitionCause?: ClueAcquisitionCause,
-  allowedDossierRecordIds: string[] = []
+  allowedDossierRecordIds: string[] = [],
+  publicContext: PublicJournalContext = {}
 ): {
   characters: Character[];
   activeCharacter: Character;
@@ -1633,5 +1634,10 @@ export function appendJournalToParty(
     clueAcquisitionCause,
     allowedDossierRecordIds
   );
-  return { ...result, changed: result.changed || actChanged };
+  const sharedJournal = buildPublicJournal({ characters: result.characters, chapter: publicContext.scope ?? result.activeCharacter.chronicleSession,
+    binding: publicContext.binding, locale: 'pl' });
+  const recorded = capturePublicJournalTurn(result.activeCharacter, rawText, messageId, { sceneLocation: sharedJournal.scene?.location,
+    ...publicContext, knownMaterialRecordIds: sharedJournal.cards.flatMap(card => card.material?.recordId ? [card.material.recordId] : []) });
+  const updated = result.characters.map(character => character.id === recorded.id ? recorded : character);
+  return { characters: updated, activeCharacter: recorded, changed: result.changed || actChanged || recorded !== result.activeCharacter };
 }

@@ -4,13 +4,12 @@
  * Odpowiada za deterministyczne mapowanie stanu świata i somatyczne impulsy grozy na fizyczne oświetlenie.
  */
 
+import type { LightingTarget } from '../ambilight/client';
+import type { LightingPayload } from '../ambilight/color';
 import { HueClient } from './hue-client';
-import {
-  HueLightStateSnapshot,
-  LightPreset,
-  SceneLightingMood,
-} from './types';
+import { HueLightStateSnapshot, LightPreset, SceneLightingMood } from './types';
 import presetsData from './light-presets.json';
+import { resolveLightingScene } from './score';
 
 export class LightDirector {
   private client: HueClient;
@@ -19,10 +18,51 @@ export class LightDirector {
   private presets: Record<string, LightPreset>;
   private lastFlashTimestamp: number = 0;
   private readonly FLASH_COOLDOWN_MS = 1500;
+  private suspended = false;
+  private generation = 0;
+  private pending = new Set<ReturnType<typeof setTimeout>>();
+  private starting: Promise<void> | null = null;
 
-  constructor(client: HueClient) {
+  public cancelPending(): void {
+    this.generation += 1;
+    for (const timer of this.pending) clearTimeout(timer);
+    this.pending.clear();
+  }
+
+  public cancelPendingEffects(): void { this.cancelPending(); }
+
+  private async applyLights(payload: Record<string, unknown>): Promise<void> {
+    if (this.suspended) return;
+    const hue = this.client.applyToSelectedLights(payload);
+    if (this.additionalTarget?.isEnabled()) void this.additionalTarget.apply(payload as LightingPayload).catch(() => undefined);
+    await hue;
+  }
+
+  public pause(): void {
+    this.suspended = true;
+    this.cancelPending();
+  }
+  public async resume(): Promise<void> {
+    this.suspended = false;
+    await this.applyPreset(this.currentMood);
+  }
+
+  private schedule(callback: () => Promise<void>, delay: number): void {
+    if (this.suspended) return;
+    const generation = this.generation;
+    const timer = setTimeout(() => {
+      this.pending.delete(timer);
+      if (generation === this.generation && !this.suspended)
+        void callback().catch(() => {});
+    }, delay);
+    this.pending.add(timer);
+  }
+
+  constructor(client: HueClient, private additionalTarget?: LightingTarget) {
     this.client = client;
-    this.presets = (presetsData as unknown as { presets: Record<string, LightPreset> }).presets;
+    this.presets = (
+      presetsData as unknown as { presets: Record<string, LightPreset> }
+    ).presets;
   }
 
   /**
@@ -35,6 +75,14 @@ export class LightDirector {
     }
     this.lastFlashTimestamp = now;
     return true;
+  }
+
+  public resetSession(): void {
+    this.cancelPending();
+    this.initialSnapshot = null;
+    this.starting = null;
+    this.suspended = false;
+    this.client.clearHeartbeat();
   }
 
   public getClient(): HueClient {
@@ -52,37 +100,46 @@ export class LightDirector {
   /**
    * Start sesji: pobiera stan początkowy oświetlenia do bezpiecznego przywrócenia (Safety Snapshot)
    */
-  public async onSessionStart(): Promise<void> {
+  public async onSessionStart(applyDefault = true): Promise<void> {
     const config = this.client.getConfig();
-    if (!config.enabled) return;
+    if (!config.enabled && !this.additionalTarget?.isEnabled()) return;
 
-    this.initialSnapshot = await this.client.captureSnapshot();
-    // Ustawienie domyślnego nastroju wnętrz retro lat 20.
-    await this.applyPreset('kerosene_lamp', 3000);
+    if (this.starting) return this.starting ?? undefined;
+    this.suspended = false;
+    this.starting = (async () => {
+      if (config.enabled) this.initialSnapshot = await this.client.captureSnapshot();
+      if (applyDefault) await this.applyPreset('kerosene_lamp', 3000);
+    })();
+    try {
+      await this.starting;
+    } finally {
+      this.starting = null;
+    }
   }
 
   /**
    * Zakończenie sesji [KONIEC_SESJI]: bezpieczne przywrócenie stanu oświetlenia sprzed gry
    */
   public async onSessionEnd(): Promise<void> {
-    const config = this.client.getConfig();
-    if (!config.enabled || !this.initialSnapshot) return;
-
-    await this.client.restoreSnapshot(this.initialSnapshot, 4000);
+    this.pause();
+    if (this.starting) await this.starting;
+    await Promise.allSettled([
+      this.initialSnapshot ? this.client.restoreSnapshot(this.initialSnapshot, 4000) : Promise.resolve(),
+      this.additionalTarget?.end() ?? Promise.resolve(),
+    ]);
     this.initialSnapshot = null;
   }
 
   /**
    * Awaryjny przycisk bezpieczeństwa w UI (Emergency Light):
-   * Natychmiast zapala bezpieczne, jasne światło domowe (2700K, 80% jasności)
+   * Natychmiast zapala bezpieczne, jasne światło domowe (2700K, 100% jasności)
    */
   public async triggerEmergencyLight(): Promise<void> {
-    await this.client.applyToSelectedLights({
-      on: { on: true },
-      dimming: { brightness: 80 },
-      color_temperature: { mirek: 370 }, // 2700K ciepła biel domowa
-      dynamics: { duration: 1000 },
-    });
+    this.pause();
+    await Promise.allSettled([
+      this.client.getConfig().enabled ? this.client.emergency() : Promise.resolve(),
+      this.additionalTarget?.isEnabled() ? this.additionalTarget.apply({ on: { on: true }, dimming: { brightness: 100 }, color_temperature: { mirek: 370 } }) : Promise.resolve(),
+    ]);
   }
 
   /**
@@ -90,17 +147,18 @@ export class LightDirector {
    */
   public async applyPreset(
     presetId: SceneLightingMood | string,
-    overrideTransitionMs?: number
+    overrideTransitionMs?: number,
+    brightness?: number
   ): Promise<boolean> {
     const preset = this.presets[presetId];
-    if (!preset) return false;
+    if (!preset || this.suspended) return false;
 
     this.currentMood = presetId as SceneLightingMood;
     const duration = overrideTransitionMs ?? preset.transitionMs;
 
     const payload: Record<string, unknown> = {
       on: { on: true },
-      dimming: { brightness: preset.brightness },
+      dimming: { brightness: brightness ?? preset.brightness },
       dynamics: { duration },
     };
 
@@ -110,7 +168,7 @@ export class LightDirector {
       payload.color = { xy: { x: preset.xy[0], y: preset.xy[1] } };
     }
 
-    await this.client.applyToSelectedLights(payload);
+    await this.applyLights(payload);
     return true;
   }
 
@@ -121,17 +179,17 @@ export class LightDirector {
    */
   public async triggerSanityShock(): Promise<void> {
     const config = this.client.getConfig();
-    if (!config.enabled) return;
+    if ((!config.enabled && !this.additionalTarget?.isEnabled()) || this.suspended) return;
 
     // Krok 1: Natychmiastowe uderzenie ciemności
-    await this.client.applyToSelectedLights({
+    await this.applyLights({
       on: { on: true },
       dimming: { brightness: 3 }, // prawie całkowity mrok
       dynamics: { duration: 200 },
     });
 
     // Krok 2: Adaptacja wzroku po 1.2 sekundy szoku
-    setTimeout(async () => {
+    this.schedule(async () => {
       await this.applyPreset(this.currentMood, 4000);
     }, 1200);
   }
@@ -141,19 +199,19 @@ export class LightDirector {
    */
   public async triggerFlicker(): Promise<void> {
     const config = this.client.getConfig();
-    if (!config.enabled) return;
+    if ((!config.enabled && !this.additionalTarget?.isEnabled()) || this.suspended) return;
 
     const currentPreset = this.presets[this.currentMood];
     const baseBrightness = currentPreset ? currentPreset.brightness : 35;
 
     // Krótkie przygaśnięcie
-    await this.client.applyToSelectedLights({
+    await this.applyLights({
       dimming: { brightness: Math.max(5, Math.floor(baseBrightness * 0.2)) },
       dynamics: { duration: 150 },
     });
 
-    setTimeout(async () => {
-      await this.client.applyToSelectedLights({
+    this.schedule(async () => {
+      await this.applyLights({
         dimming: { brightness: baseBrightness },
         dynamics: { duration: 300 },
       });
@@ -165,19 +223,20 @@ export class LightDirector {
    */
   public async triggerLightningFlash(): Promise<boolean> {
     const config = this.client.getConfig();
-    if (!config.enabled || !this.canTriggerFlash()) return false;
+    if ((!config.enabled && !this.additionalTarget?.isEnabled()) || this.suspended || !this.canTriggerFlash())
+      return false;
 
     const currentPreset = this.presets[this.currentMood];
     const restoreMs = currentPreset ? currentPreset.transitionMs : 2000;
 
-    await this.client.applyToSelectedLights({
+    await this.applyLights({
       on: { on: true },
       dimming: { brightness: 100 },
       color_temperature: { mirek: 153 }, // 6500K zimna biel wyładowania
       dynamics: { duration: 80 },
     });
 
-    setTimeout(async () => {
+    this.schedule(async () => {
       await this.applyPreset(this.currentMood, restoreMs);
     }, 100);
 
@@ -189,19 +248,20 @@ export class LightDirector {
    */
   public async triggerGunshotFlash(): Promise<boolean> {
     const config = this.client.getConfig();
-    if (!config.enabled || !this.canTriggerFlash()) return false;
+    if ((!config.enabled && !this.additionalTarget?.isEnabled()) || this.suspended || !this.canTriggerFlash())
+      return false;
 
     const currentPreset = this.presets[this.currentMood];
     const restoreMs = currentPreset ? currentPreset.transitionMs : 1500;
 
-    await this.client.applyToSelectedLights({
+    await this.applyLights({
       on: { on: true },
       dimming: { brightness: 100 },
       color_temperature: { mirek: 333 }, // 3000K błysk prochu
       dynamics: { duration: 60 },
     });
 
-    setTimeout(async () => {
+    this.schedule(async () => {
       await this.applyPreset(this.currentMood, restoreMs);
     }, 80);
 
@@ -213,30 +273,31 @@ export class LightDirector {
    */
   public async triggerElectricalSpark(): Promise<boolean> {
     const config = this.client.getConfig();
-    if (!config.enabled || !this.canTriggerFlash()) return false;
+    if ((!config.enabled && !this.additionalTarget?.isEnabled()) || this.suspended || !this.canTriggerFlash())
+      return false;
 
     // Błysk 1
-    await this.client.applyToSelectedLights({
+    await this.applyLights({
       dimming: { brightness: 90 },
       color_temperature: { mirek: 180 },
       dynamics: { duration: 50 },
     });
 
-    setTimeout(async () => {
+    this.schedule(async () => {
       // Przygaśnięcie
-      await this.client.applyToSelectedLights({
+      await this.applyLights({
         dimming: { brightness: 10 },
         dynamics: { duration: 40 },
       });
 
-      setTimeout(async () => {
+      this.schedule(async () => {
         // Błysk 2
-        await this.client.applyToSelectedLights({
+        await this.applyLights({
           dimming: { brightness: 85 },
           dynamics: { duration: 50 },
         });
 
-        setTimeout(async () => {
+        this.schedule(async () => {
           await this.applyPreset(this.currentMood, 800);
         }, 60);
       }, 50);
@@ -275,6 +336,7 @@ export class LightDirector {
    * Deterministyczna analiza stanu gry: dobór nastroju na podstawie pory dnia, lokacji i słów kluczowych (Q1 -> C)
    */
   public evaluateEnvironmentMood(params: {
+    adventureId?: string;
     hour?: number;
     isOutdoor?: boolean;
     isUnderground?: boolean;
@@ -283,6 +345,11 @@ export class LightDirector {
     explicitMood?: SceneLightingMood;
     locationText?: string;
   }): SceneLightingMood {
+    if (params.adventureId === 'cien-nad-prabutami' && params.locationText) {
+      const scene = resolveLightingScene(params.locationText);
+      const preset = scene?.lighting.presetId;
+      if (preset && this.presets[preset]) return preset as SceneLightingMood;
+    }
     // 1. Jawny wybór z węzła przygody (Q1 -> C priorytet)
     if (params.explicitMood && this.presets[params.explicitMood]) {
       return params.explicitMood;
@@ -292,60 +359,148 @@ export class LightDirector {
     if (params.locationText) {
       const txt = params.locationText.toLowerCase();
       // Priorytet 1: Anomalie Mitów i nadnaturalne zjawiska
-      if (txt.includes('kolor z innego') || txt.includes('meteoryt') || txt.includes('anomali') || txt.includes('nieziemsk')) {
+      if (
+        txt.includes('kolor z innego') ||
+        txt.includes('meteoryt') ||
+        txt.includes('anomali') ||
+        txt.includes('nieziemsk')
+      ) {
         return 'colour_out_of_space';
       }
-      if (txt.includes('rytuał') || txt.includes('ołtarz') || txt.includes('krwaw') || txt.includes('ofiarn')) {
+      if (
+        txt.includes('rytuał') ||
+        txt.includes('ołtarz') ||
+        txt.includes('krwaw') ||
+        txt.includes('ofiarn')
+      ) {
         return 'bloody_ritual';
       }
-      if (txt.includes("r'lyeh") || txt.includes('rlyeh') || txt.includes('cyklopow') || txt.includes('lodowat')) {
+      if (
+        txt.includes("r'lyeh") ||
+        txt.includes('rlyeh') ||
+        txt.includes('cyklopow') ||
+        txt.includes('lodowat')
+      ) {
         return 'frozen_rlyeh';
       }
 
       // Priorytet 2: Specyficzne lokacje fabularne
-      if (/\b(las\w*|leśn\w*|bór|boru|puszcz\w*|drzew\w*)\b/i.test(txt) || /\bsad\b/i.test(txt)) {
+      if (
+        /\b(las\w*|leśn\w*|bór|boru|puszcz\w*|drzew\w*)\b/i.test(txt) ||
+        /\bsad\b/i.test(txt)
+      ) {
         return 'deep_forest';
       }
-      if (txt.includes('bagn') || txt.includes('moczar') || txt.includes('torf')) {
+      if (
+        txt.includes('bagn') ||
+        txt.includes('moczar') ||
+        txt.includes('torf')
+      ) {
         return 'murky_swamp';
       }
-      if (txt.includes('kopaln') || txt.includes('sztolni') || txt.includes('bunk') || txt.includes('szyb')) {
+      if (
+        txt.includes('kopaln') ||
+        txt.includes('sztolni') ||
+        txt.includes('bunk') ||
+        txt.includes('szyb')
+      ) {
         return 'mine_shaft';
       }
-      if (txt.includes('morz') || txt.includes('port') || txt.includes('wybrzez') || txt.includes('plaż') || txt.includes('klif')) {
+      if (
+        txt.includes('morz') ||
+        txt.includes('port') ||
+        txt.includes('wybrzez') ||
+        txt.includes('plaż') ||
+        txt.includes('klif')
+      ) {
         return 'foggy_coast';
       }
-      if (txt.includes('ulic') || txt.includes('zauł') || txt.includes('alei') || txt.includes('miast')) {
+      if (
+        txt.includes('ulic') ||
+        txt.includes('zauł') ||
+        txt.includes('alei') ||
+        txt.includes('miast')
+      ) {
         return 'rainy_noir_street';
       }
-      if (txt.includes('krypt') || txt.includes('grobow') || txt.includes('cment') || txt.includes('klasztor')) {
+      if (
+        txt.includes('krypt') ||
+        txt.includes('grobow') ||
+        txt.includes('cment') ||
+        txt.includes('klasztor')
+      ) {
         return 'monastery_crypt';
       }
-      if (txt.includes('radio') || txt.includes('kabl') || txt.includes('antyst') || txt.includes('elektron')) {
+      if (
+        txt.includes('radio') ||
+        txt.includes('kabl') ||
+        txt.includes('antyst') ||
+        txt.includes('elektron')
+      ) {
         return 'radio_shack_electronic';
       }
-      if (txt.includes('archiw') || txt.includes('bibliotek') || txt.includes('regał') || txt.includes('czytel')) {
+      if (
+        txt.includes('archiw') ||
+        txt.includes('bibliotek') ||
+        txt.includes('regał') ||
+        txt.includes('czytel')
+      ) {
         return 'parish_archive';
       }
-      if (txt.includes('areszt') || txt.includes('przesłuch') || txt.includes('komisariat') || txt.includes('cel')) {
+      if (
+        txt.includes('areszt') ||
+        txt.includes('przesłuch') ||
+        txt.includes('komisariat') ||
+        txt.includes('cel')
+      ) {
         return 'police_interrogation';
       }
-      if (txt.includes('głębin') || /\b(toń|toni|dno)\b/i.test(txt) || txt.includes('zatopion')) {
+      if (
+        txt.includes('głębin') ||
+        /\b(toń|toni|dno)\b/i.test(txt) ||
+        txt.includes('zatopion')
+      ) {
         return 'abyssal_deep';
       }
-      if (txt.includes('pożar') || txt.includes('płon') || txt.includes('ogień') || txt.includes('płomien')) {
+      if (
+        txt.includes('pożar') ||
+        txt.includes('płon') ||
+        txt.includes('ogień') ||
+        txt.includes('płomien')
+      ) {
         return 'raging_fire';
       }
-      if (txt.includes('izolatk') || txt.includes('sanator') || txt.includes('psychiatr') || txt.includes('szpital')) {
+      if (
+        txt.includes('izolatk') ||
+        txt.includes('sanator') ||
+        txt.includes('psychiatr') ||
+        txt.includes('szpital')
+      ) {
         return 'asylum_solitary';
       }
-      if (txt.includes('speakeasy') || txt.includes('jazz') || txt.includes('klub') || txt.includes('szynk') || txt.includes('melin')) {
+      if (
+        txt.includes('speakeasy') ||
+        txt.includes('jazz') ||
+        txt.includes('klub') ||
+        txt.includes('szynk') ||
+        txt.includes('melin')
+      ) {
         return 'speakeasy_jazz';
       }
-      if (txt.includes('jarzeniówk') || txt.includes('świetlówk') || txt.includes('komitet') || txt.includes('milicj')) {
+      if (
+        txt.includes('jarzeniówk') ||
+        txt.includes('świetlówk') ||
+        txt.includes('komitet') ||
+        txt.includes('milicj')
+      ) {
         return 'prl_fluorescent';
       }
-      if (txt.includes('gabinet') || txt.includes('narad') || txt.includes('odpoczynek') || txt.includes('pokój badacz')) {
+      if (
+        txt.includes('gabinet') ||
+        txt.includes('narad') ||
+        txt.includes('odpoczynek') ||
+        txt.includes('pokój badacz')
+      ) {
         return 'investigator_study';
       }
     }

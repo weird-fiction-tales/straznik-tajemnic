@@ -36,3 +36,7 @@ data/cache/
 # Lokalny znacznik buildu paczki desktopowej
 build-info.json
 
+
+# Private prepared artwork and local acceptance evidence
+_tester/_base/.silnik/src/lib/adventures/starter-artwork.generated.ts
+docs/audits/hue-lighting/evidence/

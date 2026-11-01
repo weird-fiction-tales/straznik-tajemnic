@@ -56,7 +56,7 @@ describe('canonical commit and recoverable retry', () => {
     write.mockRestore();warning.mockRestore();
     expect(fs.existsSync(path.join(directory,'memory','pending-turns',token+'.json'))).toBe(false);
     jest.isolateModules(()=>{
-      const other:typeof import('./commit-turn')=require('./commit-turn');
+      const other:typeof import('./commit-turn')=jest.requireActual('./commit-turn');
       expect(other.retryMemoryTurn(token)).toMatchObject({status:'saved',messageId:turn.messageId});
     });
     expect(mockLedger.list(scope).map(entry=>entry.text)).toEqual(['Question','Answer']);
@@ -201,7 +201,7 @@ test('correction remains single-use and scope-bound across separately loaded rou
  const identity={scope,sessionId:'s',messageId:'m',userText:'Question',contextHash:'exact-request'};
  const token=stageDossierTurn({turn,correctionContextHash:identity.contextHash});
  jest.isolateModules(()=>{
-   const other:typeof import('./commit-turn')=require('./commit-turn');
+   const other:typeof import('./commit-turn')=jest.requireActual('./commit-turn');
    other.finalizeDossierTurn(token,false);
    expect(()=>other.consumeDossierCorrection(token,{...identity,scope:{...scope,playthroughId:'other'}})).toThrow('DOSSIER_CORRECTION_SCOPE');
    expect(other.consumeDossierCorrection(token,identity)).toBe('Answer');

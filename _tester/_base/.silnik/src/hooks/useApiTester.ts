@@ -1,4 +1,5 @@
 'use client';
+import { getHueStatus } from '@/lib/hardware/hue/hue-client';
 
 import { useState, useCallback } from 'react';
 
@@ -122,14 +123,11 @@ export function useApiTester(options: UseApiTesterOptions): UseApiTesterReturn {
           }
 
           case 'hue': {
-            if (typeof window !== 'undefined') {
-              const raw = localStorage.getItem('straznik_hue_config');
-              const cfg = raw ? JSON.parse(raw) : null;
-              const isConfigured = Boolean(cfg?.enabled && cfg?.bridgeIp && cfg?.appKey);
-              setTestResults((prev) => ({ ...prev, hue: isConfigured }));
-            } else {
-              setTestResults((prev) => ({ ...prev, hue: false }));
-            }
+            const status = await getHueStatus();
+            setTestResults((prev) => ({
+              ...prev,
+              hue: status.paired && !status.error && status.lights.length > 0,
+            }));
             setIsLoading(false);
             return;
           }

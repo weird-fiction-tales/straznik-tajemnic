@@ -1,4 +1,5 @@
 import type { ImageRequest } from '@/lib/parsers/types';
+import type { Message } from '@/lib/types';
 import type {
   AdventurePackAsset,
   AdventurePackHandoutAsset,
@@ -51,6 +52,33 @@ function assetUrl(pack: PreparedPack, asset: AdventurePackAsset): string | null 
   return `/adventure-packs/${directory}/${asset.file}`;
 }
 
+const openingUrls = new Set(Object.values(PACKS).flatMap(pack => pack.assets
+  .filter(asset => asset.id.startsWith('opening-'))
+  .map(asset => assetUrl(pack, asset))
+  .filter((url): url is string => url !== null)));
+
+/** Hide repeated prepared openings in old saves while preserving the complete source history. */
+export function deduplicatePreparedOpenings(messages: readonly Message[]): Message[] {
+  const seen = new Set<string>();
+  return messages.map(message => {
+    const images = message.generatedImages;
+    if (!images?.length) return message;
+    const keep = images.map((url, index) => {
+      if (!openingUrls.has(url)) return index;
+      if (seen.has(url)) return null;
+      seen.add(url);
+      return index;
+    }).filter((index): index is number => index !== null);
+    if (keep.length === images.length) return message;
+    return {
+      ...message,
+      generatedImages: keep.map(index => images[index]),
+      ...(message.generatedImageTypes ? { generatedImageTypes: message.generatedImageTypes.filter((_type, index) => keep.includes(index)) } : {}),
+      ...(message.generatedImageCacheIds ? { generatedImageCacheIds: message.generatedImageCacheIds.filter((_id, index) => keep.includes(index)) } : {}),
+    };
+  });
+}
+
 /**
  * Reuse the exact authored handout, node or NPC image for an authored scenario.
  * A miss is intentionally explicit: only an unprepared visual reaches /api/imagen.
@@ -99,7 +127,9 @@ export function resolvePreparedAdventureVisual(
     type === 'location' ? asset.category === 'node' || asset.category === 'kv' :
     asset.category === 'node' || asset.category === 'kv';
 
-  let asset: AdventurePackAsset | undefined;
+  // Stable authored identities precede filenames, including legacy files whose labels were swapped.
+  let asset: AdventurePackAsset | undefined = query ? pack.assets.find(entry => categoryAllowed(entry) &&
+    [entry.id,entry.nodeId,entry.clueId].some(id=>id && normalize(id)===normalize(query))) : undefined;
   if (!asset && query) {
     asset = pack.assets.find((entry) => categoryAllowed(entry) && matchesName(query, [
       entry.id,

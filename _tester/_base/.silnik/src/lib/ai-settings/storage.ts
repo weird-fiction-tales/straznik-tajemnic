@@ -1,6 +1,10 @@
 import { AISettings, normalizeSessionZeroSettings } from './types';
 import { defaultAISettings } from './defaults';
 import { applyPreset } from '../ai-presets';
+import {
+  NARRATION_MAX_OUTPUT_TOKENS,
+  QUALITY_PRESETS,
+} from '../ai-presets/definitions';
 
 // Funkcje pomocnicze
 export const saveAISettings = (settings: AISettings) => {
@@ -67,6 +71,14 @@ export const loadAISettings = (): AISettings => {
           geminiSettings: {
             ...defaultAISettings.geminiSettings,
             ...parsedSettings.geminiSettings,
+            // Upgrade legacy preset budgets without reapplying media or narration.
+            ...(parsedSettings.qualityPreset !== 'custom' &&
+            Object.hasOwn(
+              QUALITY_PRESETS,
+              parsedSettings.qualityPreset ?? defaultAISettings.qualityPreset
+            )
+              ? { maxOutputTokens: NARRATION_MAX_OUTPUT_TOKENS }
+              : {}),
           },
           voiceSettings: {
             ...defaultAISettings.voiceSettings,

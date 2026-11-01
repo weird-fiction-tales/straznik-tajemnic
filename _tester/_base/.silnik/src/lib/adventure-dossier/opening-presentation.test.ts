@@ -9,17 +9,17 @@ async function edition(){
  return authorizeLocalDraftPayload(createAuthoredPrabutyPayload(fp),{adventureId:'cien-nad-prabutami',editionFingerprint:fp});
 }
 const photo='prabuty.media.clue-photo-prabuty-1947';
-test('the newsroom opening visibly presents its source photograph without requiring a model handout tag or granting an item',async()=>{
+test('a closed folder in the newsroom opening never reveals its photograph',async()=>{
  const payload=await edition(),before=JSON.stringify(payload);
- const result=composeOpeningPresentation(payload,'Helena kładzie fotografię na biurku.',[],true);
- expect(result.handouts).toEqual([photo]);expect(result.content).toContain('[HANDOUT:'+photo+']');
+ const result=composeOpeningPresentation(payload,'Helena podaje zamkniętą teczkę. Wspomina o fotografii.',[],true);
+ expect(result.handouts).toEqual([]);expect(result.content).not.toContain('[HANDOUT:');
  expect(result.content).not.toMatch(/EKWIPUNEK|clue-sb-file-klin|clue-tape/);
  expect(JSON.stringify(payload)).toBe(before);
 });
-test('does not duplicate a model-presented photograph and never broadens the remaining handout allowlist',async()=>{
+test('an opening model tag cannot authorize revealing the closed folder contents',async()=>{
  const payload=await edition();
  const result=composeOpeningPresentation(payload,'[HANDOUT:clue-photo-prabuty-1947]',[photo],true);
- expect(result.handouts).toEqual([photo]);expect(result.content.match(/HANDOUT:/g)).toHaveLength(1);
+ expect(result.handouts).toEqual([]);expect(result.content).not.toContain('[HANDOUT:');
 });
 test('unregistered copies and other openings cannot use this source-specific reveal',async()=>{
  const payload=await edition();

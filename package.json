@@ -1,6 +1,6 @@
 {
   "name": "straznik-tajemnic-root",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "private": true,
   "scripts": {
     "build": "cd _tester/_base/.silnik && npm run build",

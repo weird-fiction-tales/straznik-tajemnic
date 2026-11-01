@@ -1,3 +1,4 @@
+import '@/components/ui/deco-window.css';
 import { SafeImage } from '@/components/ui/safe-image';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
@@ -14,7 +15,6 @@ import { Loader2, X, Maximize2, Minimize2, Play, Pause, RotateCcw, Disc } from '
 import { getApiKeyHeaders } from '@/lib/api-keys-service';
 import { DiegeticDocumentViewer } from './diegetic-document-viewer';
 import { EquipmentImagePlaceholder } from './equipment-image-placeholder';
-import { CATEGORY_LABELS } from '@/lib/equipment-data';
 import { resolveGameEraContext, formatEraCurrency, formatWeaponRange, type ResolvedEraContext } from '@/lib/era';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
@@ -194,7 +194,8 @@ export function EquipmentDetailDialog({
 
   if (!item) return null;
 
-  const canRequestRead = item.category === 'document' || item.isReadable === true || Boolean(item.readableContent);
+  const canRequestRead = Boolean(item.readableContent) || (!item.dossierBinding &&
+    (item.category === 'document' || item.isReadable === true));
 
   const handleReadItem = async () => {
     if (!onUpdateItem) return;
@@ -290,7 +291,7 @@ export function EquipmentDetailDialog({
   const mechanics = getItemMechanics(item, resolvedEraContext, locale);
   const hasImage = !!item.imageUrl && !item.mapUrl && !item.isMap;
   const hasMap = !!(item.mapUrl || (item.imageUrl && item.isMap));
-  const categoryLabel = CATEGORY_LABELS[item.category] || item.category;
+  const categoryLabel = t.has(`categories.${item.category}`) ? t(`categories.${item.category}`) : item.category;
   const effectiveLore = getLocalizedEquipmentDescription(item, locale);
 
   return (
@@ -301,7 +302,7 @@ export function EquipmentDetailDialog({
         />
         <DialogPrimitive.Content
           className={cn(
-            'fixed z-[100] flex flex-col bg-[#120e0a] border-2 border-brass/60 overflow-hidden shadow-2xl focus:outline-none pointer-events-auto transition-all duration-200',
+            'deco-window fixed z-[100] flex flex-col bg-[#120e0a] border-2 border-brass/60 overflow-hidden shadow-2xl focus:outline-none pointer-events-auto transition-all duration-200',
             isExpanded
               ? 'inset-0 w-screen h-screen max-h-none'
               : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] md:w-[60vw] h-[78vh] max-h-[85vh] rounded-none shadow-deco'

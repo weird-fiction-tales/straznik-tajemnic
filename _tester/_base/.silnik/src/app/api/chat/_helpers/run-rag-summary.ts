@@ -45,6 +45,7 @@ export interface RunRAGAndSummaryOpts {
   recipientIds?:string[];
   sceneEntityIds?:string[];
   allowedNamespaces?:string[];
+  availableContextTokens?: number;
   adaptiveTokenThreshold?: number;
   adaptiveTurnThreshold?: number;
 }
@@ -124,6 +125,7 @@ export async function runRAGAndSummary(
     scope: memoryScope,
     locale: locale ?? 'pl',
     queryEmbedding,recipientIds:opts.recipientIds,sceneEntityIds:opts.sceneEntityIds,
+    availableContextTokens: opts.availableContextTokens,
     adaptiveTokenThreshold: opts.adaptiveTokenThreshold,
     adaptiveTurnThreshold: opts.adaptiveTurnThreshold,
   });

@@ -3,8 +3,24 @@ import type { HotSeatConfig, Character } from './types';
 import { FullGameSaveManager } from './full-game-save-manager';
 import type { WorldSetupBundleV1 } from './world-setup';
 import { PREDEFINED_CHARACTERS } from './immersion/predefined-characters';
+import { makePublicJournalFixture } from '@/tests/fixtures/public-journal';
+import { buildPublicJournal, markJournalCardRead } from './journal/public-journal';
 
 describe('FullGameSaveManager duet persistence', () => {
+  it('round-trips shared public knowledge, exact sources, observed materials and read versions without chat history', () => {
+    const fixture = makePublicJournalFixture('pl');
+    const finding = fixture.model.cards.find(card => card.title === fixture.labels.finding)!;
+    fixture.characters[0] = markJournalCardRead(fixture.characters[0], fixture.model.scopeKey, finding);
+    const save = FullGameSaveManager.createFullSave({ name: 'Public journal', userId: 'local', messages: [],
+      gameSettings: { aiSettings: {} as AISettings }, characters: fixture.characters, campaigns: [], npcs: [], locations: [] });
+    const loaded = FullGameSaveManager.decompressSave(FullGameSaveManager.compressSave(save));
+    expect(loaded).not.toBeNull();
+    const model = buildPublicJournal({ characters: loaded!.characters, chapter: fixture.chapter, binding: fixture.binding, locale: 'pl' });
+    expect(model.cards.find(card => card.id === finding.id)?.unread).toBeUndefined();
+    expect(model.cards.find(card => card.id === finding.id)).toMatchObject({
+      sources: expect.arrayContaining([expect.objectContaining({ excerpt: fixture.labels.first }), expect.objectContaining({ excerpt: fixture.labels.second })]) });
+    expect(model.cards.find(card => card.kind === 'material')?.material?.recordId).toBe(fixture.materialId);
+  });
   it('preserves a dossier clue record ID across a full save and load', () => {
     const character: Character = {
       ...PREDEFINED_CHARACTERS[0],

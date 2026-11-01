@@ -14,7 +14,7 @@ export interface AdventurePackAsset {
   id: string;
   category: 'kv' | 'node' | 'npc' | 'item-clue' | 'item-gear';
   file: string;
-  aspectRatio: '16:9' | '3:4';
+  aspectRatio: '16:9' | '3:4' | '4:3';
   nameHashes?: string[];
   nodeId?: string;
   clueId?: string;
@@ -38,7 +38,7 @@ export interface AdventurePackHandoutAsset {
   slug: string;
   title: string;
   image: string;
-  aspectRatio: '16:9' | '3:4';
+  aspectRatio: '16:9' | '3:4' | '4:3';
   nodeId?: string;
   clueId?: string;
   tagsPl?: string[];
@@ -66,7 +66,7 @@ export interface AdventurePackManifest {
 export interface AssetResolveResult {
   priority: 1 | 2 | 3;
   assetUrl: string | null;
-  aspectRatio: '16:9' | '3:4';
+  aspectRatio: '16:9' | '3:4' | '4:3';
   cssFilter?: string;
   enhancedPrompt?: string;
   matchedAsset?: AdventurePackAsset;
@@ -146,7 +146,8 @@ export function resolveAdventureAsset({
     const cssFilter = manifest.visualDna?.cssFilterOverride;
 
     // 1.1 Dopasowanie bezpośrednie po clueId, nodeId lub nazwie pliku
-    const byIdOrFile = manifest.assets.find((asset) => {
+    const byIdOrFile = manifest.assets.find(asset => [asset.id,asset.clueId,asset.nodeId]
+      .some(id=>id?.toLowerCase()===query.toLowerCase())) ?? manifest.assets.find((asset) => {
       if (asset.clueId && asset.clueId.toLowerCase() === query.toLowerCase()) return true;
       if (asset.nodeId && asset.nodeId.toLowerCase() === query.toLowerCase()) return true;
       if (asset.id.toLowerCase() === query.toLowerCase()) return true;

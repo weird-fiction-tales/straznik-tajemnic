@@ -1,0 +1,381 @@
+{
+  "nodes": [
+    {
+      "id": "node-warszawa-redakcja",
+      "name": "Redakcja 'Sygnałów Nieznanego' (RTV Warszawa)",
+      "title": "Redakcja 'Sygnałów Nieznanego' (RTV Warszawa)",
+      "type": "intro",
+      "description": "Zimny, socrealistyczny gabinet redaktorki Heleny Krawczyk przy ul. Woronicza. Wokół kłęby dymu z papierosów 'Sport', taśmy montażowe i worki listów od telewidzów poruszonych fenomenem jasnowidza z Elbląga.",
+      "atmosphere": "Stukot maszyn do pisania, dym tytoniowy, zapach taniej kawy zbożowej i nerwowe spojrzenia w stronę korytarza.",
+      "npcs": [
+        "Helena Krawczyk",
+        "dr Jarosław Skrzyński"
+      ],
+      "npcIds": [
+        "npc-helena-krawczyk",
+        "npc-jaroslaw-skrzynski"
+      ],
+      "locationId": "loc-warszawa-redakcja",
+      "leadInClueIds": [],
+      "leadOutClueIds": [
+        "clue-photo-prabuty",
+        "clue-prague-delegation-list",
+        "clue-skrzynski-psychotronic-report"
+      ],
+      "availableClues": [
+        "clue-photo-prabuty",
+        "clue-prague-delegation-list",
+        "clue-skrzynski-psychotronic-report"
+      ],
+      "scenes": [
+        {
+          "sceneId": "scene-warszawa-redakcja",
+          "nodeId": "node-warszawa-redakcja",
+          "name": {
+            "pl": "Redakcja 'Sygnałów Nieznanego' (RTV Warszawa)",
+            "en": "RTV newsroom"
+          },
+          "aliases": [
+            "node-warszawa-redakcja",
+            "loc-warszawa-redakcja",
+            "Redakcja 'Sygnałów Nieznanego' (RTV Warszawa)",
+            "RTV newsroom",
+            "RTV Warszawa",
+            "Redakcja RTV"
+          ],
+          "lighting": {
+            "mode": "preset",
+            "presetId": "prl_fluorescent",
+            "brightness": 40,
+            "transitionMs": 3000,
+            "accents": [
+              {
+                "id": "scene-warszawa-redakcja-sanity-loss",
+                "trigger": "sanity-loss",
+                "effectId": "sanity-loss",
+                "returnToBase": true
+              },
+              {
+                "id": "scene-warszawa-redakcja-gunshot",
+                "trigger": "gunshot",
+                "effectId": "gunshot",
+                "returnToBase": true
+              },
+              {
+                "id": "scene-warszawa-redakcja-thunder",
+                "trigger": "thunder",
+                "effectId": "thunder",
+                "returnToBase": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "node-elblag-klasztor",
+      "name": "Klasztor św. Pawła w Elblągu (Cela o. Klimuszki)",
+      "title": "Klasztor św. Pawła w Elblągu (Cela o. Klimuszki)",
+      "type": "location",
+      "isBottleneck": true,
+      "description": "Skromna cela franciszkanina pachnąca suszonymi ziołami, miętą i starym papierem. Za oknem słychać mroźny wiatr od Zalewu Wiślanego, a pod ścianą stoi niepozorna czarna Wołga SB.",
+      "atmosphere": "Zapach suszonego dziurawca i waleriany, tykanie ściennego zegara, półmrok rozświetlany świecą i narastające napięcie elektromagnetyczne.",
+      "secret": "Cela jest całodobowo podsłuchiwana przez SB, a sam o. Klimuszko używa mieszanki nr 152, by powstrzymać wizje rozrywające jego umysł.",
+      "npcs": [
+        "Ojciec Andrzej Czesław Klimuszko"
+      ],
+      "npcIds": [
+        "npc-klimuszko"
+      ],
+      "locationId": "loc-elblag-klasztor",
+      "leadInClueIds": [
+        "clue-photo-prabuty",
+        "clue-polak-testimony-monk",
+        "clue-sb-wiretap-elblag-log"
+      ],
+      "leadOutClueIds": [
+        "clue-herbal-recipe-152",
+        "clue-wiretap-bug-elblag",
+        "clue-klimuszko-vision-crypt"
+      ],
+      "availableClues": [
+        "clue-herbal-recipe-152",
+        "clue-wiretap-bug-elblag",
+        "clue-klimuszko-vision-crypt"
+      ],
+      "scenes": [
+        {
+          "sceneId": "scene-elblag-klasztor",
+          "nodeId": "node-elblag-klasztor",
+          "name": {
+            "pl": "Klasztor św. Pawła w Elblągu (Cela o. Klimuszki)",
+            "en": "Klimuszko’s cell"
+          },
+          "aliases": [
+            "node-elblag-klasztor",
+            "loc-elblag-klasztor",
+            "Klasztor św. Pawła w Elblągu (Cela o. Klimuszki)",
+            "Klimuszko’s cell",
+            "Cela Klimuszki",
+            "Klasztor w Elblągu"
+          ],
+          "lighting": {
+            "mode": "preset",
+            "presetId": "candlelight",
+            "brightness": 25,
+            "transitionMs": 4000,
+            "accents": [
+              {
+                "id": "scene-elblag-klasztor-sanity-loss",
+                "trigger": "sanity-loss",
+                "effectId": "sanity-loss",
+                "returnToBase": true
+              },
+              {
+                "id": "scene-elblag-klasztor-gunshot",
+                "trigger": "gunshot",
+                "effectId": "gunshot",
+                "returnToBase": true
+              },
+              {
+                "id": "scene-elblag-klasztor-thunder",
+                "trigger": "thunder",
+                "effectId": "thunder",
+                "returnToBase": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "node-prabuty-wykopaliska",
+      "name": "Stara Plebania i Cmentarz w Prabutach",
+      "title": "Stara Plebania i Cmentarz w Prabutach",
+      "type": "location",
+      "isBottleneck": true,
+      "description": "Mglista, poniemiecka miejscowość na Powiślu, w której Klimuszko tuż po wojnie odnajdywał ukryte w ziemi starodruki i srebra. Lokalni mieszkańcy wciąż szepczą o nocnych błyskach światła wśród nagrobków.",
+      "atmosphere": "Gęsta mgła znad jeziora Liwieniec, krakanie wron, zapach wilgotnego torfu i dziwne mrowienie na skórze.",
+      "secret": "W ziemi wokół starej plebanii zalega radioaktywno-luminescencyjny popiół bursztynowy z 1945 roku, wskazujący podziemny korytarz do krypty.",
+      "npcs": [
+        "Tadeusz Polak"
+      ],
+      "npcIds": [
+        "npc-tadeusz-polak"
+      ],
+      "locationId": "loc-prabuty-wykopaliska",
+      "leadInClueIds": [
+        "clue-skrzynski-psychotronic-report",
+        "clue-herbal-recipe-152",
+        "clue-msw-excavation-order"
+      ],
+      "leadOutClueIds": [
+        "clue-amber-ashes",
+        "clue-polak-testimony-monk",
+        "clue-military-tire-tracks"
+      ],
+      "availableClues": [
+        "clue-amber-ashes",
+        "clue-polak-testimony-monk",
+        "clue-military-tire-tracks"
+      ],
+      "scenes": [
+        {
+          "sceneId": "scene-prabuty-wykopaliska",
+          "nodeId": "node-prabuty-wykopaliska",
+          "name": {
+            "pl": "Stara Plebania i Cmentarz w Prabutach",
+            "en": "Prabuty rectory and cemetery"
+          },
+          "aliases": [
+            "node-prabuty-wykopaliska",
+            "loc-prabuty-wykopaliska",
+            "Stara Plebania i Cmentarz w Prabutach",
+            "Prabuty rectory and cemetery",
+            "Plebania w Prabutach",
+            "Cmentarz w Prabutach"
+          ],
+          "lighting": {
+            "mode": "preset",
+            "presetId": "foggy_coast",
+            "brightness": 20,
+            "transitionMs": 5000,
+            "accents": [
+              {
+                "id": "scene-prabuty-wykopaliska-sanity-loss",
+                "trigger": "sanity-loss",
+                "effectId": "sanity-loss",
+                "returnToBase": true
+              },
+              {
+                "id": "scene-prabuty-wykopaliska-gunshot",
+                "trigger": "gunshot",
+                "effectId": "gunshot",
+                "returnToBase": true
+              },
+              {
+                "id": "scene-prabuty-wykopaliska-thunder",
+                "trigger": "thunder",
+                "effectId": "thunder",
+                "returnToBase": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "node-msw-warszawa",
+      "name": "Archiwum Operacyjne i Gabinet Gen. Majewskiego (MSW)",
+      "title": "Archiwum Operacyjne i Gabinet Gen. Majewskiego (MSW)",
+      "type": "location",
+      "isBottleneck": true,
+      "description": "Ciężkie dębowe meble, godło państwowe na ścianie, pancerne szafy na akta i cichy szum dalekopisów. Centrum dowodzenia operacją psychotroniczną KLIN.",
+      "atmosphere": "Chłód instytucjonalnego terroru, szczęk zamków szyfrowych, brzęczenie jarzeniówek i zapach pasty do podłóg.",
+      "secret": "Generał Majewski ukrywa przed Komitetem Centralnym fakt, że poprzedni eksperyment w Prabutach zakończył się śmiercią dwóch techników SB.",
+      "npcs": [
+        "Generał Edward Majewski"
+      ],
+      "npcIds": [
+        "npc-edward-majewski"
+      ],
+      "locationId": "loc-msw-warszawa",
+      "leadInClueIds": [
+        "clue-prague-delegation-list",
+        "clue-wiretap-bug-elblag",
+        "clue-military-tire-tracks"
+      ],
+      "leadOutClueIds": [
+        "clue-sb-file-klin",
+        "clue-sb-wiretap-elblag-log",
+        "clue-msw-excavation-order"
+      ],
+      "availableClues": [
+        "clue-sb-file-klin",
+        "clue-sb-wiretap-elblag-log",
+        "clue-msw-excavation-order"
+      ],
+      "scenes": [
+        {
+          "sceneId": "scene-msw-warszawa",
+          "nodeId": "node-msw-warszawa",
+          "name": {
+            "pl": "Archiwum Operacyjne i Gabinet Gen. Majewskiego (MSW)",
+            "en": "MSW operational archive"
+          },
+          "aliases": [
+            "node-msw-warszawa",
+            "loc-msw-warszawa",
+            "Archiwum Operacyjne i Gabinet Gen. Majewskiego (MSW)",
+            "MSW operational archive",
+            "Archiwum MSW",
+            "Gabinet MSW"
+          ],
+          "lighting": {
+            "mode": "preset",
+            "presetId": "institutional_cold",
+            "brightness": 55,
+            "transitionMs": 2500,
+            "accents": [
+              {
+                "id": "scene-msw-warszawa-sanity-loss",
+                "trigger": "sanity-loss",
+                "effectId": "sanity-loss",
+                "returnToBase": true
+              },
+              {
+                "id": "scene-msw-warszawa-gunshot",
+                "trigger": "gunshot",
+                "effectId": "gunshot",
+                "returnToBase": true
+              },
+              {
+                "id": "scene-msw-warszawa-thunder",
+                "trigger": "thunder",
+                "effectId": "thunder",
+                "returnToBase": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "node-prabuty-krypta-climax",
+      "name": "Zawalona Krypta pod Ruinami Kościoła w Prabutach (Finał)",
+      "title": "Zawalona Krypta pod Ruinami Kościoła w Prabutach (Finał)",
+      "type": "climax",
+      "isBottleneck": true,
+      "isClimax": true,
+      "description": "Podziemna komora pod spalonym w 1945 roku ołtarzem w Prabutach. Kable z wojskowego generatora SB oplatają popękane gotyckie kolumny, a w centrum unosi się pulsująca soczewka zakrzywionego czasu.",
+      "atmosphere": "Ogłuszający pisk aparatury pomiarowej, zapach ozonu i spalonego bursztynu, nakładające się na siebie obrazy z 1941, 1945 i 1973 roku.",
+      "secret": "Zniszczenie bursztynowej soczewki lub odcięcie zasilania generatorów SB przed północą zamyka szczelinę czwartego wymiaru, ratując umysł o. Klimuszki.",
+      "npcs": [
+        "Generał Edward Majewski",
+        "Ojciec Andrzej Czesław Klimuszko"
+      ],
+      "npcIds": [
+        "npc-edward-majewski",
+        "npc-klimuszko"
+      ],
+      "locationId": "loc-prabuty-krypta",
+      "leadInClueIds": [
+        "clue-klimuszko-vision-crypt",
+        "clue-amber-ashes",
+        "clue-sb-file-klin"
+      ],
+      "leadOutClueIds": [],
+      "availableClues": [],
+      "scenes": [
+        {
+          "sceneId": "scene-prabuty-krypta-climax",
+          "nodeId": "node-prabuty-krypta-climax",
+          "name": {
+            "pl": "Zawalona Krypta pod Ruinami Kościoła w Prabutach (Finał)",
+            "en": "Prabuty crypt"
+          },
+          "aliases": [
+            "node-prabuty-krypta-climax",
+            "loc-prabuty-krypta",
+            "Zawalona Krypta pod Ruinami Kościoła w Prabutach (Finał)",
+            "Prabuty crypt",
+            "Krypta w Prabutach",
+            "Ruiny kościoła w Prabutach"
+          ],
+          "lighting": {
+            "mode": "preset",
+            "presetId": "subterranean_dark",
+            "brightness": 10,
+            "transitionMs": 4000,
+            "accents": [
+              {
+                "id": "scene-prabuty-krypta-climax-sanity-loss",
+                "trigger": "sanity-loss",
+                "effectId": "sanity-loss",
+                "returnToBase": true
+              },
+              {
+                "id": "scene-prabuty-krypta-climax-gunshot",
+                "trigger": "gunshot",
+                "effectId": "gunshot",
+                "returnToBase": true
+              },
+              {
+                "id": "scene-prabuty-krypta-climax-thunder",
+                "trigger": "thunder",
+                "effectId": "thunder",
+                "returnToBase": true
+              },
+              {
+                "id": "prabuty-time-anomaly",
+                "trigger": "authored",
+                "effectId": "anomaly",
+                "returnToBase": true
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

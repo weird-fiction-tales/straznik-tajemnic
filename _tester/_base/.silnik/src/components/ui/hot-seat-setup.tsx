@@ -173,7 +173,7 @@ export function HotSeatSetup({
             <Button
               onClick={handleStart}
               disabled={!canStart}
-              className="bg-gradient-to-r from-green-500 to-pink-500 hover:from-green-600 hover:to-pink-600"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {t('confirmMode')}
             </Button>

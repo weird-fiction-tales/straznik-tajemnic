@@ -21,9 +21,12 @@ import {
 const sha = 'a'.repeat(64);
 const commitOld = '1111111111111111111111111111111111111111';
 const commitNew = '2222222222222222222222222222222222222222';
+const currentVersion: string = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')).version;
+const parts = currentVersion.split('.').map(Number);
+const nextVersion = `${parts[0]}.${parts[1]}.${parts[2] + 1}`;
 const manifest = {
   schemaVersion: 1,
-  version: '0.9.6',
+  version: nextVersion,
   channel: 'stable',
   bundleId: 'com.aios.straznik-tajemnic-ai',
   minimumMacOSVersion: '11.0',
@@ -47,7 +50,7 @@ describe('desktop update service', () => {
   });
 
   it('accepts only stable V1 manifests with HTTPS and the expected bundle ID', () => {
-    expect(validateManifest(manifest)?.version).toBe('0.9.6');
+    expect(validateManifest(manifest)?.version).toBe(nextVersion);
     expect(validateManifest({ ...manifest, commitSha: commitNew, shortCommit: '2222222', publishedAt: '2026-10-04T12:00:00.000Z' })?.commitSha).toBe(commitNew);
     expect(validateManifest({ ...manifest, commitSha: 'not-a-hex-sha!' })).toBeNull();
     expect(validateManifest({ ...manifest, publishedAt: 'invalid-date' })).toBeNull();
@@ -113,7 +116,7 @@ describe('desktop update service', () => {
       json: async () => manifest,
     })) as unknown as typeof fetch;
     const result = await checkForDesktopUpdate(fetcher);
-    expect(result).toMatchObject({ available: true, currentVersion: '0.9.5', canSelfUpdate: false });
+    expect(result).toMatchObject({ available: true, currentVersion: currentVersion, canSelfUpdate: false });
   });
 
   it('detects commit-based updates on the same version and reports commitsBehind', async () => {
@@ -123,7 +126,7 @@ describe('desktop update service', () => {
 
     const sameVersionManifest = {
       ...manifest,
-      version: '0.9.5',
+      version: currentVersion,
       commitSha: commitNew,
     };
 
@@ -146,7 +149,7 @@ describe('desktop update service', () => {
     const result = await checkForDesktopUpdate(fetcher);
     expect(result).toMatchObject({
       available: true,
-      currentVersion: '0.9.5',
+      currentVersion: currentVersion,
       currentCommitSha: commitOld,
       currentShortCommit: '1111111',
       commitsBehind: 4,
@@ -161,7 +164,7 @@ describe('desktop update service', () => {
 
     const sameCommitManifest = {
       ...manifest,
-      version: '0.9.5',
+      version: currentVersion,
       commitSha: commitNew,
     };
 
@@ -181,7 +184,7 @@ describe('desktop update service', () => {
 
     const olderCommitManifest = {
       ...manifest,
-      version: '0.9.5',
+      version: currentVersion,
       commitSha: commitOld,
     };
 
@@ -211,7 +214,7 @@ describe('desktop update service', () => {
 
     const diffCommitManifest = {
       ...manifest,
-      version: '0.9.5',
+      version: currentVersion,
       commitSha: commitOld,
     };
 
@@ -241,7 +244,7 @@ describe('desktop update service', () => {
 
     const commitManifest = {
       ...manifest,
-      version: '0.9.5',
+      version: currentVersion,
       commitSha: commitNew,
     };
 

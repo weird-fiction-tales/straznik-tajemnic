@@ -7,6 +7,9 @@ import type { Message, Character } from '@/lib/types';
 import { resolveEraContext } from '@/lib/era';
 import type { WorldSetupBundleV1 } from '@/lib/world-setup';
 import { toast } from '@/components/ui/use-toast';
+import { makePublicJournalFixture } from '@/tests/fixtures/public-journal';
+import { buildPublicJournal, markJournalCardRead } from '@/lib/journal/public-journal';
+import { beginChronicleTurn } from '@/lib/journal/chronicle-chapters';
 
 const restoredScope = { schemaVersion: 1, campaignDefinitionId: 'scenario:test',
   playthroughId: 'run-restored', adventureId: 'test', kind: 'scenario' };
@@ -26,6 +29,41 @@ describe('useFullSave - status urwanej narracji', () => {
     window.alert = jest.fn();
     Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: jest.fn(() => 'restore-request') });
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ scope: restoredScope }) });
+  });
+
+  it('restores public knowledge and read revisions into the new playthrough without importing foreign history', async () => {
+    const fixture = makePublicJournalFixture('pl', 'cien-nad-prabutami');
+    const scope = { ...fixture.chapter, schemaVersion: 1 as const, kind: 'scenario' as const };
+    const restored = { ...scope, playthroughId: 'journal-restored' };
+    jest.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({ scope: restored }) } as Response);
+    const first = fixture.model.cards.find(card => card.kind === 'finding')!;
+    fixture.characters[0] = markJournalCardRead(fixture.characters[0], fixture.model.scopeKey, first);
+    fixture.characters[0].activeScene = { location: fixture.labels.place, sceneNumber: 2, people: [], findings: [], notes: [],
+      startedAt: '2026-10-24T10:00:00Z', chronicleChapter: fixture.chapter, dossierBinding: fixture.binding };
+    fixture.characters[0].sceneCards = [{ ...fixture.characters[0].activeScene, id: 'known-scene', title: 'Rozmowa',
+      timestamp: '2026-10-24T09:00:00Z', keyTakeaways: [], isSealed: true, chronicleSummaryByLocale: { pl: 'Poznaliśmy sprzeczne relacje.' } }];
+    const foreign = fixture.characters[0].journal!.find(entry => entry.publicKnowledge)!;
+    fixture.characters[0].journal!.push({ ...foreign, id: 'foreign-row', publicKnowledge: { ...foreign.publicKnowledge!,
+      cardId: 'finding:foreign', title: 'PRIVATE_FOREIGN', scope: { ...scope, playthroughId: 'foreign' } } });
+    const before = buildPublicJournal({ characters: fixture.characters, chapter: scope, binding: fixture.binding, locale: 'pl' });
+    const save = FullGameSaveManager.createFullSave({ name: 'Shared journal', userId: 'local', campaignMemory: scope,
+      pdfMemory: { adventureId: fixture.binding.adventureId, adventureDossierFingerprint: fixture.binding.editionFingerprint },
+      messages: fixture.messages, characters: fixture.characters, activeCharacterId: fixture.characters[0].id,
+      campaigns: [], npcs: [], locations: [], gameSettings: { aiSettings: defaultAISettings } });
+    const setCharacters = jest.fn();
+    const { result } = renderHook(() => useFullSave({ setMessages: jest.fn(), setCharacters, setActiveCharacter: jest.fn(),
+      setCampaigns: jest.fn(), setPdfMemory: jest.fn(), setActiveGameState: jest.fn(), setAiSettings: jest.fn(), stopCurrentAudio: jest.fn() }));
+    await act(async () => { expect(await result.current.handleLoadFullSave(JSON.parse(JSON.stringify(save)))).toBe(true); });
+    const loaded = setCharacters.mock.calls[0][0] as Character[];
+    const after = buildPublicJournal({ characters: loaded, chapter: restored, binding: fixture.binding, locale: 'pl' });
+    expect(after.cards).toEqual(before.cards);
+    expect(after.scene).toEqual(before.scene);
+    expect(after.cards.find(card => card.id === first.id)?.unread).toBeUndefined();
+    expect(JSON.stringify(after)).not.toContain('PRIVATE_FOREIGN');
+    expect(loaded[0].journal!.find(entry => entry.id === 'foreign-row')?.publicKnowledge?.scope?.playthroughId).toBe('foreign');
+    const continued = beginChronicleTurn(loaded, loaded[0], { scope: restored, startMessageId: 'next-turn', participantIds: loaded.map(character => character.id) });
+    expect(continued.activeCharacter.chronicleSession?.sessionId).toBe(fixture.chapter.sessionId);
+    expect(continued.activeCharacter.activeScene?.location).toBe(fixture.labels.place);
   });
 
   it('odtwarza finishReason i continuationRequested podczas pełnego loadu', async () => {

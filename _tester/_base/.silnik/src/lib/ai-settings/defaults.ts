@@ -1,4 +1,5 @@
 import { AISettings } from './types';
+import { NARRATION_MAX_OUTPUT_TOKENS } from '../ai-presets/definitions';
 
 export const defaultAISettings: AISettings = {
   // === GEMINI API ===
@@ -6,11 +7,11 @@ export const defaultAISettings: AISettings = {
   geminiApiKey: undefined,
   geminiSettings: {
     model: 'gemini-3.8-flash', // Domyślny model Mistrza Gry z poziomem myślenia LOW (szybki start OOTB <5s)
-    // === Sampling (HIGH) ===
+    // === Shared generation defaults, independent of presentation ===
     temperature: 0.8,
     topP: 0.9,
     topK: 50,
-    maxOutputTokens: 8192, // HIGH preset (definitions.ts)
+    maxOutputTokens: NARRATION_MAX_OUTPUT_TOKENS,
     candidateCount: 1, // Jedna odpowiedź na request - wystarcza
     seed: undefined, // Losowy; user może ustawić dla powtarzalności (testy)
     presencePenalty: 0, // Neutralne
@@ -21,7 +22,7 @@ export const defaultAISettings: AISettings = {
     responseSchema: undefined,
     // === Cache (placeholder dla IND-13) ===
     enableCache: true, // Domyślnie włączone
-    cacheTTL: 2 * 60 * 60 * 1000, // 2h (HIGH preset, OPT-C04)
+    cacheTTL: 2 * 60 * 60 * 1000, // 2h (OPT-C04)
     cachedContent: undefined, // Brak cache (placeholder dla IND-13)
     // === Thinking ===
     thinkingLevel: 'low', // Domyślnie szybki poziom myślenia (błyskawiczny start OOTB bez zbędnego reasoning)
@@ -30,7 +31,7 @@ export const defaultAISettings: AISettings = {
     toolConfig: undefined,
     // === Safety ===
     safetySettings: {
-      // HIGH: Horror authentic - mniej restrykcyjne (Lovecraft = groza)
+      // Shared horror narration baseline.
       harassment: 'BLOCK_ONLY_HIGH',
       hateSpeech: 'BLOCK_ONLY_HIGH',
       sexuallyExplicit: 'BLOCK_ONLY_HIGH',
@@ -74,8 +75,8 @@ export const defaultAISettings: AISettings = {
       stylePrompt: undefined,
     },
     style: {
-      responseLength: 'long', // Preset HIGH
-      detailLevel: 'detailed', // Preset HIGH
+      responseLength: 'long', // Independent narration default
+      detailLevel: 'detailed', // Independent narration default
     },
     behavior: {
       creativity: 'balanced',

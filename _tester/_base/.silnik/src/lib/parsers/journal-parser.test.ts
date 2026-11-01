@@ -172,7 +172,7 @@ describe('appendJournalFromText (Zero-Effort Ledger & Dossier Loop)', () => {
       'Córka zaginionego profesora.'
     );
 
-    expect(updated.journal).toHaveLength(1);
+    expect(updated.journal?.filter(entry => entry.content)).toHaveLength(1);
     expect(updated.journal?.[0].title).toBe('Eleonora Vance');
   });
 

@@ -1,3 +1,4 @@
+import { CACHE_ACKNOWLEDGEMENT } from '@/lib/ai-providers/context-budget';
 /**
  * OPT-26 / OPT-C04: Gemini Context Caching Service
  *
@@ -360,7 +361,7 @@ export async function getOrCreateGeminiCache(
               role: 'model',
               parts: [
                 {
-                  text: 'Rozumiem kontekst gry, zasady epoki i protokół MG. Czekam na wiadomość gracza.',
+                  text: CACHE_ACKNOWLEDGEMENT,
                 },
               ],
             },

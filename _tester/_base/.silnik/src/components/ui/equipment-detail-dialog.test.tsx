@@ -36,6 +36,19 @@ describe('EquipmentDetailDialog', () => {
     expect(screen.getByText('📖 Przeczytaj dokument')).toBeInTheDocument();
   });
 
+  it('shows an owned dossier source summary without offering to generate a transcription', () => {
+    const dossierItem: EquipmentItem = {
+      ...mockItem,
+      description: 'Źródłowe streszczenie: fotografia kieruje do klasztoru w Elblągu.',
+      imageUrl: '/images/prabuty/playtest/photo-1947.png',
+      dossierBinding: { adventureId: 'cien-nad-prabutami', editionFingerprint: `sha256:${'a'.repeat(64)}`, recordId: 'prabuty.item.photo' },
+    };
+    render(<EquipmentDetailDialog item={dossierItem} onClose={jest.fn()} onUpdateItem={jest.fn()} />);
+    expect(screen.getByText(dossierItem.description!)).toBeVisible();
+    expect(screen.queryByText('📖 Przeczytaj dokument')).toBeNull();
+    expect(screen.getByRole('img')).toHaveAttribute('src', dossierItem.imageUrl);
+  });
+
   it('displays readable content when present', () => {
     const readableItem: EquipmentItem = {
       ...mockItem,

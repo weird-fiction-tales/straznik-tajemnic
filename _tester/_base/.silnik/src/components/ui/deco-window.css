@@ -1,0 +1,147 @@
+/* Desktop visual contract. Opted-in windows/cards only; shared controls keep their defaults. */
+@media (min-width: 1024px) {
+  .deco-window {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .deco-window
+    :is(
+      .text-\[9px\],
+      .text-\[10px\],
+      .text-\[11px\],
+      .text-\[12px\],
+      .text-\[13px\]
+    ) {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .deco-window
+    p:not(.text-sm):not(.text-lg):not(.text-xl):not(.text-2xl):not(
+      [class*='text-[']
+    ) {
+    font-size: 16px;
+  }
+
+  .deco-window input::placeholder,
+  .deco-window textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 1;
+  }
+
+  .deco-window :is(input, textarea, select, [role='combobox']).text-xs {
+    font-size: 16px;
+  }
+
+  .deco-window .text-\[15px\] {
+    font-size: 16px;
+  }
+
+  .deco-window [role='tablist'] {
+    height: auto;
+    min-height: 44px;
+  }
+  .deco-window [role='tab'][data-state='active'] {
+    color: hsl(var(--foreground));
+    background-color: hsl(var(--primary) / 0.1);
+  }
+
+  .deco-window :is(.text-destructive, .text-red-500) {
+    @apply text-red-300;
+  }
+  .deco-window :is(.text-primary, .text-primary\/80, .text-primary\/90) {
+    color: hsl(var(--ring));
+  }
+  .deco-window :is(button, [role='button'], input, textarea, select) {
+    border-color: hsl(var(--brass) / 0.75);
+  }
+  .deco-window :is(button, [role='button']).border-primary {
+    border-color: hsl(var(--ring));
+  }
+  .deco-window .text-\[\#8a7667\]\/70 {
+    color: hsl(var(--muted-foreground));
+  }
+  .deco-window :is(.line-clamp-1, .line-clamp-2, .line-clamp-3, .line-clamp-4) {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+  }
+  .deco-window .truncate {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .deco-window button.bg-primary {
+    color: hsl(170 60% 2%);
+  }
+  .deco-window .text-gold {
+    color: hsl(var(--brass));
+  }
+
+  .deco-window :where(button:not([role='checkbox']), [role='tab']) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .deco-window
+    :is(button.h-6, button.h-7, button.h-8, button.h-9, button.h-10) {
+    height: auto;
+    white-space: normal;
+  }
+
+  .deco-window
+    :where(
+      input:not([type='checkbox']):not([type='radio']):not([type='range']):not(
+          [type='file']
+        ),
+      select,
+      [role='combobox']
+    ) {
+    min-height: 44px;
+  }
+
+  .deco-window
+    :where(
+      input:not([type='checkbox']):not([type='radio']):not([type='range']):not(
+          [type='file']
+        ),
+      textarea,
+      select,
+      [role='combobox']
+    ) {
+    border-color: hsl(var(--brass) / 0.75);
+  }
+
+  .deco-window.deco-window
+    :where(
+      button,
+      input,
+      textarea,
+      select,
+      summary,
+      a,
+      [tabindex]
+    ):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
+
+  .deco-window
+    :is(.text-brass\/50, .text-brass\/60, .text-brass\/70, .text-brass\/80) {
+    color: hsl(var(--brass));
+  }
+
+  .deco-window
+    :is(
+      .text-muted-foreground\/50,
+      .text-muted-foreground\/60,
+      .text-muted-foreground\/70,
+      .text-muted-foreground\/80,
+      .text-foreground\/50,
+      .text-foreground\/60
+    ) {
+    color: hsl(var(--muted-foreground));
+  }
+}

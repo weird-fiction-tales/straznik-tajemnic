@@ -28,7 +28,7 @@ const BRIEFING_REGISTRY: Record<string, { pl?: string; en?: string; duration?: n
   // Polskie Quick Adventures (Strefa 11)
   'cien-nad-prabutami': {
     pl: '/audio/briefings/cien-nad-prabutami/briefing-pl.mp3',
-    duration: 41,
+    duration: 30,
   },
   'tajemnica-dzieci-z-traszyna': {
     pl: '/audio/briefings/tajemnica-dzieci-z-traszyna/briefing-pl.mp3',
@@ -94,6 +94,7 @@ export function getBriefingAudio(
 ): BriefingAudioInfo | null {
   const slug = resolveScenarioSlug(context, options?.title);
   if (!slug) return null;
+  if (slug === 'the-haunting' || slug === 'case-s11-01') return null;
 
   const entry = BRIEFING_REGISTRY[slug];
   if (!entry) return null;

@@ -60,7 +60,7 @@
       "id": "clue-02-ruiny-kosciola",
       "category": "item-clue",
       "file": "clue-photo-prabuty-1947.png",
-      "aspectRatio": "16:9",
+      "aspectRatio": "4:3",
       "clueId": "clue-photo-prabuty",
       "tagsPl": [
         "Zdjęcie z klinowym pismem (1947)",
@@ -353,7 +353,7 @@
     {
       "id": "clue-polak-testimony-monk",
       "category": "item-clue",
-      "file": "clue-polak-testimony-monk.png",
+      "file": "clue-military-tire-tracks.png",
       "aspectRatio": "16:9",
       "clueId": "clue-polak-testimony-monk",
       "tagsPl": [
@@ -368,7 +368,7 @@
     {
       "id": "clue-military-tire-tracks",
       "category": "item-clue",
-      "file": "clue-military-tire-tracks.png",
+      "file": "clue-polak-testimony-monk.png",
       "aspectRatio": "16:9",
       "clueId": "clue-military-tire-tracks",
       "tagsPl": [
@@ -416,7 +416,7 @@
       "slug": "clue-photo-prabuty-1947",
       "title": "Fotografia ruin kościoła w Prabutach (1947)",
       "image": "/handouts/cien-nad-prabutami/playtest/photo-1947.png",
-      "aspectRatio": "16:9",
+      "aspectRatio": "4:3",
       "nodeId": "node-warszawa-redakcja",
       "clueId": "clue-photo-prabuty",
       "tagsPl": [

@@ -2,7 +2,7 @@
 
 import type { ChangeEvent, MouseEvent } from 'react';
 import { useMemo, useState, useRef } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   Dialog,
   DialogContent,
@@ -75,6 +75,7 @@ export function AdventureSelector({
   onClearUploadError,
 }: AdventureSelectorProps) {
   const t = useTranslations('AdventureSelector');
+  const locale = useLocale() === 'en' ? 'en' : 'pl';
   const tStyles = useTranslations('AdventureStyles');
 
   const [activeTab, setActiveTab] = useState<'scenarios' | 'lorebooks'>('scenarios');
@@ -196,13 +197,19 @@ export function AdventureSelector({
       adventure.difficultyStars ||
       (adventure.difficulty === 'easy' ? 2 : adventure.difficulty === 'hard' ? 4 : 3);
     const difficultyLabel = useMemo(() => {
-      if (adventure.difficultyStars === 1) return 'Bardzo łatwy';
-      if (adventure.difficultyStars === 2) return 'Łatwy';
-      if (adventure.difficultyStars === 3) return 'Średni';
-      if (adventure.difficultyStars === 4) return 'Trudny';
-      if (adventure.difficultyStars === 5) return 'Bardzo trudny';
+      if (adventure.difficultyStars === 1) return t('difficultyStar1');
+      if (adventure.difficultyStars === 2) return t('difficultyStar2');
+      if (adventure.difficultyStars === 3) return t('difficultyStar3');
+      if (adventure.difficultyStars === 4) return t('difficultyStar4');
+      if (adventure.difficultyStars === 5) return t('difficultyStar5');
       return tStyles(diffStyle.translationKey);
-    }, [adventure.difficultyStars, adventure.difficulty, diffStyle, tStyles]);
+    }, [adventure.difficultyStars, adventure.difficulty, diffStyle, tStyles, t]);
+
+    const sessions = adventure.estimatedSessions || '2-3';
+    const plural = new Intl.PluralRules(locale).select(Number(sessions));
+    const sessionKey = /^\d+$/.test(sessions) && plural === 'one'
+      ? 'singleSession'
+      : /^\d+$/.test(sessions) && plural === 'few' ? 'fewSessions' : 'sessionsCount';
 
     return (
       <div
@@ -229,8 +236,8 @@ export function AdventureSelector({
 
         {/* Źródło / Tom zbioru jeśli dotyczy */}
         {adventure.source && (
-          <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-mono font-medium uppercase tracking-wider text-amber-300/90 bg-amber-950/30 px-2 py-0.5 rounded border border-amber-500/30">
-            <BookOpen className="h-3 w-3 text-amber-400 shrink-0" />
+          <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-mono font-medium uppercase tracking-wider text-brass bg-brass/10 px-2 py-0.5 rounded border border-brass/50">
+            <BookOpen className="h-3 w-3 text-brass shrink-0" />
             <span>Z tomu: {adventure.source}</span>
           </div>
         )}
@@ -238,7 +245,7 @@ export function AdventureSelector({
         {/* Header: Tytuł w naturalnym casing + wskaźnik wyboru / typ */}
         <div className="mb-2 flex items-start justify-between gap-3">
           <h3
-            className="font-display text-lg font-bold text-amber-100 leading-snug tracking-wide group-hover:text-white transition-colors"
+            className="font-display text-lg font-bold text-brass leading-snug tracking-wide group-hover:text-white transition-colors"
             title={adventure.title}
           >
             {adventure.title}
@@ -257,7 +264,7 @@ export function AdventureSelector({
                 className="flex items-center gap-1 bg-primary/20 text-primary border border-primary px-2 py-0.5 text-xs font-display font-semibold uppercase tracking-wider shadow-[0_0_12px_rgba(13,148,136,0.3)] rounded-sm"
               >
                 <Check className="h-3.5 w-3.5" />
-                <span>Wybrano</span>
+                <span>{t('selectedCard')}</span>
               </span>
             )}
           </div>
@@ -291,9 +298,9 @@ export function AdventureSelector({
 
         {/* Wymogi Badaczy (jeśli scenariusz definiuje np. wiek, postacie pregen) */}
         {adventure.investigatorRequirements && (
-          <div className="mb-2.5 inline-flex items-center gap-1.5 text-xs font-serif bg-amber-950/40 text-amber-200 border border-amber-500/30 px-2.5 py-1 rounded-sm w-full">
-            <Users className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-            <span className="font-semibold uppercase tracking-wider text-[11px] text-amber-300 shrink-0">
+          <div className="mb-2.5 inline-flex items-center gap-1.5 text-xs font-serif bg-brass/10 text-brass border border-brass/50 px-2.5 py-1 rounded-sm w-full">
+            <Users className="h-3.5 w-3.5 text-brass shrink-0" />
+            <span className="font-semibold uppercase tracking-wider text-[11px] text-brass shrink-0">
               Wymogi:
             </span>
             <span className="line-clamp-1">{adventure.investigatorRequirements.summary}</span>
@@ -304,7 +311,7 @@ export function AdventureSelector({
         {(adventure.puzzles?.length || adventure.handouts?.length) ? (
           <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-mono">
             {adventure.puzzles && adventure.puzzles.length > 0 && (
-              <span className="inline-flex items-center gap-1 bg-purple-950/30 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded">
+              <span className="inline-flex items-center gap-1 bg-brass/10 text-brass border border-brass/40 px-2 py-0.5 rounded">
                 <span>🧩 Zagadka: {adventure.puzzles[0].title}</span>
               </span>
             )}
@@ -322,9 +329,7 @@ export function AdventureSelector({
             <span className="inline-flex items-center gap-1 text-brass/80">
               <Clock className="h-3.5 w-3.5 text-brass/70 shrink-0" />
               <span>
-                {adventure.estimatedSessions
-                  ? `${adventure.estimatedSessions} ${adventure.estimatedSessions === '1' ? 'sesja' : 'sesje'}`
-                  : t('sessionsCount', { count: '2-3' })}
+                {t(sessionKey, { count: sessions })}
               </span>
             </span>
           ) : (
@@ -337,7 +342,7 @@ export function AdventureSelector({
           <div className="flex items-center gap-2.5">
             {!isLorebook && (
               <span className={`inline-flex items-center gap-1.5 ${diffStyle.color}`}>
-                <span className="text-amber-400 font-mono tracking-tighter text-sm">
+                <span className="text-brass font-mono tracking-tighter text-sm">
                   {'★'.repeat(starsCount)}
                   {'☆'.repeat(Math.max(0, 5 - starsCount))}
                 </span>
@@ -361,7 +366,7 @@ export function AdventureSelector({
                     : 'border-brass/35 text-brass hover:text-foreground hover:border-brass'
                 }`}
               >
-                {isSelected ? 'Wybrano' : 'Wybierz'}
+                {isSelected ? t('selectedCard') : t('selectCard')}
               </Button>
             )}
 
@@ -610,7 +615,7 @@ export function AdventureSelector({
                   {t('lorebooksTitle')}
                 </div>
                 <p className="font-serif text-xs italic text-muted-foreground mt-1 leading-relaxed">
-                  Przewodniki regionalne, almanachy oraz kompendia magii wzbogacają tło sesji i stanowią zbiór faktów dla Mistrza Gry.
+                  {t('lorebooksIntro')}
                 </p>
               </div>
 

@@ -1,4 +1,5 @@
-import { act, renderHook } from '@testing-library/react';
+import { createDossierOpeningCommit } from '@/lib/adventure-dossier/commit-opening';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { useGameStart } from './useGameStart';
 import { fetchWithApiKeys } from '@/lib/api-keys-service';
 import { parseSSEStream, type SSEMetadataEvent } from '@/lib/sse-parser';
@@ -9,18 +10,19 @@ import { defaultAISettings } from '@/lib/ai-settings/defaults';
 import type { Character, Message } from '@/lib/types';
 import { AMERICAN_COLD_CASES_ADVENTURES } from '@/lib/american-cold-cases-data';
 const fingerprint='sha256:'+'a'.repeat(64);
+jest.mock('@/lib/adventure-dossier/commit-opening',()=>{const actual=jest.requireActual('@/lib/adventure-dossier/commit-opening');return {...actual,createDossierOpeningCommit:jest.fn(actual.createDossierOpeningCommit)};});
 jest.mock('@/lib/api-keys-service',()=>({fetchWithApiKeys:jest.fn(),getApiKeyHeaders:()=>({}),isPureTextMode:()=>true}));
 jest.mock('@/lib/sse-parser',()=>({parseSSEStream:jest.fn(),createSseParseErrorHandler:()=>jest.fn()}));
 jest.mock('@/lib/adventure-dossier/client-activation',()=>({loadRuntimeDossierPayload:jest.fn()}));
 jest.mock('@/lib/posthog',()=>({trackEvent:jest.fn()}));
 jest.mock('@/lib/ai-settings/cost-control',()=>({resetSessionTokens:jest.fn()}));
-jest.mock('@/lib/time-manager',()=>({isGameTime:jest.requireActual('@/lib/time-manager').isGameTime,timeManager:{getTime:()=>({year:1973,month:9,day:18,hour:19,minute:30}),resetForAdventure:jest.fn()}}));
+jest.mock('@/lib/time-manager',()=>({isGameTime:jest.requireActual('@/lib/time-manager').isGameTime,timeManager:{getTime:()=>({year:1973,month:9,day:18,hour:19,minute:30}),getSnapshot:()=>({deadline:null,deadlineTotalHours:0}),setTime:jest.fn(),resetForAdventure:jest.fn()}}));
 jest.mock('./useEquipmentThumbnails',()=>({useEquipmentThumbnails:()=>({generateThumbnailsInBackground:jest.fn()})}));
 const payload={schema_version:1 as const,adventure_id:'cien-nad-prabutami',edition_fingerprint:fingerprint,records:[]};
 let text:string,metadata:SSEMetadataEvent;
 let messages:Message[];
-function setup(character:Character|null=null, adventureContext:Parameters<typeof useGameStart>[0]['adventureContext']={id:'cien-nad-prabutami',title:'Cień nad Prabutami',yearRange:'1973-1974',country:'Polska',location:'Warszawa'}){
- const props:Parameters<typeof useGameStart>[0]={setHasStartedGame:jest.fn(),activeCharacter:character,characters:character?[character]:[],setActiveCharacter:jest.fn(),setCharacters:jest.fn(),
+function setup(character:Character|null=null, adventureContext:Parameters<typeof useGameStart>[0]['adventureContext']={id:'cien-nad-prabutami',title:'Cień nad Prabutami',yearRange:'1973-1974',country:'Polska',location:'Warszawa'}, requirePlayerConfirmation=false){
+ const props:Parameters<typeof useGameStart>[0]={requirePlayerConfirmation,setHasStartedGame:jest.fn(),activeCharacter:character,characters:character?[character]:[],setActiveCharacter:jest.fn(),setCharacters:jest.fn(),
   pdfMemory:{adventureDossierFingerprint:fingerprint},activateDossierForSession:jest.fn(async()=>({ok:true,adventureDossierFingerprint:fingerprint})),
   adventureContext,hotSeatConfig:{enabled:false,players:[]},
   setMessages:update=>{messages=typeof update==='function'?update(messages):update;},
@@ -38,6 +40,37 @@ beforeEach(()=>{
   const body=JSON.parse(String(init?.body));
   return {ok:true,json:async()=>body.phase==='prepare'?{prepared:true}:{accepted:body.accepted}} as Response;
  });
+});
+test('cancelling a pending opening aborts transport and rejects a late response before publication',async()=>{
+ let release:(response:Response)=>void=()=>{};
+ jest.mocked(fetchWithApiKeys).mockImplementationOnce(()=>new Promise<Response>(resolve=>{release=resolve;}));
+ const {result,props}=setup();
+ let pending:Promise<void>;
+ await act(async()=>{pending=result.current.handleStartGame();});
+ await waitFor(()=>expect(fetchWithApiKeys).toHaveBeenCalledTimes(1));
+ act(()=>result.current.cancelStartGame());
+ expect(jest.mocked(fetchWithApiKeys).mock.calls[0][1]?.signal?.aborted).toBe(true);
+ await act(async()=>{release({ok:true} as Response);await pending;});
+ expect(messages).toEqual([]);
+ expect(props.tts.addToQueue).not.toHaveBeenCalled();
+ expect(result.current.startError).toBeNull();
+});
+test('cancel during voice buffering never reopens the entry gate and permits a fresh start',async()=>{
+ let release:()=>void=()=>{};
+ const {result,props}=setup();
+ props.tts.playInitialNarration=jest.fn();
+ props.tts.waitForInitialBuffer=jest.fn(()=>new Promise<void>(resolve=>{release=resolve;}));
+ let pending:Promise<void>;
+ await act(async()=>{pending=result.current.handleStartGame();});
+ await waitFor(()=>expect(props.tts.waitForInitialBuffer).toHaveBeenCalled());
+ act(()=>result.current.cancelStartGame());
+ await act(async()=>{release();await pending;});
+ expect(props.tts.playInitialNarration).not.toHaveBeenCalled();
+ expect(result.current.isReadyToEnter).toBe(false);
+ expect(result.current.isStarting).toBe(false);
+ props.tts.waitForInitialBuffer=jest.fn(async()=>{});
+ await act(async()=>{await result.current.handleStartGame();});
+ expect(fetchWithApiKeys).toHaveBeenCalledTimes(2);
 });
 test('opening rejects inventory actions before UI, TTS, journal or accepted memory',async()=>{
  text='Secret draft. [EKWIPUNEK: DODAJ | @photo]';
@@ -88,7 +121,7 @@ test('failed acknowledgement retains the ordinary transaction for next-turn reco
 });
 
 
-test.each(['pl','en'] as const)('actual pending authored opening %s retains an eligible photo without granting an inventory item',async(locale)=>{
+test.each(['pl','en'] as const)('actual pending authored opening %s keeps the photo hidden until a player discovery action',async(locale)=>{
  const {TextEncoder}=await import('node:util');const {webcrypto}=await import('node:crypto');
  Object.defineProperty(globalThis,'TextEncoder',{configurable:true,value:TextEncoder});
  Object.defineProperty(globalThis.crypto,'subtle',{configurable:true,value:webcrypto.subtle});
@@ -102,7 +135,8 @@ test.each(['pl','en'] as const)('actual pending authored opening %s retains an e
  const {result,props,rerender}=setup();
  props.locale=locale;props.pdfMemory={adventureDossierFingerprint:fp};props.activateDossierForSession=jest.fn(async()=>({ok:true,adventureDossierFingerprint:fp}));rerender();
  await act(async()=>{await result.current.handleStartGame();});
- expect(messages[0]).toMatchObject({dossierHandoutRecordIds:[media.record_id],dossierInventoryWritesAllowed:false});
+ expect(messages[0]).toMatchObject({dossierHandoutRecordIds:[],dossierInventoryWritesAllowed:false});
+ expect(messages[0].content).not.toContain('[HANDOUT:');
  const scope=loadCampaignMemoryScope()!;
  expect(JSON.parse(localStorage.getItem('zew-dossier-inventory:'+scope.playthroughId)!).entries).toEqual([]);
  expect(media.evidence.approval).toBe('pending');
@@ -170,4 +204,23 @@ test('menu prewarms only the GET health endpoint, not the POST-only key validato
   jest.useRealTimers();
   global.fetch=originalFetch;
  }
+});
+
+test('cancel after confirming the entry gate prevents delayed session publication',async()=>{
+ const {result,props}=setup(null,undefined,true);
+ let pending:Promise<void>;
+ await act(async()=>{pending=result.current.handleStartGame();});
+ await waitFor(()=>expect(result.current.isReadyToEnter).toBe(true));
+ await act(async()=>{result.current.confirmEnterGame();});
+ act(()=>result.current.cancelStartGame());
+ await act(async()=>{await pending;});
+ expect(props.setHasStartedGame).not.toHaveBeenCalledWith(true);
+ expect(localStorage.getItem('has_started_game')).not.toBe('true');
+});
+
+test('quick-start opening uses its canonical node rather than the regional adventure label',async()=>{
+ text='Helena kładzie teczkę na biurku.';
+ const {result}=setup(null,{id:'cien-nad-prabutami',title:'Prabuty',yearRange:'1973',location:'Warszawa - Elbląg - Prabuty',activeNodeId:'node-warszawa-redakcja'});
+ await act(async()=>{await result.current.handleStartGame();});
+ expect(createDossierOpeningCommit).toHaveBeenCalledWith(expect.objectContaining({location:'loc-warszawa-redakcja'}),expect.anything());
 });

@@ -1,7 +1,7 @@
 'use client';
 
-import {useLocale,useTranslations} from 'next-intl';
-import {getLocalizedSkillName} from '@/lib/data/character/skills';
+import { useLocale, useTranslations } from 'next-intl';
+import { getLocalizedSkillName } from '@/lib/data/character/skills';
 import type { FC } from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -26,7 +26,10 @@ import {
 import { useLuckSpend } from './use-luck-spend';
 import { RollTestResult } from './roll-test-result';
 import type { ArtDecoDiceBreakdown } from './ArtDecoDice3D';
-import type { CombinedSkillSubtest, SkillRollResolution } from '@/lib/parsers/types';
+import type {
+  CombinedSkillSubtest,
+  SkillRollResolution,
+} from '@/lib/parsers/types';
 import {
   evaluateCombinedSkillCheck,
   formatCombinedRollForChat,
@@ -68,6 +71,7 @@ interface RollTestModalProps {
     message: string,
     systemContext: string,
     mechanicsContext?: { skillRolls: SkillRollResolution[] },
+    roll?: DiceRoll
   ) => void;
   /** Zapisuje rzut do dziennika postaci (most appendRollToJournal w page.tsx). */
   onJournalRoll?: (
@@ -99,8 +103,8 @@ export const RollTestModal: FC<RollTestModalProps> = ({
   onJournalRoll,
   onSpendLuck,
 }) => {
-  const locale=useLocale();
-  const t=useTranslations('RollTestResult');
+  const locale = useLocale();
+  const t = useTranslations('RollTestResult');
   // 'idle' = przed rzutem, 'rolling' = animacja, 'done' = wynik gotowy (oczekuje wysłania).
   const [phase, setPhase] = useState<'idle' | 'rolling' | 'done'>('idle');
   const [animValue, setAnimValue] = useState(0);
@@ -217,21 +221,29 @@ export const RollTestModal: FC<RollTestModalProps> = ({
   const handleSend = () => {
     if (!roll) return;
     if (onRollSendToChat) {
-      const mechanicsContext: { skillRolls: SkillRollResolution[] } | undefined = roll.outcome
+      const mechanicsContext:
+        | { skillRolls: SkillRollResolution[] }
+        | undefined = roll.outcome
         ? {
-            skillRolls: [{
-              testId: test.testId,
-              resolutionId: roll.id,
-              characterId: test.characterId ?? activeCharacter?.id,
-              targetNpcId: test.targetNpcId,
-              requiredDifficulty: roll.requiredDifficulty ?? requiredDifficulty,
-              passedRequirement: roll.passedRequirement ?? isSuccess(roll.outcome),
-              outcome: roll.outcome,
-              luckSpent: roll.luckSpent ?? 0,
-              skillNames: combinedResolution
-                ? combinedResolution.subtests.map((subtest) => subtest.skillName)
-                : [test.skill],
-            }],
+            skillRolls: [
+              {
+                testId: test.testId,
+                resolutionId: roll.id,
+                characterId: test.characterId ?? activeCharacter?.id,
+                targetNpcId: test.targetNpcId,
+                requiredDifficulty:
+                  roll.requiredDifficulty ?? requiredDifficulty,
+                passedRequirement:
+                  roll.passedRequirement ?? isSuccess(roll.outcome),
+                outcome: roll.outcome,
+                luckSpent: roll.luckSpent ?? 0,
+                skillNames: combinedResolution
+                  ? combinedResolution.subtests.map(
+                      (subtest) => subtest.skillName
+                    )
+                  : [test.skill],
+              },
+            ],
           }
         : undefined;
       if (combinedResolution) {
@@ -240,14 +252,18 @@ export const RollTestModal: FC<RollTestModalProps> = ({
           activeCharacter?.name,
           (roll.luckSpent ?? 0) > 0
         ).join('\n');
-        const chatText = `${formatCombinedRollForChat(combinedResolution, activeCharacter?.name,locale)}\n\n${resultTags}`;
-        const aiText = formatCombinedRollForAI(combinedResolution, activeCharacter?.name);
-        onRollSendToChat(chatText, aiText, mechanicsContext);
+        const chatText = `${formatCombinedRollForChat(combinedResolution, activeCharacter?.name, locale)}\n\n${resultTags}`;
+        const aiText = formatCombinedRollForAI(
+          combinedResolution,
+          activeCharacter?.name
+        );
+        onRollSendToChat(chatText, aiText, mechanicsContext, roll);
       } else {
         onRollSendToChat(
-          formatRollForChat(roll,locale),
+          formatRollForChat(roll, locale),
           formatRollForAI(roll, activeCharacter?.name),
           mechanicsContext,
+          roll
         );
       }
     }
@@ -264,7 +280,13 @@ export const RollTestModal: FC<RollTestModalProps> = ({
               {t('fateKicker')}
             </div>
             <DialogTitle className="mt-1 justify-center font-display text-xl font-bold uppercase tracking-[0.1em] text-foreground">
-              {t('testTitle',{skill:test.combined?test.combined.skills.map(s=>getLocalizedSkillName(s.skillName,locale)).join(' '+test.combined.operator+' '):getLocalizedSkillName(test.skill,locale)})}
+              {t('testTitle', {
+                skill: test.combined
+                  ? test.combined.skills
+                      .map((s) => getLocalizedSkillName(s.skillName, locale))
+                      .join(' ' + test.combined.operator + ' ')
+                  : getLocalizedSkillName(test.skill, locale),
+              })}
             </DialogTitle>
           </div>
           <DialogDescription className="text-center font-serif italic text-muted-foreground">

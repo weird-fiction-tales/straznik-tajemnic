@@ -19,3 +19,23 @@ test('dialogue next to a prop remains free, but quoting a source inscription thr
  expect(unsupportedDocumentQuotes('Helena odkłada fotografię. „Nie oddam jej bez gwarancji bezpieczeństwa.”',payload)).toEqual([]);
  expect(unsupportedDocumentQuotes('Helena: „Na rewersie fotografii napisano: Tajne przejście otwiera się o północy.”',payload)).toHaveLength(1);
 });
+
+// Candidate10: ordinary contact question was rejected twice beside the photo.
+test.each([
+ 'Helena odkłada fotografię z adnotacją i mówi: „Zadzwońcie do klasztoru w Elblągu, tam zastaniecie ojca Klimuszkę.”',
+ 'Helena mówi: „Adnotacja na fotografii brzmi wiarygodnie, ale lepiej zapytajcie samego ojca Klimuszkę.”',
+ 'Helena sets the photograph with its inscription down and says: "Ask at the monastery in Elblag."',
+])('nearby document words do not convert NPC speech into a transcription: %s',text=>{
+ expect(unsupportedDocumentQuotes(text,payload)).toEqual([]);
+});
+test.each([
+ 'Helena czyta adnotację na fotografii: „Tajne przejście otwiera się o północy.”',
+ 'Helena: „Na rewersie fotografii napisano: Tajne przejście otwiera się o północy.”',
+ 'The inscription reads: "The secret tunnel opens at midnight."',
+])('NPC reading still cannot invent literal source words: %s',text=>{
+ expect(unsupportedDocumentQuotes(text,payload)).toHaveLength(1);
+});
+
+test('a prior sentence about a document is not the immediate quotation introducer',()=>{
+ expect(unsupportedDocumentQuotes('Na odwrocie fotografii widnieje adnotacja. Helena wyjaśnia: „Ojca Klimuszkę zastaniecie w klasztorze w Elblągu.”',payload)).toEqual([]);
+});

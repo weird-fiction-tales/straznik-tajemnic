@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   computeNameHash,
   normalizeNameForHash,
@@ -120,8 +122,6 @@ describe('AdventureAssetResolver (Issue #661)', () => {
 });
 
 describe('explicit asset directory', () => {
-  const fs = require('node:fs') as typeof import('node:fs');
-  const path = require('node:path') as typeof import('node:path');
   it.each(['cien-nad-prabutami', 'englewood-murder-castle-1893'])(
     'resolves every real %s manifest asset to an existing file while preserving case identity', (directory) => {
       const publicRoot = path.join(process.cwd(), 'public');
@@ -130,7 +130,7 @@ describe('explicit asset directory', () => {
       expect(manifest.assetDirectory).toBe(directory);
       for (const asset of manifest.assets) {
         const result = resolveAdventureAsset({slugOrQuery:asset.id, manifest});
-        expect(result.assetUrl).toBe('/adventure-packs/' + directory + '/' + asset.file);
+        expect(result.assetUrl).toBe(result.matchedHandout?.image ?? '/adventure-packs/' + directory + '/' + asset.file);
         expect(fs.statSync(path.join(publicRoot, result.assetUrl!.slice(1))).isFile()).toBe(true);
       }
     }
@@ -150,7 +150,7 @@ describe('explicit asset directory', () => {
       for (const clueId of expectedClueIds) {
         const resolved = resolveAdventureAsset({slugOrQuery:clueId, manifest});
         expect(resolved.priority).toBe(1);
-        expect(resolved.matchedAsset?.clueId).toBe(clueId);
+        expect(resolved.matchedAsset?.clueId ?? resolved.matchedHandout?.clueId).toBe(clueId);
       }
       expect(raw.assets.every(asset => ['kv', 'node', 'npc', 'item-clue', 'item-gear'].includes(asset.category ?? ''))).toBe(true);
       expect(raw.audioAssets).toEqual(expect.arrayContaining([expect.objectContaining({category:'audio-handout'})]));

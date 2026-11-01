@@ -1,5 +1,7 @@
 'use client';
 
+import '@/components/ui/deco-window.css';
+
 /**
  * @file opposed-melee-card.tsx
  * Karta obrony Badacza w walce wręcz (Opposed Melee Defense - CoC 7e RAW Rozdz. 6, s. 102-117 BMG).
@@ -217,13 +219,13 @@ export function OpposedMeleeCard({
   const getOutcomeBadge = (outcome: RollOutcome) => {
     switch (outcome) {
       case 'critical':
-        return <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40">{t('outcomeCritical')}</Badge>;
+        return <Badge className="bg-brass/10 text-brass border-brass/50">{t('outcomeCritical')}</Badge>;
       case 'extreme':
         return <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40">{t('outcomeExtreme')}</Badge>;
       case 'hard':
         return <Badge className="bg-emerald-600/20 text-emerald-400 border-emerald-600/30">{t('outcomeHard')}</Badge>;
       case 'regular':
-        return <Badge className="bg-sky-500/20 text-sky-300 border-sky-500/40">{t('outcomeRegular')}</Badge>;
+        return <Badge className="bg-primary/10 text-primary border-primary/60">{t('outcomeRegular')}</Badge>;
       case 'fail':
         return <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/40">{t('outcomeFail')}</Badge>;
       case 'fumble':
@@ -379,7 +381,7 @@ export function OpposedMeleeCard({
   };
 
   return (
-    <Card data-testid="opposed-melee-card" className="my-3 overflow-hidden border border-brass/50 bg-card/95 text-foreground shadow-deco backdrop-blur-sm">
+    <Card data-testid="opposed-melee-card" className="deco-window my-3 overflow-hidden border border-brass/50 bg-card/95 text-foreground shadow-deco backdrop-blur-sm">
       {/* Nagłówek klimatyczny Dark Art Déco */}
       <div className="border-b border-brass/20 bg-gradient-to-r from-brass/15 via-background/40 to-brass/10 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
@@ -407,7 +409,7 @@ export function OpposedMeleeCard({
 
         {/* Opis sytuacji w świecie gry */}
         <div className="mt-2 space-y-1">
-          <p className="font-serif text-sm font-medium text-foreground">
+          <p className="font-serif text-lg font-medium text-foreground">
             <strong className="text-destructive">{attackerName}</strong>{' '}
             {t('incomingAttackWithWeapon', {
               attacker: '',
@@ -415,7 +417,7 @@ export function OpposedMeleeCard({
             }).replace(/^:\s*/, '')}
           </p>
           {attackIntent && (
-            <p className="font-serif text-xs italic text-muted-foreground">
+            <p className="font-serif text-lg italic text-muted-foreground">
               „{attackIntent}”
             </p>
           )}
@@ -435,21 +437,21 @@ export function OpposedMeleeCard({
         {!effectiveResolved && (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {/* Opcja 1: Zwinny Unik (Dodge) */}
-            <div className="flex flex-col justify-between rounded-lg border border-sky-500/30 bg-sky-950/20 p-3.5 transition-all hover:border-sky-500/60">
+            <div className="flex flex-col justify-between rounded-lg border border-primary/60 bg-primary/10 p-3.5 transition-all hover:border-primary/60">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 font-display text-sm font-semibold text-sky-400">
+                  <span className="flex items-center gap-1.5 font-display text-sm font-semibold text-primary">
                     <Footprints className="h-4 w-4" />
                     {t('dodgeTitle')}
                   </span>
-                  <Badge className="border-sky-500/40 bg-sky-500/15 font-mono text-xs text-sky-300">
+                  <Badge className="border-primary/60 bg-primary/10 font-mono text-xs text-primary">
                     {dodgeSkill}%
                   </Badge>
                 </div>
                 <p className="font-serif text-xs text-muted-foreground leading-relaxed">
                   {t('dodgeLore')}
                 </p>
-                <div className="border-t border-sky-500/20 pt-1.5 text-[11px] font-mono text-sky-300/80">
+                <div className="border-t border-primary/60 pt-1.5 text-[11px] font-mono text-primary">
                   {t('dodgeThresholds', {
                     regular: dodgeSkill,
                     hard: Math.floor(dodgeSkill / 2),
@@ -462,7 +464,7 @@ export function OpposedMeleeCard({
                 variant="outline"
                 disabled={disabled || !canAct}
                 onClick={() => handleExecuteDefense('dodge')}
-                className="mt-3 w-full border-sky-500/50 text-sky-300 hover:bg-sky-500/20 hover:text-sky-100"
+                className="mt-3 w-full border-primary/60 text-primary hover:bg-primary/10 hover:text-primary"
               >
                 {t('dodgeButton')}
               </Button>
@@ -517,14 +519,14 @@ export function OpposedMeleeCard({
             </div>
 
             {/* Opcja 3: Manewr Taktyczny (Fighting Maneuver) */}
-            <div className="flex flex-col justify-between rounded-lg border border-amber-500/30 bg-amber-950/20 p-3.5 transition-all hover:border-amber-500/60">
+            <div className="flex flex-col justify-between rounded-lg border border-brass/50 bg-brass/10 p-3.5 transition-all hover:border-brass/50">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 font-display text-sm font-semibold text-amber-400">
+                  <span className="flex items-center gap-1.5 font-display text-sm font-semibold text-brass">
                     <ShieldAlert className="h-4 w-4" />
                     {t('maneuverTitle')}
                   </span>
-                  <Badge className="border-amber-500/40 bg-amber-500/15 font-mono text-xs text-amber-300">
+                  <Badge className="border-brass/50 bg-brass/10 font-mono text-xs text-brass">
                     {brawlSkill}%
                   </Badge>
                 </div>
@@ -539,7 +541,7 @@ export function OpposedMeleeCard({
                       {t('maneuverLore')}
                     </p>
                     {maneuverCheck.penaltyDice > 0 && (
-                      <p className="text-[11px] font-mono text-amber-300">
+                      <p className="text-[11px] font-mono text-brass">
                         {t('maneuverPenaltyWarn', {
                           buildDiff: maneuverCheck.buildDifference,
                           penalty: maneuverCheck.penaltyDice,
@@ -554,7 +556,7 @@ export function OpposedMeleeCard({
                           onClick={() => setSelectedManeuver(type)}
                           className={`flex-1 rounded border px-2 py-1 text-[11px] font-medium transition-colors ${
                             selectedManeuver === type
-                              ? 'border-amber-400 bg-amber-500/20 text-amber-200'
+                              ? 'border-primary bg-primary/10 text-foreground'
                               : 'border-border/60 text-muted-foreground hover:bg-background'
                           }`}
                         >
@@ -576,7 +578,7 @@ export function OpposedMeleeCard({
                 variant="outline"
                 disabled={disabled || !canAct || !maneuverCheck.allowed}
                 onClick={() => handleExecuteDefense('maneuver')}
-                className="mt-3 w-full border-amber-500/50 text-amber-300 hover:bg-amber-500/20 hover:text-amber-100"
+                className="mt-3 w-full border-brass/50 text-brass hover:bg-brass/10 hover:text-brass"
               >
                 {t('maneuverButton')}
               </Button>
@@ -635,7 +637,7 @@ export function OpposedMeleeCard({
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Dices className="h-4 w-4 text-sky-400" />
+                  <Dices className="h-4 w-4 text-primary" />
                   <span className="text-base font-bold text-foreground">
                     K100: {resultState.defenderRoll}
                   </span>

@@ -13,6 +13,7 @@ const dataRoot=process.env.ZEW_DATA_DIR||join(homedir(),'Library/Application Sup
 const showcasePort=Number(process.env.ZEW_SHOWCASE_PORT||4050);
 if(!Number.isInteger(showcasePort)||showcasePort<1024||showcasePort>65535)throw Error('Nieprawidłowy port pokazu.');
 const origin='http://127.0.0.1:'+showcasePort;
+const narratorMode=process.env.ZEW_LOCAL_TTS||'gemini';
 const adventureIds=['cien-nad-prabutami','englewood-murder-castle-1893'];
 const buildId=readFileSync(join(runtime,'.next/BUILD_ID'),'utf8').trim();
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -25,6 +26,9 @@ async function verifyReady(){
   const value=await response.json();
   if(!response.ok||value.mode!=='local_playtest'||value.adventureId!==id||value.payload?.adventure_id!==id)throw Error('Brak gotowej teczki: '+id);
  }
+ const voiceResponse=await fetch(origin+'/api/tts/gemini?languageCode=pl-PL',{signal:AbortSignal.timeout(3000)});
+ const voice=await voiceResponse.json();
+ if(!voiceResponse.ok||voice.provider!==(narratorMode==='macos'?'macos-zosia':'gemini'))throw Error('Niezgodny lektor pokazu.');
  const response=await fetch(origin+'/api/desktop/update/check',{signal:AbortSignal.timeout(3000)});
  const update=await response.json();
  if(!response.ok||update.available!==false||update.canSelfUpdate!==false||update.configured!==false||!update.currentVersion?.includes('showcase'))throw Error('Brak ochrony wersji pokazowej.');
@@ -46,12 +50,11 @@ try{
 const rag=process.env.RAG_DATA_DIR||join(dataRoot,'rag');
 mkdirSync(rag,{recursive:true});
 const showcaseEnv={...process.env};
-delete showcaseEnv.GEMINI_API_KEY;
-delete showcaseEnv.GOOGLE_API_KEY;
+// An explicitly inherited server key remains in this local process only. Finder uses existing browser BYOK.
 delete showcaseEnv.ZEW_UPDATE_MANIFEST_URL;
 const child=spawn(process.execPath,[require.resolve('next/dist/bin/next'),'start','--hostname','127.0.0.1','--port',String(showcasePort)],{
  cwd:runtime,stdio:'inherit',env:{...showcaseEnv,STRAZNIK_DESKTOP_UPDATE:'1',
- ZEW_DESKTOP_SHOWCASE:'1',ZEW_DESKTOP_SELF_UPDATE:'0',ZEW_LOCAL_PLAYTEST:'showcase-pl-en',
+ ZEW_LOCAL_TTS:narratorMode,ZEW_DESKTOP_SHOWCASE:'1',ZEW_DESKTOP_SELF_UPDATE:'0',ZEW_LOCAL_PLAYTEST:'showcase-pl-en',
  ZEW_DISABLE_GIT_FALLBACK:'1',ZEW_DATA_DIR:dataRoot,RAG_DATA_DIR:rag,ZEW_APP_PORT:String(showcasePort),
  NEXT_TELEMETRY_DISABLED:'1'},
 });

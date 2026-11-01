@@ -2,6 +2,11 @@ import { applyDossierInventoryTurn, registerDossierAccessTests, resolveDossierAc
 import { emptyDossierInventory } from './inventory-state';
 import type { DossierRagPayload } from './rag-schema';
 import type { Character } from '../types';
+import { TextEncoder } from 'node:util';
+import { webcrypto } from 'node:crypto';
+import { createAuthoredPrabutyPayload } from './authored-prabuty';
+import { authorizeLocalDraftPayload, fingerprintLocalDraftPayload } from './runtime-authorization';
+import { resolveAuthoredPrabutyMedia } from './authored-media';
 
 const fingerprint = 'sha256:' + 'a'.repeat(64);
 const character: Character = {
@@ -22,6 +27,28 @@ const payload: DossierRagPayload = {
 const state = () => emptyDossierInventory({playthroughId:'play-1',adventureId:'fixture',editionFingerprint:fingerprint});
 const input = () => ({payload,state:state(),turnId:'turn-1',characters:[character],activeCharacter:character,
  rawText:'[EKWIPUNEK: DODAJ | @item-1]',location:'test-camp',writesAllowed:true,era:'1920s'});
+
+test('taking an authored photograph or recording preserves its existing media and source summary without a transcription', async () => {
+ Object.defineProperty(globalThis, 'TextEncoder', { configurable: true, value: TextEncoder });
+ Object.defineProperty(globalThis.crypto, 'subtle', { configurable: true, value: webcrypto.subtle });
+ const fp = await fingerprintLocalDraftPayload(createAuthoredPrabutyPayload(`sha256:${'0'.repeat(64)}`));
+ const authored = await authorizeLocalDraftPayload(createAuthoredPrabutyPayload(fp), { adventureId: 'cien-nad-prabutami', editionFingerprint: fp });
+ for (const media of authored.records.filter(r => r.record_type === 'media')) {
+  const card = authored.records.find(r => media.links.includes(r.record_id) && r.inventory_item)!;
+  const handout = resolveAuthoredPrabutyMedia(authored, media.record_id)!;
+  const taken = applyDossierInventoryTurn({ ...input(), payload: authored,
+   state: emptyDossierInventory({ playthroughId: 'authored-run', adventureId: authored.adventure_id, editionFingerprint: fp }),
+   rawText: `[EKWIPUNEK: DODAJ | @${card.record_id}]`, location: card.tags.scenes[0], era: 'prl-1970s' });
+  expect(taken.rejected).toEqual([]);
+  expect(taken.activeCharacter.equipment).toHaveLength(1);
+  expect(taken.activeCharacter.equipment![0]).toMatchObject({
+   description: handout.textContent, imageUrl: handout.image,
+   dossierBinding: { recordId: card.record_id, handoutRecordId: media.record_id },
+  });
+  expect(taken.activeCharacter.equipment![0].audioUrl).toBe(handout.audioUrl);
+  expect(taken.activeCharacter.equipment![0].readableContent).toBeUndefined();
+ }
+});
 
 test('location and narrator ADD cannot grant an undiscovered gated item', () => {
  const result = applyDossierInventoryTurn(input());

@@ -5,6 +5,9 @@
  * @module ai-presets
  */
 
+// Shared response budget; presentation presets never choose narrative length.
+export const NARRATION_MAX_OUTPUT_TOKENS = 8192;
+
 // ========================================
 // QUALITY PRESETS
 // ========================================
@@ -19,20 +22,6 @@ export const QUALITY_PRESETS = {
     settings: {
       // Gemini settings - Gemini Flash-Lite Latest
       model: 'gemini-flash-lite-latest' as const, // Ultra-szybki i tani
-      temperature: 0.7,
-      topP: 0.85,
-      topK: 40,
-      thinkingLevel: 'minimal' as const,
-      maxOutputTokens: 2048,
-      // === GEMINI nested (IND-32a) ===
-      safetySettings: {
-        harassment: 'BLOCK_MEDIUM_AND_ABOVE' as const,
-        hateSpeech: 'BLOCK_MEDIUM_AND_ABOVE' as const,
-        sexuallyExplicit: 'BLOCK_MEDIUM_AND_ABOVE' as const,
-        dangerousContent: 'BLOCK_MEDIUM_AND_ABOVE' as const,
-      },
-      enableCache: true,
-      cacheTTL: 2 * 60 * 60 * 1000, // 2h (OPT-C04)
       // TTS settings - lektor wyłączony
       ttsEnabled: false,
       ttsProvider: 'gemini' as const,
@@ -41,10 +30,6 @@ export const QUALITY_PRESETS = {
       imagesEnabled: false,
       imageProvider: 'vertex' as const,
       imageQuality: 'medium' as const,
-      // Narration style - zwięzła narracja
-      responseLength: 'short' as const,
-      detailLevel: 'minimal' as const,
-      creativity: 'conservative' as const,
     },
   },
 
@@ -54,35 +39,17 @@ export const QUALITY_PRESETS = {
     settings: {
       // Gemini settings - Gemini Flash Latest
       model: 'gemini-flash-latest' as const,
-      temperature: 0.7,
-      topP: 0.85,
-      topK: 40,
-      thinkingLevel: 'low' as const,
-      maxOutputTokens: 2048,
-      // === GEMINI nested (IND-32a) ===
-      safetySettings: {
-        harassment: 'BLOCK_MEDIUM_AND_ABOVE' as const,
-        hateSpeech: 'BLOCK_MEDIUM_AND_ABOVE' as const,
-        sexuallyExplicit: 'BLOCK_MEDIUM_AND_ABOVE' as const,
-        dangerousContent: 'BLOCK_MEDIUM_AND_ABOVE' as const,
-      },
-      enableCache: true,
-      cacheTTL: 2 * 60 * 60 * 1000, // 2h (OPT-C04)
       // TTS settings - Charon jako jeden stabilny lektor
       ttsEnabled: false,
       ttsProvider: 'gemini' as const,
       ttsVoice: null,
       narratorOnly: true,
       volume: 85,
-      speed: 0.92,
+      speed: 1.0,
       // Image settings - Imagen standard
       imagesEnabled: false,
       imageProvider: 'vertex' as const,
       imageQuality: 'medium' as const,
-      // Narration style
-      responseLength: 'medium' as const,
-      detailLevel: 'standard' as const,
-      creativity: 'balanced' as const,
     },
   },
 
@@ -92,21 +59,6 @@ export const QUALITY_PRESETS = {
     settings: {
       // === GEMINI SETTINGS ===
       model: 'gemini-3.8-flash' as const, // Gemini 3.8 Flash
-      temperature: 0.8,
-      topP: 0.9,
-      topK: 50,
-      thinkingLevel: 'low' as const,
-      maxOutputTokens: 8192,
-
-      // === GEMINI nested (IND-32a) - Horror authentic safety ===
-      safetySettings: {
-        harassment: 'BLOCK_ONLY_HIGH' as const,
-        hateSpeech: 'BLOCK_ONLY_HIGH' as const,
-        sexuallyExplicit: 'BLOCK_ONLY_HIGH' as const,
-        dangerousContent: 'BLOCK_ONLY_HIGH' as const,
-      },
-      enableCache: true,
-      cacheTTL: 2 * 60 * 60 * 1000, // 2h (OPT-C04)
 
       // === GEMINI TTS SŁUCHOWISKO ===
       ttsEnabled: true,
@@ -127,11 +79,6 @@ export const QUALITY_PRESETS = {
       autoGenerateNPCs: true,
       autoGenerateLocations: true,
       maxImagesPerMessage: 1,
-
-      // === NARRATION STYLE ===
-      responseLength: 'long' as const,
-      detailLevel: 'detailed' as const,
-      creativity: 'balanced' as const,
     },
   },
 
@@ -141,35 +88,17 @@ export const QUALITY_PRESETS = {
     settings: {
       // Gemini settings - wysoka jakość z szybkim modelem Flash (Issue #798)
       model: 'gemini-3.8-flash' as const,
-      temperature: 0.9,
-      topP: 0.95,
-      topK: 60,
-      thinkingLevel: 'low' as const,
-      maxOutputTokens: 8192,
-      // === GEMINI nested (IND-32a) ===
-      safetySettings: {
-        harassment: 'BLOCK_ONLY_HIGH' as const,
-        hateSpeech: 'BLOCK_ONLY_HIGH' as const,
-        sexuallyExplicit: 'BLOCK_ONLY_HIGH' as const,
-        dangerousContent: 'BLOCK_ONLY_HIGH' as const,
-      },
-      enableCache: true,
-      cacheTTL: 2 * 60 * 60 * 1000, // 2h
       // === GEMINI TTS FULL SŁUCHOWISKO ===
       ttsEnabled: true,
       ttsProvider: 'gemini' as const,
       ttsVoice: 'Algenib',
       narratorOnly: false,
       volume: 85,
-      speed: 0.92,
+      speed: 1.0,
       // === IMAGE SETTINGS ===
       imagesEnabled: true,
       imageProvider: 'vertex' as const,
       imageQuality: 'high' as const,
-      // Narration style - długie, bogate opisy
-      responseLength: 'long' as const,
-      detailLevel: 'detailed' as const,
-      creativity: 'creative' as const,
     },
   },
 

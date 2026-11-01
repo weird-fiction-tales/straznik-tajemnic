@@ -7,6 +7,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import './deco-window.css';
 
 const Dialog = DialogPrimitive.Root;
 
@@ -39,15 +40,15 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
  * - `screen`- pełny ekran 100% okna (100vw / 100vh), flex-col z wewnętrznym przewijaniem.
  */
 const dialogContentVariants = cva(
-  'fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] border border-brass/30 bg-card shadow-deco duration-200 data-[state=open]:animate-modal-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 sm:rounded-lg',
+  'deco-window fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] border border-brass/30 bg-card shadow-deco duration-200 data-[state=open]:animate-modal-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 sm:rounded-lg',
   {
     variants: {
       size: {
-        sm: 'grid w-full max-w-lg gap-4 p-6',
+        sm: 'grid w-full max-w-lg lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto gap-4 p-6',
         lg: 'grid w-full max-w-3xl max-h-[86vh] gap-4 overflow-y-auto p-6',
         wide: 'grid w-[80vw] 2xl:w-[85vw] h-[78vh] 2xl:h-[84vh] max-h-[85vh] 2xl:max-h-[88vh] gap-4 overflow-y-auto p-6',
         screen:
-          'deco-corners fixed inset-0 left-0 top-0 translate-x-0 translate-y-0 h-screen max-h-screen w-screen max-w-none flex flex-col overflow-hidden p-0 sm:rounded-none rounded-none border-none',
+          'deco-corners fixed inset-0 left-0 top-0 translate-x-0 translate-y-0 lg:!translate-x-0 lg:!translate-y-0 h-screen max-h-screen w-screen max-w-none flex flex-col overflow-hidden p-0 sm:rounded-none rounded-none border-none',
       },
     },
     defaultVariants: {
@@ -106,7 +107,7 @@ const DialogHeader = ({
 }: HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      'flex flex-col space-y-1.5 text-center sm:text-left',
+      'flex flex-col space-y-1.5 lg:pr-14 text-center sm:text-left',
       className
     )}
     {...props}

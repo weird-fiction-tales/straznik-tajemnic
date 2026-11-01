@@ -22,12 +22,12 @@ describe('briefing-audio-resolver', () => {
     expect(resolveScenarioSlug(null, 'Ovidhall Lake Anomaly')).toBe('ovidhall-lake-anomaly-2005');
   });
 
-  it('zwraca poprawny URL audio z podziałem na locale dla startera', () => {
+  it('nie podstawia dawnych nagrań do przygotowanej teczki startera', () => {
     const plAudio = getBriefingAudio({ id: 'the-haunting', title: 'Nawiedzony Dom' }, { locale: 'pl' });
-    expect(plAudio?.audioUrl).toBe('/audio/briefings/the-haunting/briefing-pl.mp3');
+    expect(plAudio).toBeNull();
 
     const enAudio = getBriefingAudio({ id: 'the-haunting', title: 'The Haunting' }, { locale: 'en' });
-    expect(enAudio?.audioUrl).toBe('/audio/briefings/the-haunting/briefing-en.mp3');
+    expect(enAudio).toBeNull();
   });
 
   it('zwraca null dla nieznanego scenariusza', () => {

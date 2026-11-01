@@ -14,14 +14,14 @@ describe('SFX Catalog & Detection Patterns (Issue #205, Issue #504, Issue #789)'
   it('playSFX inicjalizuje odtwarzanie Audio dla poprawnego presetu', () => {
     const audioSpy = jest.spyOn(global, 'Audio');
     playSFX('creaking_door');
-    expect(audioSpy).toHaveBeenCalledWith('/sounds/sfx/creaking_door.mp3');
+    expect(audioSpy).toHaveBeenCalledWith('/sounds/sfx/door_creak_wood_heavy.webm');
     audioSpy.mockRestore();
   });
   it('każdy wzorzec w SFX_PATTERNS wskazuje na istniejący preset w SFX_CATALOG', () => {
     for (const entry of SFX_PATTERNS) {
       const preset = SFX_CATALOG[entry.presetId];
       expect(preset).toBeDefined();
-      expect(preset.file).toMatch(/^\/sounds\/sfx\/.*\.mp3$/);
+      expect(preset.file).toMatch(/^\/sounds\/sfx\/.*\.(?:mp3|webm)$/);
       expect(preset.volume).toBeGreaterThan(0);
       expect(preset.volume).toBeLessThanOrEqual(1.0);
     }

@@ -9,6 +9,7 @@
  */
 
 import type { Section, HandoutType, StickyNote } from './types';
+import { extractAttributedDialogueSpans } from '@/lib/parsers/dialogue-parser';
 
 export function parseStickyNote(raw: string): { stickyNote?: StickyNote; cleaned: string } {
   const match = raw.match(/\[(?:NOTATKA_BADACZA|STICKY_NOTE|INVESTIGATOR_NOTE):\s*([\s\S]*?)\]/i);
@@ -83,7 +84,7 @@ export function parseIntoSections(content: string): Section[] {
         handoutBuffer.length === 1 &&
         /^\[?(?:NOTATKA_BADACZA|STICKY_NOTE|INVESTIGATOR_NOTE)/i.test(handoutBuffer[0].trim());
 
-      const isDialogueLine =
+      const isDialogueLine = extractAttributedDialogueSpans(trimmedLine).length > 0 ||
         /^[\u201E\u201C\u201D\u0022].+?[\u201E\u201C\u201D\u0022][.!?,;:…]*(?:\s*[\u2014\u2013-]\s*.+)?$/.test(
           trimmedLine
         ) ||
@@ -177,6 +178,29 @@ export function parseIntoSections(content: string): Section[] {
       handoutType = detectHandoutType(trimmedLine);
       handoutBuffer = [line];
       currentSection = null;
+      continue;
+    }
+
+    const attributedDialogues = extractAttributedDialogueSpans(trimmedLine);
+    if (attributedDialogues.length > 0) {
+      if (currentSection && currentSection.content.trim()) sections.push(currentSection);
+      currentSection = null;
+      let cursor = 0;
+      for (const dialogue of attributedDialogues) {
+        const before = trimmedLine.slice(cursor, dialogue.start).trim();
+        if (before) sections.push({ type: 'narrative', content: before });
+        sections.push({
+          type: 'dialogue',
+          content: dialogue.text,
+          speaker: dialogue.speaker,
+          openingQuote: dialogue.openingQuote,
+          closingQuote: dialogue.closingQuote,
+          ...(dialogue.punctuationAfterQuote ? { punctuationAfterQuote: dialogue.punctuationAfterQuote } : {}),
+        });
+        cursor = dialogue.end;
+      }
+      const after = trimmedLine.slice(cursor).trim();
+      if (after) currentSection = { type: 'narrative', content: after };
       continue;
     }
 

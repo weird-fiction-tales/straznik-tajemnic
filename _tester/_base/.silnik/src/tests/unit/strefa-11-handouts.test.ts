@@ -99,7 +99,7 @@ describe('Strefa 11 & American Mythos Cold Cases Adventures & Handouts Assets (I
     }
   });
 
-  it('każdy ze 4 scenariuszy American Mythos Cold Cases ma 5 węzłów, 12 wskazówek, 4 handouty (3 WebP + 1 MP3) oraz 4 asymetrycznych badaczy (Issue #659)', () => {
+  it('każdy ze 4 scenariuszy American Mythos Cold Cases ma 5 węzłów, 12 wskazówek, 4 handouty (3 obrazy + 1 MP3) oraz 4 asymetrycznych badaczy (Issue #659)', () => {
     expect(AMERICAN_COLD_CASES_ADVENTURES).toHaveLength(4);
     expect(AMERICAN_COLD_CASES_CHARACTERS).toHaveLength(16);
 
@@ -128,7 +128,7 @@ describe('Strefa 11 & American Mythos Cold Cases Adventures & Handouts Assets (I
       expect(startingNodes.size).toBe(4);
 
       for (const handout of adv.handouts || []) {
-        expect(handout.image).toMatch(/^\/handouts\/.*\.webp$/);
+        expect(handout.image).toMatch(/^\/handouts\/.*\.(?:webp|png)$/);
         const imgDiskPath = path.join(publicDir, handout.image);
         expect(fs.existsSync(imgDiskPath)).toBe(true);
         expect(fs.statSync(imgDiskPath).size).toBeGreaterThan(1000);

@@ -327,11 +327,11 @@ describe('Challenger M3-1 Empirical Stress Tests', () => {
       expect(sections[5].content).toContain('Co robicie?');
     });
 
-    it('2.5: demonstrates vulnerability: colon-formatted [RZUT: ...] is stripped by cleanup.ts catch-all', () => {
+    it('2.5: preserves colon-formatted rolls for the dedicated roll section', () => {
       const text = 'Wchodzicie do gabinetu.\n[RZUT: Spostrzegawczość 50/50 -> SUKCES]\nWidzicie dokument.';
       const cleaned = cleanupContent(text);
-      // Because RZUT is not whitelisted in cleanup.ts:142, the roll tag is erased
-      expect(cleaned).not.toContain('[RZUT:');
+      // The formatter routes this public protocol to a dedicated roll section.
+      expect(cleaned).toContain('[RZUT:');
     });
 
     it('2.4: inline handout tag embedded inside text sentence is extracted correctly', () => {

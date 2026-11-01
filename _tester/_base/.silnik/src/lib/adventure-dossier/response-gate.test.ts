@@ -1,5 +1,6 @@
 import { createDossierResponseGate } from './response-gate';
 import type { DossierRagPayload } from './rag-schema';
+import type { Character } from '../types';
 const fingerprint = 'sha256:' + 'a'.repeat(64);
 const payload: DossierRagPayload = { schema_version: 1, adventure_id: 'neutral', edition_fingerprint: fingerprint, records: [] };
 const input = () => ({payload, adventureId: 'neutral', editionFingerprint: fingerprint, playthroughId: 'p', turnId: 't',
@@ -166,4 +167,86 @@ test('fabricated source quotation is rejected before publication and without a p
  const {x}=await authoredGateInput();const gate=createDossierResponseGate(x);
  expect(()=>gate.validate('Na rewersie fotografii widnieje: „Tajne przejście otwiera się o północy.”',metadata)).toThrow('DOSSIER_DOCUMENT_QUOTE_UNSUPPORTED');
  expect(gate.candidate).toBeUndefined();expect(gate.token).toBeUndefined();expect(localStorage.length).toBe(0);
+});
+
+const investigator: Character = {
+ id:'pc',name:'Ada',occupation:'Detective',age:35,str:50,con:50,siz:50,dex:50,app:50,int:50,pow:50,edu:50,
+ skills:{},hp:10,san:50,maxSan:99,luck:50,mp:10,equipment:[],background:'',playerName:'Player',isActive:true,
+ lastUsed:new Date(0),notes:'',experience:{totalXP:0,availableXP:0,earnedThisSession:0,maxEarnedThisSession:0},developmentHistory:[],
+};
+const photoId='prabuty.media.clue-photo-prabuty-1947';
+const photoItemId='prabuty.item.clue-photo-prabuty-1947';
+const proposedPhoto=`[EKWIPUNEK: DODAJ | @${photoItemId}]`;
+test.each([
+ 'Co Helena wie o fotografii?', 'Otwieram teczkę.', 'Oglądam fotografię.',
+ 'Nie zabieram fotografii.', 'Helena mówi: zabieram fotografię.', 'Rozważam, czy zabieram fotografię.',
+ 'I do not take the photograph.', 'She says: I take the photograph.', 'What if I take the photograph?',
+ 'Zabieram latarkę.',
+])('a model ADD cannot grant a source photograph without a discovery and taking declaration: %s',async playerMessage=>{
+ const {x}=await authoredGateInput();
+ const gate=createDossierResponseGate({...x,location:'loc-warszawa-redakcja',playerMessage,
+  characters:[investigator],activeCharacter:investigator});
+ expect(()=>gate.validate(proposedPhoto,metadata)).toThrow('DOSSIER_EFFECTS_REJECTED');
+ expect(gate.candidate).toBeUndefined();expect(gate.token).toBeUndefined();expect(localStorage.length).toBe(0);
+});
+test.each(['Zabieram fotografię.', 'I take the photograph.'])('a discovered photograph can be deliberately taken: %s',async playerMessage=>{
+ const {x}=await authoredGateInput();
+ const gate=createDossierResponseGate({...x,location:'loc-warszawa-redakcja',playerMessage,knownHandoutIds:[photoId],
+  characters:[investigator],activeCharacter:investigator});
+ expect(()=>gate.validate(proposedPhoto,metadata)).not.toThrow();
+ expect(gate.candidate?.next.activeCharacter?.equipment).toHaveLength(1);
+});
+test.each(['Nie zabieram fotografii.', 'Helena mówi: zabieram fotografię.', 'I do not take the photograph.',
+ 'She says: I take the photograph.', 'What if I take the photograph?', 'Zabieram latarkę.',
+ 'Oglądam fotografię i zabieram mapę.'])('discovery does not authorize a later unchosen acquisition: %s',async playerMessage=>{
+ const {x}=await authoredGateInput();
+ const gate=createDossierResponseGate({...x,location:'loc-warszawa-redakcja',playerMessage,knownHandoutIds:[photoId],
+  characters:[investigator],activeCharacter:investigator});
+ expect(()=>gate.validate(proposedPhoto,metadata)).toThrow('DOSSIER_EFFECTS_REJECTED');
+ expect(gate.candidate).toBeUndefined();
+});
+test('opening the folder and taking its photograph in one declaration grants exactly one source item',async()=>{
+ const {x}=await authoredGateInput();
+ const gate=createDossierResponseGate({...x,location:'loc-warszawa-redakcja',playerMessage:'Otwieram teczkę i zabieram fotografię.',
+  characters:[investigator],activeCharacter:investigator});
+ gate.validate(proposedPhoto,metadata);
+ expect(gate.handouts).toEqual([photoId]);
+ expect(gate.candidate?.next.activeCharacter?.equipment).toHaveLength(1);
+});
+
+test.each(['Otwieram ją.', 'I open it.'])('the final gate publishes a missing card from the prior turn reference: %s', async playerMessage=>{
+ const {x}=await authoredGateInput();
+ const gate=createDossierResponseGate({...x,location:'loc-warszawa-redakcja',playerMessage,
+  previousAssistantMessage:'Na biurku leży zamknięta teczka. A closed folder rests on the desk.'});
+ gate.validate('Oglądasz zawartość.',{...metadata,dossierHandoutRecordIds:[]});
+ expect(gate.handouts).toEqual([photoId]);
+ expect(gate.candidate?.cleanText).toContain(`[HANDOUT:${photoId}]`);
+ expect(gate.candidate?.next.inventory.entries).toEqual([]);
+});
+
+test('a guardrail or a command cannot grant handout access from a rejected opening action',async()=>{
+ const {x}=await authoredGateInput();
+ for(const flags of [{guardrail:true},{isCommand:true}]){
+  const gate=createDossierResponseGate({...x,location:'loc-warszawa-redakcja',playerMessage:'Otwieram teczkę.'});
+  gate.validate('Nie możesz teraz tego zrobić.',{...metadata,...flags});
+  expect(gate.handouts).toEqual([]);
+ }
+});
+
+
+test('staging a second Helena entry after prepare preserves the roster guard and allows commit', async () => {
+ const {appendJournalToParty}=await import('../journal/apply-journal-tags');
+ const opening=appendJournalToParty([investigator],investigator,
+  'Helena podaje teczkę. [JOURNAL:npc:Helena Krawczyk]Helena podaje teczkę.[/JOURNAL]', 'opening');
+ const roster=opening.characters;
+ const snapshot=JSON.stringify(roster);
+ const gate=createDossierResponseGate({...input(),characters:roster,activeCharacter:opening.activeCharacter,
+  isCurrent:()=>JSON.stringify(roster)===snapshot});
+ const text='Helena patrzy na twój ruch. [JOURNAL:npc:Helena Krawczyk]Helena patrzy na twój ruch.[/JOURNAL]';
+ gate.validate(text,{...metadata});
+ const staged=appendJournalToParty(roster,opening.activeCharacter,gate.candidate!.cleanText,'photo');
+ expect(()=>gate.assertCurrent()).not.toThrow();
+ expect(gate.token).toBe('token');
+ expect(staged.activeCharacter.investigatorDossier!.npcs[0].keyInformation).toContain('Helena patrzy');
+ expect(JSON.stringify(roster)).toBe(snapshot);
 });

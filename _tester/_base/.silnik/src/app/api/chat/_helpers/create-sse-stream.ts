@@ -32,7 +32,12 @@ import type { Character, NPC } from '@/lib/types';
 import { enrichMeleeAttackReferences } from '@/lib/combat/npc-combat-profile';
 import type { RagMeta } from './run-rag-summary';
 import type { CampaignMemoryScope } from '@/core/memory/types';
-import { commitMemoryTurn, retainFailedTurn, stageDossierTurn, type DossierNarrativeTurn } from '@/core/memory/commit-turn';
+import {
+  commitMemoryTurn,
+  retainFailedTurn,
+  stageDossierTurn,
+  type DossierNarrativeTurn,
+} from '@/core/memory/commit-turn';
 import { extractRevealedTurn } from '@/core/memory/revealed-facts';
 import { stripPushedRollConsequenceEntries } from '@/lib/parsers/mechanics-parser';
 import type {
@@ -88,6 +93,7 @@ export interface CreateSseStreamOpts {
   pushedRoll?: PushedRollResolutionContext;
   /** Validated stake proposal request; model output must not advance game time. */
   pushedRollStakeRequest?: PushedRollStakeRequestContext;
+  starterState?: import('@/lib/adventures/starter-runtime').StarterState;
 }
 
 export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
@@ -140,7 +146,8 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
 
         // Auto-sędzia: automatyczne egzekwowanie utraty Poczytalności (SAN) po oblanym teście kości CoC RAW (Issue #564)
         const effectiveSanityResolutions =
-          pendingSanityResolutions ?? detectPendingSanityTestResolution(message);
+          pendingSanityResolutions ??
+          detectPendingSanityTestResolution(message);
         if (effectiveSanityResolutions.length > 0) {
           const isDuet = Boolean(
             (characters && characters.length > 1) ||
@@ -154,7 +161,8 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
           );
 
           for (const fallback of fallbacks) {
-            const separator = fullText.length > 0 && !fullText.endsWith('\n') ? '\n' : '';
+            const separator =
+              fullText.length > 0 && !fullText.endsWith('\n') ? '\n' : '';
             const fallbackChunk = `${separator}${fallback}`;
             fullText += fallbackChunk;
             controller.enqueue(
@@ -213,55 +221,87 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
 
         const usage = await getUsage();
         const finishReason = getFinishReason();
-        let memoryCommit: (MemoryCommit & {retryToken?:string}) | undefined;
+        let memoryCommit: (MemoryCommit & { retryToken?: string }) | undefined;
         let narrativeTurn: DossierNarrativeTurn['turn'] | undefined;
         if (memoryScope) {
-          const revealed = extractRevealedTurn(stateText,assistantMessageId ?? traceId,characters,character);
-          const pushedConsequence = pushedRoll && !pushedRoll.passedRequirement
-            ? [{
-                kind: 'consequence' as const,
-                text: `Forsowanie testu ${pushedRoll.skillName}: ${pushedRoll.failureStake}`,
-                status: 'confirmed' as const,
-                sourceJournalEntryId: `journal-${assistantMessageId ?? traceId}-${extractJournalTags(stateText).length}`,
-                provenance: 'pushed_roll_resolver',
-                tags: ['pushed_roll'],
-              }]
-            : [];
-          narrativeTurn = {scope:memoryScope,sessionId:sessionId ?? memoryScope.playthroughId,
-            messageId:assistantMessageId ?? traceId,userMessageId,userText:message,
-            assistantText:revealed.narrative,facts:[...revealed.facts, ...pushedConsequence],
-            recipientIds:character ? [character.id] : undefined};
+          const revealed = extractRevealedTurn(
+            stateText,
+            assistantMessageId ?? traceId,
+            characters,
+            character
+          );
+          const pushedConsequence =
+            pushedRoll && !pushedRoll.passedRequirement
+              ? [
+                  {
+                    kind: 'consequence' as const,
+                    text: `Forsowanie testu ${pushedRoll.skillName}: ${pushedRoll.failureStake}`,
+                    status: 'confirmed' as const,
+                    sourceJournalEntryId: `journal-${assistantMessageId ?? traceId}-${extractJournalTags(stateText).length}`,
+                    provenance: 'pushed_roll_resolver',
+                    tags: ['pushed_roll'],
+                  },
+                ]
+              : [];
+          narrativeTurn = {
+            scope: memoryScope,
+            sessionId: sessionId ?? memoryScope.playthroughId,
+            messageId: assistantMessageId ?? traceId,
+            userMessageId,
+            userText: message,
+            assistantText: revealed.narrative,
+            facts: [...revealed.facts, ...pushedConsequence],
+            recipientIds: character ? [character.id] : undefined,
+          };
         }
         const commitNarrative = () => {
-        if (narrativeTurn) {
-          const turn=narrativeTurn;
-          try { memoryCommit = commitMemoryTurn(turn); }
-          catch (error) {
-            console.warn('Campaign memory ledger write failed:',error);
-            memoryCommit = {messageId:turn.messageId,status:'failed',retryToken:retainFailedTurn(turn)};
+          if (narrativeTurn) {
+            const turn = narrativeTurn;
+            try {
+              memoryCommit = commitMemoryTurn(turn);
+            } catch (error) {
+              console.warn('Campaign memory ledger write failed:', error);
+              memoryCommit = {
+                messageId: turn.messageId,
+                status: 'failed',
+                retryToken: retainFailedTurn(turn),
+              };
+            }
           }
-        }
 
-        // Director's State update (warunkowo)
-        if (sessionId && parsed.gmMetadata) {
-          try {
-            updateDirectorState(
-              sessionId,
-              parsed.gmMetadata,
-              parsed.journalEntries
-            );
-          } catch (e) {
-            console.warn('⚠️ Director state update failed:', e);
+          // Director's State update (warunkowo)
+          if (sessionId && parsed.gmMetadata) {
+            try {
+              updateDirectorState(
+                sessionId,
+                parsed.gmMetadata,
+                parsed.journalEntries
+              );
+            } catch (e) {
+              console.warn('⚠️ Director state update failed:', e);
+            }
           }
-        }
 
           return { memoryCommit };
         };
-        if (opts.deferDossierFinalization && !memoryScope) throw new Error('DOSSIER_MEMORY_SCOPE_REQUIRED');
+        if (opts.deferDossierFinalization && !memoryScope)
+          throw new Error('DOSSIER_MEMORY_SCOPE_REQUIRED');
         const dossierFinalizationToken = opts.deferDossierFinalization
-          ? stageDossierTurn({turn:narrativeTurn!, correctionContextHash:opts.dossierCorrectionContextHash, correctionAttempt:opts.dossierCorrectionAttempt, ...(sessionId && parsed.gmMetadata ? {
-              director:{sessionId,metadata:parsed.gmMetadata,journalEntries:parsed.journalEntries},
-            } : {})}) : undefined;
+          ? stageDossierTurn({
+              turn: narrativeTurn!,
+              correctionContextHash: opts.dossierCorrectionContextHash,
+              correctionAttempt: opts.dossierCorrectionAttempt,
+              ...(sessionId && parsed.gmMetadata
+                ? {
+                    director: {
+                      sessionId,
+                      metadata: parsed.gmMetadata,
+                      journalEntries: parsed.journalEntries,
+                    },
+                  }
+                : {}),
+            })
+          : undefined;
         if (!opts.deferDossierFinalization) commitNarrative();
 
         // Telemetry namespace dla PostHog client-side emit (spawn task 2026-05-22).
@@ -288,7 +328,10 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
           combatState: parsed.combat,
           dialogues: parsed.dialogues,
           illustrations: parsed.illustrations,
-          skillTests: parsed.skillTests,
+          skillTests: opts.starterState
+            ? opts.starterState.pendingTests
+            : parsed.skillTests,
+          starterState: opts.starterState,
           pendingMeleeAttacks: melee.attacks,
           opposedMagicEvents: parsed.opposedMagicEvents || [],
           opposedMeleeEvents: parsed.opposedMeleeEvents || [],
@@ -306,7 +349,9 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
           dossierFinalizationToken,
           dossierClueRecordIds,
           dossierHandoutRecordIds,
-          dossierInventoryWritesAllowed: dossierInventoryWritesAllowed && (parsed.skillTests?.length ?? 0) === 0,
+          dossierInventoryWritesAllowed:
+            dossierInventoryWritesAllowed &&
+            (parsed.skillTests?.length ?? 0) === 0,
         };
 
         controller.enqueue(
@@ -363,11 +408,19 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
         }
 
         // Conversation memory persist (fire-and-forget local RAG)
-        if (!opts.deferDossierFinalization && !memoryScope && sessionId && fullText) {
+        if (
+          !opts.deferDossierFinalization &&
+          !memoryScope &&
+          sessionId &&
+          fullText
+        ) {
           conversationMemory
             .saveConversationTurn({
               userMessage: message,
-              aiResponse: extractRevealedTurn(stateText,assistantMessageId ?? traceId).narrative,
+              aiResponse: extractRevealedTurn(
+                stateText,
+                assistantMessageId ?? traceId
+              ).narrative,
               sessionId,
               characterName: character?.name,
               memoryScope,
@@ -378,7 +431,10 @@ export function createSseStream(opts: CreateSseStreamOpts): ReadableStream {
 
         controller.close();
       } catch (e) {
-        console.error('❌ [create-sse-stream] Błąd podczas strumieniowania SSE:', e);
+        console.error(
+          '❌ [create-sse-stream] Błąd podczas strumieniowania SSE:',
+          e
+        );
         controller.error(e);
       } finally {
         endGeneration();

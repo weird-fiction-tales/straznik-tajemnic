@@ -10,7 +10,6 @@ import {
   type DiceRoll,
   getOutcomeInfo,
   isSuccess,
-  REQUIRED_DIFFICULTY_LABELS,
 } from '@/lib/dice-utils';
 import type { RollTestData } from './RollTestModal';
 import { ArtDecoDice3D, type ArtDecoDiceBreakdown } from './ArtDecoDice3D';
@@ -78,6 +77,11 @@ export const RollTestResult: FC<RollTestResultProps> = ({
     hasSetDifficulty && !succeeded && roll?.outcome && isSuccess(roll.outcome)
       ? getOutcomeInfo('fail',locale)
       : rawOutcomeInfo;
+
+  const displayedOutcome =
+    hasSetDifficulty && !succeeded && roll?.outcome && isSuccess(roll.outcome)
+      ? 'fail'
+      : roll?.outcome;
 
   const bonusLabel =
     test.bonusDice > 0
@@ -207,9 +211,10 @@ export const RollTestResult: FC<RollTestResultProps> = ({
             <>
               {outcomeInfo && (
                 <div
-                  className={`relative font-display text-lg uppercase tracking-[0.16em] ${outcomeInfo.color}`}
+                  data-testid="roll-outcome-label"
+                  className={`relative font-display text-lg uppercase tracking-[0.16em] ${displayedOutcome === 'fail' || displayedOutcome === 'fumble' ? 'text-destructive' : displayedOutcome === 'critical' ? 'text-brass' : 'text-primary'}`}
                 >
-                  {outcomeInfo.emoji} {outcomeInfo.label}
+                  {outcomeInfo.emoji} {displayedOutcome ? t(`outcomes.${displayedOutcome}`) : ''}
                 </div>
               )}
               {roll?.requiredDifficulty &&
@@ -220,7 +225,7 @@ export const RollTestResult: FC<RollTestResultProps> = ({
                   >
                     {succeeded ? '✓' : '✗'}{' '}
                     {t('requiredLevelTag', {
-                      level:locale==='en'?{regular:'Regular',hard:'Hard',extreme:'Extreme'}[roll.requiredDifficulty]:REQUIRED_DIFFICULTY_LABELS[roll.requiredDifficulty],
+                      level: { regular: t('difficultyRegular'), hard: t('difficultyHard'), extreme: t('difficultyExtreme') }[roll.requiredDifficulty],
                     })}
                   </div>
                 )}

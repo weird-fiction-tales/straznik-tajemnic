@@ -1,6 +1,7 @@
 'use client';
 
 import type { FormEvent } from 'react';
+import { immersion } from '@/lib/hardware/hue/immersion';
 import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from './button';
@@ -25,7 +26,6 @@ import {
 import { rollWithBonusPenalty } from './combat-utils';
 import { PhysicalDiceScene } from '@/components/dice/physical-dice-scene';
 import { traceForDice, type PhysicalDieType } from '@/lib/dice-roll-trace';
-
 
 export interface Combatant {
   id: string;
@@ -113,13 +113,26 @@ export interface CombatAction {
   timestamp: Date;
 }
 
-function CombatDamageDice({ formula, results }: { formula?: string; results?: number[] }) {
+function CombatDamageDice({
+  formula,
+  results,
+}: {
+  formula?: string;
+  results?: number[];
+}) {
   const sides = Number(formula?.match(/d(3|4|6|8|10|12|20)\b/i)?.[1]);
   if (!results?.length || !sides) return null;
   return (
     <div className="mt-2 max-w-xs">
       <PhysicalDiceScene
-        dice={traceForDice(`d${sides}` as PhysicalDieType, results, results.reduce((sum, value) => sum + value, 0), 'combat-damage').dice}
+        dice={
+          traceForDice(
+            `d${sides}` as PhysicalDieType,
+            results,
+            results.reduce((sum, value) => sum + value, 0),
+            'combat-damage'
+          ).dice
+        }
         label={formula ?? 'damage'}
       />
     </div>
@@ -660,7 +673,11 @@ export function CombatSystem({
       malfunctionThreshold,
       targetArmor: target.armor,
       targetMaxHp: target.maxHp,
-      convention: target.convention ?? (target.rulesetVariant === 'pulp' || attacker.rulesetVariant === 'pulp' ? 'pulp' : 'classic'),
+      convention:
+        target.convention ??
+        (target.rulesetVariant === 'pulp' || attacker.rulesetVariant === 'pulp'
+          ? 'pulp'
+          : 'classic'),
     });
 
     const success = shotResolution.hit;
@@ -722,7 +739,6 @@ export function CombatSystem({
       playCombatSound('miss');
     }
 
-
     const action: CombatAction = {
       id: Date.now().toString(),
       attackerId: attacker.id,
@@ -746,6 +762,9 @@ export function CombatSystem({
       }),
       timestamp: new Date(),
     };
+
+    if (!shotResolution.isMalfunction)
+      immersion.committedShot('shot-' + action.id);
 
     // Add to combat history
     if (currentRoundData) {
@@ -841,9 +860,7 @@ export function CombatSystem({
               {t('title')}
             </h2>
           </div>
-          <p className="text-muted-foreground mt-2">
-            {t('subtitle')}
-          </p>
+          <p className="text-muted-foreground mt-2">{t('subtitle')}</p>
         </div>
 
         <div className="p-6">
@@ -883,7 +900,10 @@ export function CombatSystem({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold font-display tracking-wider text-brass">
-                    {t('roundTurn', { round: currentRound, turn: currentTurn + 1 })}
+                    {t('roundTurn', {
+                      round: currentRound,
+                      turn: currentTurn + 1,
+                    })}
                   </h3>
                   <p className="text-foreground/80 text-sm">
                     {t('currentPlayer', {
@@ -954,7 +974,9 @@ export function CombatSystem({
                   </div>
                   <div>
                     <span className="text-muted-foreground">ZR:</span>
-                    <span className="ml-1 text-emerald-400">{combatant.dex}</span>
+                    <span className="ml-1 text-emerald-400">
+                      {combatant.dex}
+                    </span>
                   </div>
                 </div>
 
@@ -1022,7 +1044,10 @@ export function CombatSystem({
               </h3>
               <div className="space-y-3 max-h-64 overflow-y-auto">
                 {combatHistory.map((round) => (
-                  <div key={round.id} className="bg-muted/30 rounded-lg p-3 border border-border/40">
+                  <div
+                    key={round.id}
+                    className="bg-muted/30 rounded-lg p-3 border border-border/40"
+                  >
                     <h4 className="font-medium text-brass mb-2">
                       {t('roundLabel', { round: round.roundNumber })}
                     </h4>
@@ -1056,7 +1081,10 @@ export function CombatSystem({
                                 damage: action.damage,
                                 roll: action.damageRoll ?? '',
                               })}
-                              <CombatDamageDice formula={action.damageDiceFormula} results={action.damageDiceResults} />
+                              <CombatDamageDice
+                                formula={action.damageDiceFormula}
+                                results={action.damageDiceResults}
+                              />
                             </div>
                           )}
                         </div>

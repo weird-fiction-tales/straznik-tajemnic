@@ -1,5 +1,7 @@
 'use client';
 
+import '@/components/ui/deco-window.css';
+
 import { SafeImage } from '@/components/ui/safe-image';
 import type { ChangeEvent } from 'react';
 import { useState, useEffect } from 'react';
@@ -329,7 +331,7 @@ export function FullGameSaveModal({
 
   return (
     <div className="fixed inset-0 bg-[#050608]/80 flex items-center justify-center z-50 p-4">
-      <div className="relative w-[80vw] h-[78vh] max-h-[85vh] overflow-hidden flex flex-col border border-brass/30 bg-gradient-to-br from-[#14110c] to-[#0a0c0f] shadow-[0_30px_90px_rgba(0,0,0,0.6)]">
+      <div className="deco-window relative w-[80vw] h-[78vh] max-h-[85vh] overflow-hidden flex flex-col border border-brass/30 bg-gradient-to-br from-[#14110c] to-[#0a0c0f] shadow-[0_30px_90px_rgba(0,0,0,0.6)]">
         {/* Narożniki déco */}
         <span className="absolute top-3 left-3 w-[30px] h-[30px] border-t-2 border-l-2 border-brass/55 pointer-events-none" />
         <span className="absolute top-3 right-3 w-[30px] h-[30px] border-t-2 border-r-2 border-brass/55 pointer-events-none" />
@@ -367,7 +369,7 @@ export function FullGameSaveModal({
             <div className="space-y-4">
               <div>
                 <label className="block font-display uppercase tracking-[0.16em] text-xs font-semibold text-brass mb-2">
-                  Nazwa zapisu *
+                  {t('nameLabel')}
                 </label>
                 <input
                   type="text"
@@ -379,12 +381,12 @@ export function FullGameSaveModal({
               </div>
               <div>
                 <label className="block font-display uppercase tracking-[0.16em] text-xs font-semibold text-brass mb-2">
-                  Notatki (opcjonalne)
+                  {t('notesLabel')}
                 </label>
                 <textarea
                   value={saveNotes}
                   onChange={(e) => setSaveNotes(e.target.value)}
-                  placeholder="Dodaj notatki o tym zapisie..."
+                  placeholder={t('notesPlaceholder')}
                   className="w-full px-4 py-2 bg-input border border-brass/30 rounded-md font-special-elite text-foreground focus:border-primary focus:outline-none min-h-[100px]"
                   rows={4}
                 />
@@ -402,11 +404,7 @@ export function FullGameSaveModal({
                         obrazy inline w treści (intro `![Wprowadzenie](data:)`) +
                         generatedImages + illustrations. Wcześniej liczyło tylko
                         generatedImages → intro nie wpadał → "(0)" mimo obrazu. */}
-                    Zapisz wygenerowane obrazy (
-                    {currentData
-                      ? collectSaveImages(currentData.messages).length
-                      : 0}
-                    )
+                    {t('saveImagesLabel', { count: currentData ? collectSaveImages(currentData.messages).length : 0 })}
                   </span>
                 </label>
 
@@ -418,7 +416,7 @@ export function FullGameSaveModal({
                     className="w-4 h-4 accent-primary"
                   />
                   <span className="font-special-elite text-sm text-foreground">
-                    Zapisz ustawienia AI
+                    {t('saveSettingsLabel')}
                   </span>
                 </label>
               </div>
@@ -431,48 +429,48 @@ export function FullGameSaveModal({
                 </h3>
                 <ul className="font-special-elite text-xs text-muted-foreground tracking-[0.04em] space-y-2">
                   <li className="flex items-center justify-between">
-                    <span>Historia rozmowy</span>
+                    <span>{t('chatHistoryLabel')}</span>
                     <span className="text-foreground">
                       {t('messagesCount', { count: currentData?.messages.length || 0 })}
                     </span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span>Postacie</span>
+                    <span>{t('charactersLabel')}</span>
                     <span className="text-foreground">
                       {currentData?.characters.length || 0}
                     </span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span>Kampanie</span>
+                    <span>{t('campaignsLabel')}</span>
                     <span className="text-foreground">
                       {currentData?.campaigns.length || 0}
                     </span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span>NPC</span>
+                    <span>{t('npcsLabel')}</span>
                     <span className="text-foreground">
                       {currentData?.npcs.length || 0}
                     </span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span>Lokacje</span>
+                    <span>{t('locationsLabel')}</span>
                     <span className="text-foreground">
                       {currentData?.locations.length || 0}
                     </span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span>PDF Memory (zasady i przygoda)</span>
+                    <span>{t('pdfMemoryLabel')}</span>
                     <span className="text-primary">✓</span>
                   </li>
                   {saveImages && (
                     <li className="flex items-center justify-between">
-                      <span>Wygenerowane obrazy</span>
+                      <span>{t('generatedImagesLabel')}</span>
                       <span className="text-primary">✓</span>
                     </li>
                   )}
                   {saveSettings && (
                     <li className="flex items-center justify-between">
-                      <span>Ustawienia AI</span>
+                      <span>{t('aiSettingsLabel')}</span>
                       <span className="text-primary">✓</span>
                     </li>
                   )}
@@ -510,7 +508,7 @@ export function FullGameSaveModal({
               ) : savesList.length === 0 ? (
                 <div className="relative border border-dashed border-brass/30 bg-[#1f1a14]/40 py-10 text-center">
                   <p className="font-display uppercase tracking-[0.16em] text-brass text-sm">
-                    Brak zapisanych gier
+                    {t('noSaves')}
                   </p>
                   <p className="font-serif italic text-muted-foreground mt-1">
                     {t('firstChronicle')}

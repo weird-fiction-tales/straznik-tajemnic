@@ -1,6 +1,60 @@
 import { DialogueLine, NPCPosition } from './types';
 import { cleanResponseText, isCommonWord } from './text-cleaner';
 
+/** Jawnie podpisany cytat; indeksy obejmują podpis, cytat i końcową interpunkcję. */
+export interface AttributedDialogueSpan {
+    speaker: string;
+    text: string;
+    start: number;
+    end: number;
+    openingQuote: string;
+    closingQuote: string;
+    punctuationAfterQuote?: string;
+}
+
+/** Wspólny parser podpisanych wypowiedzi dla czatu i źródeł dziennika. */
+export function extractAttributedDialogueSpans(text: string): AttributedDialogueSpan[] {
+    const spans: AttributedDialogueSpan[] = [];
+    const labels = /(?:^|(?<=\s))([*_]*(?:(?:[A-ZŁŻŹŚĆŃÓĄĘ][\p{L}'’\-]*|[Dd]r\.?|[Pp]rof\.?)\s+){0,3}[A-ZŁŻŹŚĆŃÓĄĘ][\p{L}'’\-]*[*_]*\s*:[*_]*\s*)([„“"«])/gu;
+    let match: RegExpExecArray | null;
+
+    while ((match = labels.exec(text)) !== null) {
+        const openingQuote = match[2];
+        const quoteStart = match.index + match[1].length;
+        const closingQuote = openingQuote === '"' ? '"' : openingQuote === '«' ? '»' : '”';
+        let quoteEnd = -1;
+        let escaped = false;
+        for (let index = quoteStart + 1; index < text.length; index++) {
+            const character = text[index];
+            if (character === closingQuote && !escaped) {
+                quoteEnd = index;
+                break;
+            }
+            escaped = character === '\\' && !escaped;
+        }
+        if (quoteEnd === -1) continue;
+        // An ASCII quote directly followed by a word may open an unescaped
+        // inner quotation. Do not split at an uncertain boundary; the caller
+        // can keep the whole line through its existing prose/legacy path.
+        if (closingQuote === '"' && /[\p{L}\p{N}]/u.test(text[quoteEnd + 1] ?? '')) continue;
+
+        const punctuation = text.slice(quoteEnd + 1).match(/^[.!?,;:…]+/)?.[0];
+        const end = quoteEnd + 1 + (punctuation?.length ?? 0);
+        spans.push({
+            speaker: match[1].replace(/[*_]/g, '').replace(/:\s*$/, '').trim(),
+            text: text.slice(quoteStart + 1, quoteEnd),
+            start: match.index,
+            end,
+            openingQuote,
+            closingQuote,
+            ...(punctuation ? { punctuationAfterQuote: punctuation } : {}),
+        });
+        labels.lastIndex = end;
+    }
+
+    return spans;
+}
+
 // === WYKRYWANIE PŁCI NPC ===
 export function detectSpeakerGender(textBeforeDialogue: string): 'male' | 'female' | 'unknown' {
     const context = textBeforeDialogue.toLowerCase();

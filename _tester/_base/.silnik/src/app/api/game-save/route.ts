@@ -1,3 +1,5 @@
+import { validateStarterState } from '@/lib/adventures/starter-runtime';
+import { getStarterStore } from '@/lib/adventures/starter-store';
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
@@ -182,6 +184,13 @@ export async function POST(request: NextRequest) {
     }
 
     const sessionCost = saveData.sessionCost || 0;
+    if (saveData.dossierState) {
+      try { validateStarterState(saveData.dossierState); } catch { return NextResponse.json({ error: 'Invalid starter snapshot' }, { status: 400 }); }
+      if (saveData.dossierState.playthroughId !== saveData.campaignMemory?.playthroughId) return NextResponse.json({ error: 'Starter scope mismatch' }, { status: 400 });
+      const committed = getStarterStore().load(saveData.campaignMemory.playthroughId, saveData.dossierState.participantIds);
+      if (committed.revision !== saveData.dossierState.revision) return NextResponse.json({ error: 'Wait for the current turn to finish before saving.' }, { status: 409 });
+      saveData.dossierState = committed;
+    }
     const fullSave = FullGameSaveManager.createFullSave({
       ...saveData,
       sessionCost,

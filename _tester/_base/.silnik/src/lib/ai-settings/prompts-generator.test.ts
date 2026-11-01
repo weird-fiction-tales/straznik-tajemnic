@@ -1,3 +1,4 @@
+import { applyPreset } from '../ai-presets/apply';
 import { getGameMasterPrompt, loadDefaultPrompt } from './prompts-generator';
 import { getGMProtocolPrompt, getCompactGMProtocolPrompt } from '../prompts/gm-protocol';
 import { defaultAISettings } from './defaults';
@@ -193,4 +194,45 @@ describe('default prompt assets are text, not a successful HTML fallback',()=>{
   const spy=jest.spyOn(global,'fetch').mockResolvedValue({ok:true,headers:new Headers({'content-type':'text/markdown; charset=utf-8'}),text:async()=> '# Keeper instructions\nKeep player agency.'} as Response);
   try{await expect(loadDefaultPrompt(locale)).resolves.toContain('Keeper instructions');}finally{spy.mockRestore();}
  });
+});
+
+describe('preset-independent instructions sent to the narrator', () => {
+  it.each(['pl', 'en'] as const)(
+    'keeps the same rich and concise instructions across presets in %s',
+    (locale) => {
+      for (const responseLength of ['long', 'short'] as const) {
+        const settings = {
+          ...defaultAISettings,
+          gameMasterNarration: {
+            ...defaultAISettings.gameMasterNarration,
+            style: { responseLength, detailLevel: 'detailed' as const },
+            behavior: {
+              ...defaultAISettings.gameMasterNarration.behavior,
+              creativity: 'creative' as const,
+            },
+          },
+        };
+        const heading =
+          locale === 'pl' ? '## KALIBRACJA STYLU' : '## KEEPER NARRATION STYLE';
+        const baseline = getGameMasterPrompt(settings, locale).split(
+          heading
+        )[1];
+        expect(baseline).toBeTruthy();
+        expect(baseline).toContain(
+          responseLength === 'long'
+            ? locale === 'pl'
+              ? 'wieloakapitowe'
+              : 'multi-paragraph'
+            : '1-2'
+        );
+        for (const preset of ['low', 'mid', 'high', 'ultra'] as const) {
+          const prompt = getGameMasterPrompt(
+            applyPreset(preset, settings),
+            locale
+          );
+          expect(prompt.split(heading)[1]).toBe(baseline);
+        }
+      }
+    }
+  );
 });

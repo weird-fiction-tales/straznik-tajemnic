@@ -6,6 +6,7 @@
  */
 
 import React from 'react';
+import { useMagicLabels } from '@/components/ui/use-magic-labels';
 import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ export interface SheetMagicProps {
 
 export function SheetMagic({ character, onCharacterUpdate }: SheetMagicProps) {
   const t = useTranslations('Magic');
+  const labels = useMagicLabels();
   const locale = useLocale() === 'en' ? 'en' : 'pl';
 
   const magic = character.magic;
@@ -83,7 +85,7 @@ export function SheetMagic({ character, onCharacterUpdate }: SheetMagicProps) {
     <div className="space-y-4 pt-2 border-t border-brass/20">
       {/* Nagłówek sekcji */}
       <h3 className="font-display uppercase tracking-[0.24em] text-brass text-xs font-semibold flex items-center gap-1.5">
-        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+        <Sparkles className="w-3.5 h-3.5 text-primary" />
         {t('sheetMagicTitle')}
       </h3>
 
@@ -95,7 +97,7 @@ export function SheetMagic({ character, onCharacterUpdate }: SheetMagicProps) {
             {isSkeptic ? (
               <Badge
                 variant="outline"
-                className="border-amber-500/50 text-amber-400 font-mono cursor-help"
+                className="border-brass/50 text-brass font-mono cursor-help"
                 title={t('beliefTooltipSkeptic')}
               >
                 <ShieldAlert className="w-3 h-3 mr-1 inline" />
@@ -104,7 +106,7 @@ export function SheetMagic({ character, onCharacterUpdate }: SheetMagicProps) {
             ) : (
               <Badge
                 variant="outline"
-                className="border-purple-500/50 text-purple-300 font-mono cursor-help"
+                className="border-brass/40 text-primary font-mono cursor-help"
                 title={t('beliefTooltipBeliever')}
               >
                 <Brain className="w-3 h-3 mr-1 inline" />
@@ -158,7 +160,7 @@ export function SheetMagic({ character, onCharacterUpdate }: SheetMagicProps) {
               return (
                 <div
                   key={entry.tomeId}
-                  className="p-2.5 rounded-sm bg-card/40 border border-amber-900/30 text-xs space-y-1"
+                  className="p-2.5 rounded-sm bg-card/40 border border-brass/50 text-xs space-y-1"
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span className="font-serif font-semibold text-foreground truncate">
@@ -166,18 +168,18 @@ export function SheetMagic({ character, onCharacterUpdate }: SheetMagicProps) {
                     </span>
                     {tomeDef?.language && (
                       <Badge variant="outline" className="text-[10px] border-border/40 text-muted-foreground">
-                        {tomeDef.language}
+                        {labels.language(tomeDef.language)}
                       </Badge>
                     )}
                   </div>
 
                   <div className="flex flex-wrap gap-2 text-[11px] font-mono text-muted-foreground">
                     {entry.initialReadingDone && (
-                      <span className="text-emerald-400">✓ Przegląd (+{entry.cmiAwarded} CMI)</span>
+                      <span className="text-emerald-400">✓ {t('sheetInitialReading', { gain: entry.cmiAwarded })}</span>
                     )}
                     {entry.fullStudyDone && (
-                      <span className="text-amber-300">
-                        ✓ Studium ({entry.completedWeeks} tyg., +{entry.cmfAwarded} CMF)
+                      <span className="text-brass">
+                        ✓ {t('sheetFullStudy', { weeks: entry.completedWeeks, gain: entry.cmfAwarded })}
                       </span>
                     )}
                   </div>
@@ -208,21 +210,21 @@ export function SheetMagic({ character, onCharacterUpdate }: SheetMagicProps) {
               return (
                 <div
                   key={sp.spellId}
-                  className="p-2.5 rounded-sm bg-card/40 border border-purple-900/30 text-xs space-y-1"
+                  className="p-2.5 rounded-sm bg-card/40 border border-brass/40 text-xs space-y-1"
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span className="font-serif font-semibold text-foreground truncate">
                       {name}
                     </span>
-                    <Badge variant="outline" className="text-[10px] border-purple-500/30 text-purple-300 font-mono">
+                    <Badge variant="outline" className="text-[10px] border-brass/40 text-primary font-mono">
                       {canonical}
                     </Badge>
                   </div>
 
                   {spellDef && (
                     <div className="flex flex-wrap gap-2 text-[11px] font-mono text-muted-foreground">
-                      <span className="text-purple-300">🔮 {spellDef.mpCost} PM</span>
-                      <span className="text-destructive">🧠 {spellDef.sanCost} SAN</span>
+                      <span className="text-primary">🔮 {spellDef.mpCost} {t('mpLabel')}</span>
+                      <span className="text-destructive">🧠 {labels.dice(spellDef.sanCost)} SAN</span>
                       <span>⏱️ {spellDef.castingTime.value[locale]}</span>
                     </div>
                   )}
@@ -234,13 +236,13 @@ export function SheetMagic({ character, onCharacterUpdate }: SheetMagicProps) {
                         {t('sheetCastDone')}
                       </span>
                     ) : (
-                      <span className="text-amber-400 flex items-center gap-1">
+                      <span className="text-brass flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
                         {t('sheetCastPending')}
                       </span>
                     )}
                     {sp.deeperUnlocked && (
-                      <Badge className="bg-purple-900/50 text-purple-200 text-[9px] border-none py-0">
+                      <Badge className="bg-primary/10 text-primary text-[9px] border-none py-0">
                         {t('sheetDeeperStatus')}
                       </Badge>
                     )}

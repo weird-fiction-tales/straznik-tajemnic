@@ -32,6 +32,7 @@ import { getGeminiClient } from '@/lib/gemini-client-pool';
 import { resolveUserId } from '@/lib/auth-user';
 import { recordUserUsage, ttsCostPerChar } from '@/lib/user-usage';
 import { pcmToWav } from '@/lib/audio/pcm-to-wav';
+import { buildGeminiTtsPrompt } from '@/lib/audio/gemini-tts-prompt';
 import {
   GEMINI_VOICES,
   DEFAULT_GEMINI_VOICE,
@@ -234,9 +235,10 @@ export async function POST(request: NextRequest) {
     // X-Gemini-Api-Key (localStorage, jeśli gracz wpisał własny), fallbackiem jest
     // serwerowy GEMINI_API_KEY z .env.local. Offline jeden klucz zasila wszystko
     // (czat/obrazy/lektor) - bez ręcznego wpisywania w modal. Brak obu = 401.
-    const apiKey =
-      request.headers.get('X-Gemini-Api-Key')?.trim() ||
-      process.env.GEMINI_API_KEY?.trim();
+    const clientApiKey = request.headers.get('X-Gemini-Api-Key')?.trim();
+    const apiKey = clientApiKey || process.env.GEMINI_API_KEY?.trim();
+    const localServerTransport = !clientApiKey && Boolean(process.env.GEMINI_API_KEY?.trim()) &&
+      isShowcaseServer() && isSameOriginLocalDossierRequest(request);
     if (!apiKey) {
       return NextResponse.json(
         {
@@ -248,7 +250,7 @@ export async function POST(request: NextRequest) {
     }
 
     const tier = request.headers.get('X-Gemini-Tier')?.trim();
-    if (tier === 'free') {
+    if (tier === 'free' && !localServerTransport) {
       return NextResponse.json({
         success: false,
         code: 'PURE_TEXT_MODE_ACTIVE',
@@ -275,11 +277,9 @@ export async function POST(request: NextRequest) {
       ? enhanceAudioDirectionWithPhonetics(audioDirection || '', 'pl')
       : audioDirection;
 
-    // Issue #693: Do syntezy audio przekazujemy wyłącznie właściwy tekst literacki (normalizedText).
-    // Wcześniejsze doklejanie angielskiej dyrektywy reżyserskiej (`${effectiveAudioDirection}\n\n${normalizedText}`)
-    // powodowało, że model wielojęzyczny Gemini TTS przy languageCode='pl-PL' czytał angielskie instrukcje
-    // na głos z polską fonetyką („gwara / mowa Cthulhu / węgierski”), których w ogóle nie było w tekście opowieści.
-    const promptText = normalizedText;
+    // Issue #835: Gemini 3.1 needs explicit silent performance sections and a
+    // separate TRANSCRIPT, not the naive direction prefix that regressed #693.
+    const promptText = buildGeminiTtsPrompt(normalizedText, effectiveAudioDirection, effectiveLang);
 
     // IND-191 + IND-236: retry server-side. Walidacja audio jest WEWNĄTRZ operacji -
     // brak inlineData rzuca sentinel (text-instead-of-audio) → ponowienie zamiast 500.

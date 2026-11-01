@@ -15,17 +15,24 @@ describe('AI Presets & Thinking Level Decoupling (Issue #754)', () => {
   });
 
   describe('definitions.ts', () => {
-    it('żaden preset jakościowy nie wymusza poziomu myślenia high', () => {
-      expect(QUALITY_PRESETS.low.settings.thinkingLevel).not.toBe('high');
-      expect(QUALITY_PRESETS.mid.settings.thinkingLevel).not.toBe('high');
-      expect(QUALITY_PRESETS.high.settings.thinkingLevel).not.toBe('high');
-      expect(QUALITY_PRESETS.ultra.settings.thinkingLevel).not.toBe('high');
-    });
-
-    it('presety high i ultra używają bezpiecznego i szybkiego poziomu low jako baseline', () => {
-      expect(QUALITY_PRESETS.high.settings.thinkingLevel).toBe('low');
-      expect(QUALITY_PRESETS.ultra.settings.thinkingLevel).toBe('low');
-    });
+    it.each(['low', 'mid', 'high', 'ultra'] as const)(
+      '%s contains presentation only, without narration or generation overrides',
+      (preset) => {
+        for (const field of [
+          'thinkingLevel',
+          'temperature',
+          'topP',
+          'topK',
+          'safetySettings',
+          'maxOutputTokens',
+          'responseLength',
+          'detailLevel',
+          'creativity',
+        ]) {
+          expect(QUALITY_PRESETS[preset].settings).not.toHaveProperty(field);
+        }
+      }
+    );
   });
 
   describe('applyPreset decoupling', () => {

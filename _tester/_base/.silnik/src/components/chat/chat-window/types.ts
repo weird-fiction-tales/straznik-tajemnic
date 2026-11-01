@@ -40,7 +40,8 @@ export interface ChatWindowProps {
   handleSendMessage: (
     message: string,
     mechanicsContext?: {
-      chase?: ChaseState;
+      starter?: import('@/lib/adventures/starter-runtime').StarterMechanics;
+    chase?: ChaseState;
       combat?: { resolutions: CombatResolution[] };
       skillRolls?: SkillRollResolution[];
     }

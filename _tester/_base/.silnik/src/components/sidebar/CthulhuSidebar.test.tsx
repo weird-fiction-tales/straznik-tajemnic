@@ -8,7 +8,9 @@ jest.mock('@/hooks/useLocalPlaytestTransport', () => ({useLocalPlaytestTransport
 
 jest.mock('../ui/youtube-player', () => ({
   YouTubePlayer: ({ isTTSPlaying }: { isTTSPlaying?: boolean }) => (
-    <div data-testid="youtube-player">YouTube player {isTTSPlaying ? 'ducked' : 'normal'}</div>
+    <div data-testid="youtube-player">
+      YouTube player {isTTSPlaying ? 'ducked' : 'normal'}
+    </div>
   ),
 }));
 
@@ -49,7 +51,9 @@ describe('CthulhuSidebar player tools', () => {
       />
     );
 
-    const lockedBtn = screen.getByTitle(/Faza Rozwoju według zasad d100 Weird Fiction jest dostępna dopiero po zakończeniu sesji/i);
+    const lockedBtn = screen.getByTitle(
+      /Faza Rozwoju według zasad d100 Weird Fiction jest dostępna dopiero po zakończeniu sesji/i
+    );
     expect(lockedBtn).toBeInTheDocument();
     expect(lockedBtn).toBeDisabled();
   });
@@ -72,7 +76,9 @@ describe('CthulhuSidebar player tools', () => {
       />
     );
 
-    const readyBtn = screen.getByTitle(/Sesja zakończona! Otwórz Fazę Rozwoju/i);
+    const readyBtn = screen.getByTitle(
+      /Sesja zakończona! Otwórz Fazę Rozwoju/i
+    );
     expect(readyBtn).toBeInTheDocument();
     expect(readyBtn).not.toBeDisabled();
     readyBtn.click();
@@ -138,16 +144,15 @@ describe('CthulhuSidebar player tools', () => {
     } as never;
 
     render(
-      <CthulhuSidebar
-        activeCharacter={mockChar}
-        adventureContext={null}
-      />
+      <CthulhuSidebar activeCharacter={mockChar} adventureContext={null} />
     );
 
     const img = screen.getByAltText('Harvey Walters');
     expect(img).toBeInTheDocument();
     // Domyślny klasyczny filtr CoC 1920s gdy kontekst przygody jest pusty
-    expect(img).toHaveStyle({ filter: 'sepia(0.22) saturate(0.76) contrast(1.04) brightness(0.98)' });
+    expect(img).toHaveStyle({
+      filter: 'sepia(0.22) saturate(0.76) contrast(1.04) brightness(0.98)',
+    });
   });
 
   it('stosuje autentyczny filtr epoki 1980s dla scenariusza Traszyn (1983-1999)', () => {
@@ -181,18 +186,16 @@ describe('CthulhuSidebar player tools', () => {
     const img = screen.getByAltText('Ksiądz Jan');
     expect(img).toBeInTheDocument();
     // 1980s filter
-    expect(img).toHaveStyle({ filter: 'sepia(0.04) saturate(0.88) contrast(1.04) brightness(0.97)' });
+    expect(img).toHaveStyle({
+      filter: 'sepia(0.04) saturate(0.88) contrast(1.04) brightness(0.97)',
+    });
   });
 
   it('renderuje Kompendium i Kulisy MG w sekcji Pomoce Badacza i obsługuje przełączanie', () => {
     process.env.NEXT_INTL_TEST_LOCALE = 'pl';
     const mockOpenHelp = jest.fn();
 
-    render(
-      <CthulhuSidebar
-        onOpenHelp={mockOpenHelp}
-      />
-    );
+    render(<CthulhuSidebar onOpenHelp={mockOpenHelp} />);
 
     // Kompendium w Pomocach Badacza
     const compendiumBtn = screen.getByTitle(/Otwórz kompendium wiedzy/i);
@@ -217,13 +220,14 @@ describe('CthulhuSidebar player tools', () => {
 
   it('nie renderuje dropdownu wyboru postaci ani licznika gdy sesja ma tylko 1 postać (tryb Solo)', () => {
     process.env.NEXT_INTL_TEST_LOCALE = 'pl';
-    const mockChar = { id: 'char_1', name: 'Helena Krawczyk', skills: {} } as never;
+    const mockChar = {
+      id: 'char_1',
+      name: 'Helena Krawczyk',
+      skills: {},
+    } as never;
 
     render(
-      <CthulhuSidebar
-        activeCharacter={mockChar}
-        characters={[mockChar]}
-      />
+      <CthulhuSidebar activeCharacter={mockChar} characters={[mockChar]} />
     );
 
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
@@ -233,8 +237,18 @@ describe('CthulhuSidebar player tools', () => {
 
   it('renderuje dropdown wyboru postaci i licznik gdy sesja ma co najmniej 2 postacie (Hot Seat / Duet)', () => {
     process.env.NEXT_INTL_TEST_LOCALE = 'pl';
-    const mockChar1 = { id: 'char_1', name: 'Helena Krawczyk', occupation: 'Producent', skills: {} } as never;
-    const mockChar2 = { id: 'char_2', name: 'Ryszard Kaczmarek', occupation: 'Oficer', skills: {} } as never;
+    const mockChar1 = {
+      id: 'char_1',
+      name: 'Helena Krawczyk',
+      occupation: 'Producent',
+      skills: {},
+    } as never;
+    const mockChar2 = {
+      id: 'char_2',
+      name: 'Ryszard Kaczmarek',
+      occupation: 'Oficer',
+      skills: {},
+    } as never;
 
     render(
       <CthulhuSidebar
@@ -249,8 +263,18 @@ describe('CthulhuSidebar player tools', () => {
 
   it('wywołuje onCharacterSwitch po zmianie wyboru w dropdownie postaci', () => {
     process.env.NEXT_INTL_TEST_LOCALE = 'pl';
-    const mockChar1 = { id: 'char_1', name: 'Helena Krawczyk', occupation: 'Producent', skills: {} } as never;
-    const mockChar2 = { id: 'char_2', name: 'Ryszard Kaczmarek', occupation: 'Oficer', skills: {} } as never;
+    const mockChar1 = {
+      id: 'char_1',
+      name: 'Helena Krawczyk',
+      occupation: 'Producent',
+      skills: {},
+    } as never;
+    const mockChar2 = {
+      id: 'char_2',
+      name: 'Ryszard Kaczmarek',
+      occupation: 'Oficer',
+      skills: {},
+    } as never;
     const mockOnSwitch = jest.fn();
 
     render(
@@ -269,7 +293,7 @@ describe('CthulhuSidebar player tools', () => {
     expect(mockOnSwitch).toHaveBeenCalledWith(mockChar2);
   });
 
-  it('renderuje kontrolkę oświetlenia Hue w Ustawieniach i obsługuje szybki toggle oraz światło awaryjne', () => {
+  it('renderuje kontrolkę oświetlenia Hue w Ustawieniach i obsługuje szybki toggle oraz światło awaryjne', async () => {
     process.env.NEXT_INTL_TEST_LOCALE = 'pl';
     localStorage.setItem(
       'straznik_hue_config',
@@ -290,8 +314,10 @@ describe('CthulhuSidebar player tools', () => {
     expect(emergencyBtn).toBeInTheDocument();
 
     // Kliknięcie toggle Hue przełącza na Wył
-    const hueToggleBtn = screen.getByTitle(/Włącz lub wyłącz nastrojowe oświetlenie Philips Hue/i);
-    act(() => {
+    const hueToggleBtn = screen.getByTitle(
+      /Włącz lub wyłącz nastrojowe oświetlenie Philips Hue/i
+    );
+    await act(async () => {
       fireEvent.click(hueToggleBtn);
     });
 

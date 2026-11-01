@@ -1,4 +1,5 @@
 'use client';
+import { immersion } from '@/lib/hardware/hue/immersion';
 
 import { SafeImage } from '@/components/ui/safe-image';
 import type { FC } from 'react';
@@ -60,6 +61,7 @@ import {
   ActiveGameState,
   HotSeatConfig,
   JournalEntry,
+  Message,
   AdventureContext as BaseAdventureContext,
 } from '@/lib/types';
 import { AdventureContext, CustomAdventure } from '@/lib/adventures-data';
@@ -67,10 +69,14 @@ import { useResolvedPortrait } from '@/hooks/useResolvedPortrait';
 import { useLocalPlaytestTransport } from '@/hooks/useLocalPlaytestTransport';
 import { getEraImageFilter } from '@/lib/era-visual-style';
 import { resolveGameEraContext } from '@/lib/era';
-import { mergeAdventureJournalEntries } from '@/lib/journal/shared-adventure-journal';
+import { buildPublicJournal, markJournalCardRead } from '@/lib/journal/public-journal';
+import { loadCampaignMemoryScope } from '@/core/memory/campaign-scope';
 import type { AISettings } from '@/lib/ai-settings';
+import type { DossierHandoutBinding } from '@/lib/adventure-dossier/local-handouts';
 
 interface CthulhuSidebarProps {
+  messages?: Message[];
+  dossierHandoutBinding?: DossierHandoutBinding;
   activeCharacter?: Character;
   characters?: Character[]; // Lista wszystkich postaci
   onCharacterSwitch?: (character: Character) => void;
@@ -113,7 +119,10 @@ interface CthulhuSidebarProps {
   customAdventures?: CustomAdventure[];
   onUploadAdventure?: (file: File) => Promise<CustomAdventure | null>;
   onDeleteAdventure?: (id: string) => Promise<void>;
-  onToggleAttachLorebook?: (adventureId: string, lorebookId: string) => Promise<void>;
+  onToggleAttachLorebook?: (
+    adventureId: string,
+    lorebookId: string
+  ) => Promise<void>;
   isUploadingAdventure?: boolean;
   uploadProgressAdventure?: number;
   loadingStatusAdventure?: string;
@@ -132,13 +141,14 @@ interface CthulhuSidebarProps {
 }
 
 export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
+  messages,
+  dossierHandoutBinding,
   activeCharacter,
   characters,
   onCharacterSwitch,
   onCharacterCreate,
   onCharacterManage,
   onUpdateCharacter,
-  onUpdateSharedJournal,
   handleSendMessage,
   activeGameState,
   voiceFeatureAvailable,
@@ -230,7 +240,6 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
   }, [effectiveAdventureContext]);
 
   // System notyfikacji - nowe pozycje w dzienniku i ekwipunku
-  const [unseenJournalCount, setUnseenJournalCount] = useState(0);
   const [seenEquipmentCount, setSeenEquipmentCount] = useState<number>(
     () => activeCharacter?.equipment?.length ?? 0
   );
@@ -267,7 +276,9 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
         setIsDirectorMode(customEvent.detail.isDirectorMode);
       } else {
         try {
-          setIsDirectorMode(localStorage.getItem('straznik_director_mode') === 'true');
+          setIsDirectorMode(
+            localStorage.getItem('straznik_director_mode') === 'true'
+          );
         } catch {
           // ignore
         }
@@ -275,7 +286,11 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
     };
 
     window.addEventListener('director-mode-changed', handleDirectorModeChange);
-    return () => window.removeEventListener('director-mode-changed', handleDirectorModeChange);
+    return () =>
+      window.removeEventListener(
+        'director-mode-changed',
+        handleDirectorModeChange
+      );
   }, []);
 
   const [hueConfig, setHueConfig] = useState(loadStoredHueConfig);
@@ -292,20 +307,25 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
     window.addEventListener('straznik_hue_config_changed', handleHueChange);
     window.addEventListener('storage', handleHueChange);
     return () => {
-      window.removeEventListener('straznik_hue_config_changed', handleHueChange);
+      window.removeEventListener(
+        'straznik_hue_config_changed',
+        handleHueChange
+      );
       window.removeEventListener('storage', handleHueChange);
     };
   }, []);
 
   const handleToggleHue = () => {
     const updated = { ...hueConfig, enabled: !hueConfig.enabled };
-    setHueConfig(updated);
-    saveStoredHueConfig(updated);
+    void saveStoredHueConfig(updated)
+      .then(() => {
+        setHueConfig(updated);
+      })
+      .catch(() => {});
   };
 
   const handleTriggerEmergencyLight = async () => {
-    const director = getGlobalLightDirector();
-    await director.triggerEmergencyLight();
+    await immersion.emergency().catch(() => {});
   };
 
   // Portret do panelu postaci - dociągany z IndexedDB gdy portraitUrl pusty
@@ -315,74 +335,16 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
   const inspectedCharacter =
     characters?.find((character) => character.id === inspectedCharacterId) ??
     activeCharacter;
-  const sharedJournalEnabled =
-    Boolean(hotSeatConfig?.enabled) && (characters?.length ?? 0) >= 2;
-  const sharedJournal = useMemo(
-    () =>
-      sharedJournalEnabled
-        ? mergeAdventureJournalEntries(
-            characters ?? [],
-            hotSeatConfig?.adventureJournalId
-          )
-        : undefined,
-    [characters, hotSeatConfig?.adventureJournalId, sharedJournalEnabled]
-  );
-  const participantNames = useMemo(
-    () =>
-      sharedJournalEnabled
-        ? (characters ?? []).map(
-            (character) => character.playerName || character.name
-          )
-        : [],
-    [characters, sharedJournalEnabled]
-  );
-  const journalEntryCount = sharedJournalEnabled
-    ? (sharedJournal?.length ?? 0)
-    : (activeCharacter?.journal?.length ?? 0);
-  const journalStorageKey = sharedJournalEnabled
-    ? `unseen_journal_${(characters ?? [])
-        .map((character) => character.id)
-        .sort()
-        .join('_')}`
-    : activeCharacter
-      ? `unseen_${activeCharacter.id}`
-      : null;
+  const journalParty = activeCharacter && !characters?.some(character => character.id === activeCharacter.id)
+    ? [...(characters ?? []), activeCharacter] : characters ?? [];
+  const journalScope = loadCampaignMemoryScope() ?? activeCharacter?.chronicleSession;
+  const journalModel = buildPublicJournal({ characters: journalParty, chapter: journalScope,
+    binding: dossierHandoutBinding, messages, locale: locale === 'en' ? 'en' : 'pl' });
+  const unseenJournalCount = journalModel.cards.filter(card => card.unread).length;
 
-  // Zmiana tury synchronizuje domyślny widok tylko przy zamkniętych modalach.
-  // Otwarta karta/ekwipunek może niezależnie oglądać drugiego badacza.
   useEffect(() => {
     if (!openDialog) setInspectedCharacterId(activeCharacter?.id);
   }, [activeCharacter?.id, openDialog]);
-
-  // Śledzenie nowych pozycji
-  useEffect(() => {
-    if (!journalStorageKey) return;
-
-    const stored = localStorage.getItem(journalStorageKey);
-    const unseenData = stored ? JSON.parse(stored) : { journalSeen: 0 };
-
-    // Oblicz ile nowych pozycji od ostatniego widzenia
-    const newJournal = Math.max(0, journalEntryCount - unseenData.journalSeen);
-
-    setUnseenJournalCount(newJournal);
-  }, [journalEntryCount, journalStorageKey]);
-
-  // Resetuj licznik po otwarciu modala
-  useEffect(() => {
-    if (!journalStorageKey) return;
-
-    if (openDialog === 'journal') {
-      const stored = localStorage.getItem(journalStorageKey);
-      const unseenData = stored
-        ? JSON.parse(stored)
-        : { journalSeen: 0, inventorySeen: 0 };
-      localStorage.setItem(
-        journalStorageKey,
-        JSON.stringify({ ...unseenData, journalSeen: journalEntryCount })
-      );
-      setUnseenJournalCount(0);
-    }
-  }, [journalEntryCount, journalStorageKey, openDialog]);
 
   // Rejestracja funkcji otwierającej Sesję Zero dla zewnętrznych komponentów
   useEffect(() => {
@@ -464,7 +426,9 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                 </CardTitle>
                 {activeCharacter && characters && characters.length > 1 && (
                   <span className="text-xs font-mono text-muted-foreground">
-                    {characters.findIndex((c) => c.id === activeCharacter.id) + 1}/{characters.length}
+                    {characters.findIndex((c) => c.id === activeCharacter.id) +
+                      1}
+                    /{characters.length}
                   </span>
                 )}
               </div>
@@ -489,7 +453,10 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                     </option>
                     {characters.map((char) => (
                       <option key={char.id} value={char.id}>
-                        🎭 {char.name} ({getLocalizedOccupationName(char.occupation, locale) || t('investigator')})
+                        🎭 {char.name} (
+                        {getLocalizedOccupationName(char.occupation, locale) ||
+                          t('investigator')}
+                        )
                       </option>
                     ))}
                   </select>
@@ -518,8 +485,12 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                           setOpenDialog('characterSheet');
                         }
                       }}
-                      aria-label={t('openCharacterSheet', { name: activeCharacter.name })}
-                      title={t('openCharacterSheet', { name: activeCharacter.name })}
+                      aria-label={t('openCharacterSheet', {
+                        name: activeCharacter.name,
+                      })}
+                      title={t('openCharacterSheet', {
+                        name: activeCharacter.name,
+                      })}
                       className="relative deco-corners p-4 bg-card rounded-lg border border-brass/30 cursor-pointer transition-colors hover:bg-muted/40 hover:border-brass/60 focus:outline-none focus:ring-2 focus:ring-primary/50"
                     >
                       <div className="flex items-center gap-3">
@@ -530,7 +501,9 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                             className="w-16 h-16 rounded-lg object-cover border border-brass/40"
                             style={{
                               filter: getEraImageFilter(
-                                effectiveAdventureContext?.yearRange?.split('-')[0] ||
+                                effectiveAdventureContext?.yearRange?.split(
+                                  '-'
+                                )[0] ||
                                   effectiveAdventureContext?.era ||
                                   '1920s'
                               ),
@@ -546,7 +519,10 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                             {activeCharacter.name}
                           </div>
                           <div className="text-sm text-brass/90 font-special-elite font-medium tracking-wide truncate">
-                            {getLocalizedOccupationName(activeCharacter.occupation, locale)}
+                            {getLocalizedOccupationName(
+                              activeCharacter.occupation,
+                              locale
+                            )}
                           </div>
                         </div>
                       </div>
@@ -584,10 +560,11 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
               <div className="space-y-1">
                 {playerTools.map((item) => {
                   const IconComponent = item.icon;
-                  const currentEquipmentLength = activeCharacter?.equipment?.length ?? 0;
+                  const currentEquipmentLength =
+                    activeCharacter?.equipment?.length ?? 0;
                   const isEquipment = item.id === 'equipment';
                   const isJournal = item.id === 'journal';
-                  
+
                   return (
                     <Button
                       key={item.id}
@@ -598,7 +575,7 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                             ? 'btn-open-equipment'
                             : item.id === 'journal'
                               ? 'btn-open-journal'
-                          : undefined
+                              : undefined
                       }
                       variant="ghost"
                       className="w-full flex items-center justify-between border border-brass/15 font-special-elite tracking-wide text-foreground hover:bg-brass/5 hover:border-brass/40 hover:text-foreground px-3 py-2 text-left"
@@ -614,11 +591,12 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                         <IconComponent className="w-4 h-4 text-brass shrink-0" />
                         <span className="truncate">{item.label}</span>
                       </span>
-                      {isEquipment && currentEquipmentLength > seenEquipmentCount && (
-                        <span className="ml-2 text-[10px] font-bold uppercase rounded bg-primary text-primary-foreground px-1.5 py-0.5 animate-pulse shadow shrink-0">
-                          {t('newBadge')}
-                        </span>
-                      )}
+                      {isEquipment &&
+                        currentEquipmentLength > seenEquipmentCount && (
+                          <span className="ml-2 text-[10px] font-bold uppercase rounded bg-primary text-primary-foreground px-1.5 py-0.5 animate-pulse shadow shrink-0">
+                            {t('newBadge')}
+                          </span>
+                        )}
                       {isJournal && unseenJournalCount > 0 && (
                         <span className="ml-2 text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 bg-destructive text-destructive-foreground shrink-0 shadow">
                           {unseenJournalCount > 99 ? '99+' : unseenJournalCount}
@@ -629,8 +607,9 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                 })}
 
                 {/* IND-230 / Issue #28: Faza Rozwoju CoC - dostępna wyłącznie po zakończeniu sesji */}
-                {activeCharacter && onOpenDevelopmentPhase && (
-                  isSessionEnded || sessionEndStatus === 'ended' ? (
+                {activeCharacter &&
+                  onOpenDevelopmentPhase &&
+                  (isSessionEnded || sessionEndStatus === 'ended' ? (
                     <Button
                       variant="outline"
                       className="w-full flex items-center justify-between border-brass/60 font-special-elite tracking-wide text-brass bg-brass/10 hover:bg-brass/20 hover:border-brass hover:text-foreground animate-pulse px-3 py-2 text-left"
@@ -639,7 +618,9 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                     >
                       <span className="flex items-center gap-3 min-w-0 truncate">
                         <Sparkles className="w-4 h-4 text-brass shrink-0" />
-                        <span className="truncate">{t('developmentPhaseReady')}</span>
+                        <span className="truncate">
+                          {t('developmentPhaseReady')}
+                        </span>
                       </span>
                       {markedSkillsCount > 0 && (
                         <span className="ml-2 bg-primary text-primary-foreground text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shrink-0 shadow">
@@ -656,19 +637,22 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                     >
                       <span className="flex items-center gap-3 min-w-0 truncate">
                         <Lock className="w-4 h-4 text-muted-foreground/50 shrink-0" />
-                        <span className="truncate">{t('developmentPhaseLocked')}</span>
+                        <span className="truncate">
+                          {t('developmentPhaseLocked')}
+                        </span>
                       </span>
                       {markedSkillsCount > 0 && (
                         <span
                           className="ml-2 bg-muted text-muted-foreground text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shrink-0 border border-border/40"
-                          title={t('markedSkillsBadgeTooltip', { count: markedSkillsCount })}
+                          title={t('markedSkillsBadgeTooltip', {
+                            count: markedSkillsCount,
+                          })}
                         >
                           {markedSkillsCount > 99 ? '99+' : markedSkillsCount}
                         </span>
                       )}
                     </Button>
-                  )
-                )}
+                  ))}
               </div>
 
               {/* Create New Character / Koniec Sesji */}
@@ -710,7 +694,9 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                     title={t('awaitingClosureTitle')}
                   >
                     <Hourglass className="w-4 h-4 mr-1 animate-spin text-brass shrink-0" />
-                    <span className="leading-tight">{t('awaitingClosure')}</span>
+                    <span className="leading-tight">
+                      {t('awaitingClosure')}
+                    </span>
                   </Button>
                 ) : (
                   <Button
@@ -807,19 +793,27 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
               <Button
                 variant="ghost"
                 className={`w-full justify-between hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors ${
-                  isDirectorMode ? 'bg-brass/15 text-gold border border-brass/40' : ''
+                  isDirectorMode
+                    ? 'bg-brass/15 text-gold border border-brass/40'
+                    : ''
                 }`}
                 onClick={toggleDirectorMode}
                 title={t('directorModeTooltip')}
                 aria-pressed={isDirectorMode}
               >
                 <span className="flex items-center">
-                  <Eye className={`w-4 h-4 mr-3 ${isDirectorMode ? 'text-gold' : 'text-primary'}`} />
+                  <Eye
+                    className={`w-4 h-4 mr-3 ${isDirectorMode ? 'text-gold' : 'text-primary'}`}
+                  />
                   {t('directorMode')}
                 </span>
-                <span className={`text-xs px-2 py-0.5 rounded font-mono ${
-                  isDirectorMode ? 'bg-gold/20 text-gold font-semibold' : 'text-muted-foreground'
-                }`}>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded font-mono ${
+                    isDirectorMode
+                      ? 'bg-gold/20 text-gold font-semibold'
+                      : 'text-muted-foreground'
+                  }`}
+                >
                   {isDirectorMode ? t('on') : t('off')}
                 </span>
               </Button>
@@ -903,7 +897,8 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                   <ImageIcon
                     className={`w-4 h-4 mr-3 ${aiSettings.imageGenerationEnabled ? 'text-primary' : 'text-muted-foreground'}`}
                   />
-                  {t('images')}: {aiSettings.imageGenerationEnabled ? t('on') : t('off')}
+                  {t('images')}:{' '}
+                  {aiSettings.imageGenerationEnabled ? t('on') : t('off')}
                 </Button>
               )}
               {/* Szybki toggle oświetlenia Philips Hue w pokoju */}
@@ -982,12 +977,11 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
       {openDialog === 'journal' && activeCharacter && onUpdateCharacter && (
         <SessionJournal
           character={activeCharacter}
+          messages={messages}
+          dossierHandoutBinding={dossierHandoutBinding}
           onUpdateCharacter={onUpdateCharacter}
-          sharedJournal={sharedJournal}
-          onUpdateSharedJournal={
-            sharedJournalEnabled ? onUpdateSharedJournal : undefined
-          }
-          participantNames={participantNames}
+          model={journalModel}
+          onReadCard={card => onUpdateCharacter(markJournalCardRead(activeCharacter, journalModel.scopeKey, card))}
           onClose={() => setOpenDialog(null)}
         />
       )}
@@ -998,7 +992,9 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
             <h3 className="text-xl font-bold text-foreground mb-2">
               {t('selectCharacter')}
             </h3>
-            <p className="text-muted-foreground mb-6">{t('journalRequiresCharacter')}</p>
+            <p className="text-muted-foreground mb-6">
+              {t('journalRequiresCharacter')}
+            </p>
             <div className="flex gap-3 justify-center">
               <Button
                 onClick={() => setOpenDialog('character')}
@@ -1064,7 +1060,9 @@ export const CthulhuSidebar: FC<CthulhuSidebarProps> = ({
                       character.playerName === player.name
                   )
                 )
-                .filter((character): character is Character => Boolean(character))
+                .filter((character): character is Character =>
+                  Boolean(character)
+                )
             : activeCharacter
               ? [activeCharacter]
               : []

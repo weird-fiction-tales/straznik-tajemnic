@@ -32,6 +32,8 @@ export interface AudioTimeCue {
   transcriptSnippet?: string;
 }
 
+const EMPTY_CUES: AudioTimeCue[] = [];
+
 interface AudioReelPlayerProps {
   audioUrl: string;
   title?: string;
@@ -46,7 +48,7 @@ export function AudioReelPlayer({
   audioUrl,
   title,
   reelType = 'reel_to_reel',
-  cues = [],
+  cues = EMPTY_CUES,
   transcript,
   className = '',
   onCueClick,

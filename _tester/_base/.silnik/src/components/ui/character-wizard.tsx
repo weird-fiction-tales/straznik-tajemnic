@@ -1,5 +1,7 @@
 'use client';
 
+import '@/components/ui/deco-window.css';
+
 import { SafeImage } from '@/components/ui/safe-image';
 import { Fragment, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
@@ -36,7 +38,6 @@ import {
   getStartingEquipmentForOccupation,
 } from '@/lib/equipment-data';
 import { collectSSEText } from '@/lib/sse-parser';
-import { STAT_FULL_NAMES } from '@/components/ui/character-sheet/types';
 import {
   buildRecommendedSkills,
   normalizeSkillName,
@@ -331,6 +332,7 @@ export function CharacterWizardV2({
   initialCharacter,
 }: Props) {
   const t = useTranslations('CharacterWizard');
+  const sheetT = useTranslations('CharacterSheet');
   const locale = useLocale();
   const dynamicT = t as unknown as ((key: string) => string) & { has?: (key: string) => boolean };
   const statShortDesc: Record<string, string> = {
@@ -732,12 +734,12 @@ export function CharacterWizardV2({
   const renderOracleOverloadedBanner = (testId: string, onRetryAction: () => void) => (
     <div
       data-testid={testId}
-      className="border border-amber-500/50 bg-black/90 p-4 shadow-[0_0_25px_rgba(245,158,11,0.2)] relative space-y-3 animate-in fade-in zoom-in-95"
+      className="border border-brass/50 bg-black/90 p-4 shadow-[0_0_25px_rgba(245,158,11,0.2)] relative space-y-3 animate-in fade-in zoom-in-95"
     >
       <div className="flex items-start gap-3">
-        <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+        <AlertTriangle className="w-5 h-5 text-brass shrink-0 mt-0.5" />
         <div className="space-y-1 flex-1">
-          <h4 className="text-sm font-display font-bold uppercase tracking-wider text-amber-200">
+          <h4 className="text-sm font-display font-bold uppercase tracking-wider text-brass">
             {t('oracleOverloadedTitle')}
           </h4>
           <p className="text-xs font-serif text-foreground/90 leading-relaxed">
@@ -753,7 +755,7 @@ export function CharacterWizardV2({
             setOracleOverloaded(null);
             onRetryAction();
           }}
-          className="bg-amber-600 hover:bg-amber-500 text-black font-display font-semibold text-xs uppercase tracking-wider"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground font-display font-semibold text-xs uppercase tracking-wider"
         >
           <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
           {t('oracleRetry')}
@@ -1973,17 +1975,17 @@ export function CharacterWizardV2({
         )}
 
         {adventureContext?.investigatorRequirements && (
-          <div className="border border-amber-500/40 bg-amber-950/25 p-3.5 rounded-sm flex items-start gap-3">
-            <Users className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="border border-brass/50 bg-brass/10 p-3.5 rounded-sm flex items-start gap-3">
+            <Users className="h-4 w-4 text-brass shrink-0 mt-0.5" />
             <div className="space-y-1.5 text-sm">
-              <span className="font-display uppercase tracking-wider font-semibold text-amber-200">
+              <span className="font-display uppercase tracking-wider font-semibold text-brass">
                 Wymogi scenariusza dotyczące Badaczy
               </span>
-              <p className="text-amber-100/90 font-serif leading-relaxed">
+              <p className="text-brass font-serif leading-relaxed">
                 {adventureContext.investigatorRequirements.summary}
               </p>
               {adventureContext.investigatorRequirements.minAge !== undefined && (
-                <p className="font-mono text-amber-300/90 font-medium">
+                <p className="font-mono text-brass font-medium">
                   Dozwolony wiek: {adventureContext.investigatorRequirements.minAge} - {adventureContext.investigatorRequirements.maxAge || 90} lat.
                 </p>
               )}
@@ -2073,6 +2075,7 @@ export function CharacterWizardV2({
             return (
               <button
                 key={archetype.id}
+                data-testid={`wizard-archetype-${archetype.id}`}
                 type="button"
                 onClick={() => {
                   setSelectedArchetypeId(archetype.id);
@@ -2336,7 +2339,7 @@ export function CharacterWizardV2({
                 className="border border-brass/28 bg-[#16130f] p-4 text-center"
               >
                 <label className="flex items-center justify-center font-display text-base uppercase tracking-[0.08em] text-foreground mb-1">
-                  {STAT_FULL_NAMES[stat] || stat.toUpperCase()}
+                  {sheetT(`stats.${stat}.full`)}
                   <HelpIcon
                     content={
                       t.has(`statTooltips.${stat}`)
@@ -2479,7 +2482,7 @@ export function CharacterWizardV2({
             className="w-full"
           />
           {adventureContext?.investigatorRequirements?.minAge !== undefined && (
-            <p className="mt-1.5 font-mono text-[11px] text-amber-400/90">
+            <p className="mt-1.5 font-mono text-[11px] text-brass">
               Wymóg scenariusza: wiek Badacza ograniczony do {minReqAge}-{maxReqAge} lat.
             </p>
           )}
@@ -3030,10 +3033,11 @@ export function CharacterWizardV2({
                     return (
                       <div
                         key={occ.id}
+                        data-testid={`wizard-occupation-${occ.id}`}
                         onClick={() => selectOccupation(occ.id)}
                         className={`p-3.5 border cursor-pointer transition-all duration-150 relative text-left flex flex-col justify-between ${
                           isSelected
-                            ? 'border-brass bg-primary/20 shadow-[0_0_16px_rgba(13,148,136,.25)] ring-1 ring-brass/80'
+                            ? 'border-primary bg-primary/10 shadow-glow ring-1 ring-primary/60'
                             : isRecommended
                               ? 'border-primary/50 bg-primary/[0.08] hover:border-primary/80 hover:bg-primary/[0.14] ring-1 ring-primary/30'
                               : 'border-brass/25 bg-[#16130f] hover:border-brass/50 hover:bg-[#1c1813]'
@@ -3121,7 +3125,7 @@ export function CharacterWizardV2({
                     <div className="font-display text-2xl font-bold text-brass/90 mt-0.5">
                       {state.occupationPoints}{' '}
                       <span className="text-xs text-muted-foreground font-normal">
-                        pkt
+                        {t('pointsUnit')}
                       </span>
                     </div>
                     <div className="font-special-elite text-[11px] text-brass/70 mt-1 truncate">
@@ -3371,7 +3375,7 @@ export function CharacterWizardV2({
               <span className="text-foreground font-special-elite text-xs uppercase tracking-[0.08em]">
                 {t('occupationPointsLabel')}:
               </span>{' '}
-              {state.occupationPoints} pkt
+              {state.occupationPoints} {t('pointsUnit')}
               <div className="font-serif italic text-sm mt-1">
                 {selectedOcc
                   ? t('occupationFormula', { formula: selectedOcc.formula })
@@ -3382,7 +3386,7 @@ export function CharacterWizardV2({
               <span className="text-foreground font-special-elite text-xs uppercase tracking-[0.08em]">
                 {t('interestPoints')}:
               </span>{' '}
-              {state.interestPoints} pkt
+              {state.interestPoints} {t('pointsUnit')}
               <div className="font-serif italic text-sm mt-1">
                 {t('intFormula', { value: state.stats.int })}
               </div>
@@ -3449,7 +3453,7 @@ export function CharacterWizardV2({
                   {usage.occupationPointsRemaining}
                 </span>
                 <span className="font-special-elite text-sm text-brass/90 ml-1">
-                  pkt
+                  {t('pointsUnit')}
                 </span>
               </div>
               {state.creditRating > 0 && (
@@ -3527,7 +3531,7 @@ export function CharacterWizardV2({
                   {usage.interestPointsRemaining}
                 </span>
                 <span className="font-special-elite text-sm text-teal-300/90 ml-1">
-                  pkt
+                  {t('pointsUnit')}
                 </span>
               </div>
               <span className="font-serif italic text-sm text-foreground/80">
@@ -4109,7 +4113,7 @@ export function CharacterWizardV2({
                   <div className="flex-1 space-y-2 text-center sm:text-left">
                     <Badge
                       variant="outline"
-                      className="font-mono text-[11px] text-amber-400 border-amber-500/40 bg-amber-950/20 px-2.5 py-1"
+                      className="font-mono text-[11px] text-brass border-brass/50 bg-brass/10 px-2.5 py-1"
                     >
                       📜 {t('pureTextDossierBadge')}
                     </Badge>
@@ -4281,7 +4285,7 @@ export function CharacterWizardV2({
             onClick={() => setShowRetroPortraitPicker(false)}
           >
             <div
-              className="relative bg-[#0e1413] border-2 border-brass/50 p-6 max-w-4xl w-full max-h-[90vh] shadow-[0_0_40px_rgba(0,0,0,.9)] flex flex-col space-y-4 overflow-hidden"
+              className="deco-window relative bg-[#0e1413] border-2 border-brass/50 p-6 max-w-4xl w-full max-h-[90vh] shadow-[0_0_40px_rgba(0,0,0,.9)] flex flex-col space-y-4 overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Narożniki déco */}
@@ -4316,7 +4320,7 @@ export function CharacterWizardV2({
               </div>
 
               {/* Siatka 12 rycin */}
-              <div className="flex-1 overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 py-2">
+              <div className="flex-1 overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 py-2 lg:min-h-0 lg:auto-rows-max lg:content-start">
                 {RETRO_PORTRAITS.map((archetype) => {
                   const isCurrent =
                     state.portraitUrl === archetype.svgPath ||
@@ -4339,18 +4343,18 @@ export function CharacterWizardV2({
                       }}
                       className={`group relative flex flex-col items-center text-left p-2.5 transition-all border ${
                         isCurrent
-                          ? 'border-brass bg-brass/15 shadow-[0_0_15px_rgba(201,162,39,0.25)] ring-1 ring-brass/60'
+                          ? 'border-primary bg-primary/10 shadow-glow ring-1 ring-primary/60'
                           : 'border-brass/25 bg-[#0a0f0e]/90 hover:border-brass/60 hover:bg-brass/[0.07]'
                       }`}
                     >
-                      <div className="relative w-full aspect-square border border-brass/30 overflow-hidden bg-black/60 mb-2">
+                      <div className="relative w-full aspect-square lg:shrink-0 border border-brass/30 overflow-hidden bg-black/60 mb-2">
                         <SafeImage
                           src={archetype.svgPath}
                           alt={localizedTitle}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                         />
                         {isCurrent && (
-                          <span className="absolute top-1 right-1 font-mono text-[9px] uppercase tracking-wider text-black bg-brass px-1.5 py-0.5 font-bold shadow">
+                          <span className="absolute top-1 right-1 font-mono text-[9px] uppercase tracking-wider text-primary-foreground bg-primary px-1.5 py-0.5 font-bold shadow">
                             {t('activeEngraving')}
                           </span>
                         )}
@@ -4423,7 +4427,7 @@ export function CharacterWizardV2({
   return (
     <div
       data-testid="character-wizard"
-      className="fixed inset-0 bg-black z-50 p-0 flex flex-col w-screen h-screen overflow-hidden"
+      className="deco-window fixed inset-0 bg-black z-50 p-0 flex flex-col w-screen h-screen overflow-hidden"
     >
       <div
         data-testid="character-wizard-modal"

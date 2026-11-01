@@ -1,82 +1,73 @@
-/**
- * @file hue-settings-section.test.tsx
- * Testy jednostkowe dla komponentu HueSettingsSection (Dark Art Déco, Pushlink 30s UX).
- */
-
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { HueSettingsSection } from './hue-settings-section';
-import { HueClient } from '@/lib/hardware/hue/hue-client';
-
-jest.mock('@/lib/hardware/hue/hue-client');
-
-describe('HueSettingsSection', () => {
+import { DEFAULT_HUE_CONFIG } from '@/lib/hardware/hue/types';
+const status = {
+  config: {
+    ...DEFAULT_HUE_CONFIG,
+    enabled: true,
+    paired: true,
+    bridgeIp: '192.168.1.2',
+    bridgeId: '001788fffe123456',
+    selectedLightIds: ['light-1'],
+  },
+  phase: 'off',
+  paired: true,
+  hasClientKey: false,
+  lights: [{ id: 'light-1', metadata: { name: 'Desk' }, on: { on: true } }],
+  areas: [],
+};
+describe('Hue settings', () => {
   beforeEach(() => {
     localStorage.clear();
-    jest.clearAllMocks();
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => status });
   });
-
-  it('renderuje nagłówek i status wyłączony w stanie początkowym', () => {
+  it('loads live pairing state and renders all five score rows', async () => {
     render(<HueSettingsSection />);
-
-    expect(screen.getByTestId('hue-settings')).toBeInTheDocument();
-    expect(screen.getByText(/Inteligentne Oświetlenie \(Philips Hue\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/Wyłączone \/ Brak mostka/i)).toBeInTheDocument();
-  });
-
-  it('rozwija sekcję konfiguracji po kliknięciu [Rozwiń]', () => {
-    render(<HueSettingsSection />);
-
-    const expandBtn = screen.getByRole('button', { name: /Rozwiń/i });
-    act(() => {
-      fireEvent.click(expandBtn);
-    });
-
-    expect(screen.getByText(/Adres IP mostka w sieci lokalnej/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('192.168.1.xxx')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Wykryj w LAN/i })).toBeInTheDocument();
-  });
-
-  it('pozwala wpisać IP mostka i uruchamia pętlę Pushlink', async () => {
-    const mockLinkWithPolling = jest.fn().mockImplementation((_ip, onCountdown) => {
-      onCountdown(29);
-      return Promise.resolve({ success: true, appKey: 'test-app-key-777' });
-    });
-
-    (HueClient as unknown as jest.Mock).mockImplementation(() => ({
-      linkBridgeWithPolling: mockLinkWithPolling,
-      getLights: jest.fn().mockResolvedValue([
-        {
-          id: '1',
-          metadata: { name: 'Kinkiet Gabinet' },
-          on: { on: true },
-        },
-      ]),
-    }));
-
-    render(<HueSettingsSection />);
-
-    // Rozwiń
-    fireEvent.click(screen.getByRole('button', { name: /Rozwiń/i }));
-
-    // Wpisz IP
-    const input = screen.getByPlaceholderText('192.168.1.xxx');
-    fireEvent.change(input, { target: { value: '192.168.1.50' } });
-
-    // Kliknij Paruj
-    const pairBtn = screen.getByRole('button', { name: /Paruj z mostkiem/i });
-    await act(async () => {
-      fireEvent.click(pairBtn);
-    });
-
-    expect(mockLinkWithPolling).toHaveBeenCalledWith(
-      '192.168.1.50',
-      expect.any(Function),
-      expect.any(Object),
-      30
+    fireEvent.click(screen.getByRole('button', { name: 'Rozwiń' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('hue-enabled')).toBeEnabled()
     );
-
-    // Po sukcesie powinien pojawić się komunikat sukcesu
-    expect(screen.getByText(/Pomyślnie połączono z mostkiem Hue!/i)).toBeInTheDocument();
+    expect(screen.getByTestId('hue-scene-values')).toHaveTextContent('40%');
+    fireEvent.change(screen.getByTestId('hue-scene-select'), {
+      target: { value: 'scene-prabuty-krypta-climax' },
+    });
+    expect(screen.getByTestId('hue-scene-values')).toHaveTextContent('10%');
+    expect(screen.getByRole('table').querySelectorAll('tbody tr')).toHaveLength(
+      5
+    );
+  });
+  it('explains paired-but-unselected lamps and disables lighting tests', async () => {
+    jest
+      .mocked(fetch)
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ...status,
+          config: { ...status.config, selectedLightIds: [] },
+        }),
+      } as Response);
+    render(<HueSettingsSection />);
+    expect(
+      await screen.findByTestId('hue-selection-required')
+    ).toHaveTextContent('Wybierz lampy');
+  });
+  it('reports failed operations and never erases a legacy key on failed migration', async () => {
+    localStorage.setItem(
+      'straznik_hue_config',
+      JSON.stringify({ ...status.config, appKey: 'legacy-dummy' })
+    );
+    jest.mocked(fetch).mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'OFFLINE' }),
+    } as Response);
+    render(<HueSettingsSection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Rozwiń' }));
+    await screen.findByText(/Nie udało się wykonać polecenia/);
+    expect(
+      JSON.parse(localStorage.getItem('straznik_hue_config')!).appKey
+    ).toBe('legacy-dummy');
   });
 });

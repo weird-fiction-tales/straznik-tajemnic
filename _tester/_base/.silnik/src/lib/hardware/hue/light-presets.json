@@ -20,7 +20,10 @@
       "id": "subterranean_dark",
       "name": "Mrok podziemi / Piwnica",
       "description": "Głęboki, zimny granat i znikoma widoczność",
-      "xy": [0.18, 0.15],
+      "xy": [
+        0.18,
+        0.15
+      ],
       "brightness": 8,
       "transitionMs": 3000
     },
@@ -28,7 +31,10 @@
       "id": "cosmic_horror",
       "name": "Obca przestrzeń / Rytuał",
       "description": "Nienaturalny fiolet lub zielonkawa poświata z kosmosu",
-      "xy": [0.28, 0.45],
+      "xy": [
+        0.28,
+        0.45
+      ],
       "brightness": 12,
       "transitionMs": 2500
     },
@@ -52,7 +58,10 @@
       "id": "deep_forest",
       "name": "Gęsty las / Sad nocą",
       "description": "Chłodny mech i leśna sosna pod osłoną nocy",
-      "xy": [0.21, 0.42],
+      "xy": [
+        0.21,
+        0.42
+      ],
       "brightness": 12,
       "transitionMs": 4000
     },
@@ -60,7 +69,10 @@
       "id": "murky_swamp",
       "name": "Bagna i torfowiska",
       "description": "Zgniła, ciężka oliwkowa poświata i opary gazu błotnego",
-      "xy": [0.38, 0.48],
+      "xy": [
+        0.38,
+        0.48
+      ],
       "brightness": 15,
       "transitionMs": 3500
     },
@@ -68,7 +80,10 @@
       "id": "mine_shaft",
       "name": "Sztolnia / Kopalnia / Bunkier",
       "description": "Brunatny mrok z rdzawym blaskiem lampy karbidowej",
-      "xy": [0.49, 0.38],
+      "xy": [
+        0.49,
+        0.38
+      ],
       "brightness": 6,
       "transitionMs": 2500
     },
@@ -76,7 +91,10 @@
       "id": "foggy_coast",
       "name": "Wybrzeże morskie / Port",
       "description": "Blady, zamglony morski cyjan i stalowy błękit fal",
-      "xy": [0.22, 0.28],
+      "xy": [
+        0.22,
+        0.28
+      ],
       "brightness": 25,
       "transitionMs": 5000
     },
@@ -84,7 +102,10 @@
       "id": "rainy_noir_street",
       "name": "Deszczowa ulica miejska",
       "description": "Mokry asfalt, odblask latarni gazowych w deszczu",
-      "xy": [0.29, 0.31],
+      "xy": [
+        0.29,
+        0.31
+      ],
       "brightness": 20,
       "transitionMs": 3000
     },
@@ -92,7 +113,10 @@
       "id": "monastery_crypt",
       "name": "Krypta klasztorna / Grobowiec",
       "description": "Zimny, kamienny szary z popielato-fioletową poświatą",
-      "xy": [0.26, 0.24],
+      "xy": [
+        0.26,
+        0.24
+      ],
       "brightness": 10,
       "transitionMs": 3000
     },
@@ -100,7 +124,10 @@
       "id": "radio_shack_electronic",
       "name": "Elektronika kineskopowa / PRL",
       "description": "Monochromatyczny bursztyn kineskopu lub zielony fosfor",
-      "xy": [0.42, 0.51],
+      "xy": [
+        0.42,
+        0.51
+      ],
       "brightness": 18,
       "transitionMs": 2000
     },
@@ -124,7 +151,10 @@
       "id": "abyssal_deep",
       "name": "Zatopione głębiny oceanu",
       "description": "Głęboki, bezdenny granat toni morskiej",
-      "xy": [0.15, 0.12],
+      "xy": [
+        0.15,
+        0.12
+      ],
       "brightness": 5,
       "transitionMs": 4000
     },
@@ -132,7 +162,10 @@
       "id": "raging_fire",
       "name": "Pożar / Płonąca rezydencja",
       "description": "Pulsujący cynober i żar ognia trawiącego budynek",
-      "xy": [0.65, 0.34],
+      "xy": [
+        0.65,
+        0.34
+      ],
       "brightness": 65,
       "transitionMs": 1500
     },
@@ -140,7 +173,10 @@
       "id": "asylum_solitary",
       "name": "Izolatka sanatorium",
       "description": "Niepokojąca, blada seledynowo-zielona poświata szpitalna",
-      "xy": [0.28, 0.38],
+      "xy": [
+        0.28,
+        0.38
+      ],
       "brightness": 20,
       "transitionMs": 2500
     },
@@ -148,7 +184,10 @@
       "id": "colour_out_of_space",
       "name": "Kolor z Innego Wszechświata",
       "description": "Fluorescencyjny róż i magenta, nieziemska anomalia z głębi kosmosu",
-      "xy": [0.38, 0.15],
+      "xy": [
+        0.38,
+        0.15
+      ],
       "brightness": 60,
       "transitionMs": 3000
     },
@@ -156,7 +195,10 @@
       "id": "bloody_ritual",
       "name": "Krwawy Rytuał",
       "description": "Złowieszczy szkarłat i pulsujący cynober bluźnierczego ołtarza",
-      "xy": [0.68, 0.31],
+      "xy": [
+        0.68,
+        0.31
+      ],
       "brightness": 45,
       "transitionMs": 2500
     },
@@ -164,7 +206,10 @@
       "id": "frozen_rlyeh",
       "name": "Lodowata Pustka R'lyeh",
       "description": "Trupi, zimny błękit i cyjan zatopionych cyklopowych ruin",
-      "xy": [0.15, 0.22],
+      "xy": [
+        0.15,
+        0.22
+      ],
       "brightness": 35,
       "transitionMs": 4000
     },
@@ -172,7 +217,10 @@
       "id": "speakeasy_jazz",
       "name": "Klub Jazzowy / Speakeasy",
       "description": "Przytłumiony rubin i zadymiony bursztyn nielegalnego lokalu lat 20.",
-      "xy": [0.55, 0.38],
+      "xy": [
+        0.55,
+        0.38
+      ],
       "brightness": 40,
       "transitionMs": 3000
     },
@@ -180,7 +228,10 @@
       "id": "prl_fluorescent",
       "name": "Świetlówka PRL",
       "description": "Zimny, blady seledyn migoczącej starej jarzeniówki w urzędzie",
-      "xy": [0.28, 0.38],
+      "xy": [
+        0.28,
+        0.38
+      ],
       "brightness": 50,
       "transitionMs": 1500
     },
@@ -191,6 +242,15 @@
       "mirek": 454,
       "brightness": 65,
       "transitionMs": 3000
+    }
+  },
+  "adventureScores": {
+    "cien-nad-prabutami": {
+      "loc-warszawa-redakcja": "prl_fluorescent",
+      "loc-elblag-klasztor": "candlelight",
+      "loc-prabuty-wykopaliska": "new_england_fog",
+      "loc-msw-warszawa": "institutional_cold",
+      "loc-prabuty-krypta": "subterranean_dark"
     }
   }
 }

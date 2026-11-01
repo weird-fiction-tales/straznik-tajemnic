@@ -1,7 +1,23 @@
 'use client';
 
+import { localizeAdventure } from '@/lib/immersion/strefa-11-localization';
+import { STARTER_HAUNTING_ADVENTURE } from '@/lib/starter-haunting-data';
+import { isStarterAdventure } from '@/lib/adventures/starter-runtime';
+import {
+  storeStarterState,
+  applyStarterStateToCharacters,
+} from '@/lib/adventures/starter-client';
+import { validateStarterState } from '@/lib/adventures/starter-runtime';
+
+import { immersion } from '@/lib/hardware/hue/immersion';
 import { useState, useCallback, useRef } from 'react';
-import type { Message, Character, Campaign, HotSeatConfig, AdventureContext } from '@/lib/types';
+import type {
+  Message,
+  Character,
+  Campaign,
+  HotSeatConfig,
+  AdventureContext,
+} from '@/lib/types';
 import { getAdventureById } from '@/lib/adventures-data';
 import type { FullGameSave } from '@/lib/full-game-save-manager';
 import { normalizePdfMemory, type PdfMemory } from './usePdfMemory';
@@ -12,10 +28,22 @@ import { migrateEquipmentCatalog } from '@/lib/equipment-catalog';
 import type { EquipmentVisualEra } from '@/lib/types';
 import { clearStoredWorldSetup, storeWorldSetup } from '@/lib/world-setup';
 import { ensureCharacterDossier } from '@/lib/journal/dossier-migration';
+import { restorePublicJournalScope } from '@/lib/journal/public-journal';
 import { toast } from '@/components/ui/use-toast';
-import { timeManager, isCampaignClockSnapshot, isGameTime } from '@/lib/time-manager';
-import { isDossierInventoryState, storeDossierInventory, emptyDossierInventory } from '@/lib/adventure-dossier/inventory-state';
-import { isDossierWorldState, storeDossierWorldState } from '@/lib/adventure-dossier/world-object-state';
+import {
+  timeManager,
+  isCampaignClockSnapshot,
+  isGameTime,
+} from '@/lib/time-manager';
+import {
+  isDossierInventoryState,
+  storeDossierInventory,
+  emptyDossierInventory,
+} from '@/lib/adventure-dossier/inventory-state';
+import {
+  isDossierWorldState,
+  storeDossierWorldState,
+} from '@/lib/adventure-dossier/world-object-state';
 import {
   clearCampaignMemoryScope,
   isCampaignMemoryScope,
@@ -102,7 +130,10 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
   const [showFullSaveModal, setShowFullSaveModal] = useState(false);
   const [saveModalMode, setSaveModalMode] = useState<'save' | 'load'>('save');
   const [sessionStartTime] = useState<string>(new Date().toISOString());
-  const restoreRequest = useRef<{ save: FullGameSave; requestId: string } | null>(null);
+  const restoreRequest = useRef<{
+    save: FullGameSave;
+    requestId: string;
+  } | null>(null);
   const loading = useRef(false);
 
   const handleLoadFullSave = useCallback(
@@ -110,33 +141,79 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
       if (loading.current) return false;
       loading.current = true;
       try {
-        if (save.clockState !== undefined && !isCampaignClockSnapshot(save.clockState)) {
-          throw new Error(currentLocale === 'en' ? 'The saved game clock is invalid.' : 'Zapis zegara gry jest nieprawidłowy.');
+        if (
+          save.clockState !== undefined &&
+          !isCampaignClockSnapshot(save.clockState)
+        ) {
+          throw new Error(
+            currentLocale === 'en'
+              ? 'The saved game clock is invalid.'
+              : 'Zapis zegara gry jest nieprawidłowy.'
+          );
         }
-        if (save.dossierInventory && (!isDossierInventoryState(save.dossierInventory) ||
-          save.dossierInventory.editionFingerprint !== (save.pdfMemory as PdfMemory)?.adventureDossierFingerprint ||
-          save.dossierInventory.adventureId !== (save.pdfMemory as PdfMemory)?.adventureId)) {
-          throw new Error(currentLocale === 'en' ? 'The saved item state does not match this adventure.' : 'Zapis przedmiotów nie odpowiada tej przygodzie.');
+        if (
+          save.dossierInventory &&
+          (!isDossierInventoryState(save.dossierInventory) ||
+            save.dossierInventory.editionFingerprint !==
+              (save.pdfMemory as PdfMemory)?.adventureDossierFingerprint ||
+            save.dossierInventory.adventureId !==
+              (save.pdfMemory as PdfMemory)?.adventureId)
+        ) {
+          throw new Error(
+            currentLocale === 'en'
+              ? 'The saved item state does not match this adventure.'
+              : 'Zapis przedmiotów nie odpowiada tej przygodzie.'
+          );
         }
-        if (save.dossierWorldState && (!isDossierWorldState(save.dossierWorldState) ||
-          save.dossierWorldState.editionFingerprint !== (save.pdfMemory as PdfMemory)?.adventureDossierFingerprint ||
-          save.dossierWorldState.adventureId !== (save.pdfMemory as PdfMemory)?.adventureId)) {
-          throw new Error(currentLocale === 'en' ? 'The saved world state does not match this adventure.' : 'Zapis stanu świata nie odpowiada tej przygodzie.');
+        if (
+          save.dossierWorldState &&
+          (!isDossierWorldState(save.dossierWorldState) ||
+            save.dossierWorldState.editionFingerprint !==
+              (save.pdfMemory as PdfMemory)?.adventureDossierFingerprint ||
+            save.dossierWorldState.adventureId !==
+              (save.pdfMemory as PdfMemory)?.adventureId)
+        ) {
+          throw new Error(
+            currentLocale === 'en'
+              ? 'The saved world state does not match this adventure.'
+              : 'Zapis stanu świata nie odpowiada tej przygodzie.'
+          );
         }
         // A save's source identity, never its prose/name or the current profile,
         // binds the restored title and dossier handouts to their exact adventure.
         const savedPdf = save.pdfMemory as PdfMemory | undefined;
-        const savedAdventureId = savedPdf?.adventureId ?? save.campaignMemory?.adventureId;
-        const savedAdventure = savedAdventureId ? getAdventureById(savedAdventureId) ?? null : null;
-        const hasDossier = Boolean(savedPdf?.adventureDossierFingerprint || save.dossierInventory ||
-          save.dossierWorldState || save.messages.some(message => message.dossierHandoutBinding));
-        if ((savedPdf?.adventureId && save.campaignMemory?.adventureId &&
-          savedPdf.adventureId !== save.campaignMemory.adventureId) ||
-          (hasDossier && (!savedAdventure || !savedPdf?.adventureId || !savedPdf.adventureDossierFingerprint)) ||
-          save.messages.some(message => message.dossierHandoutBinding &&
-            (message.dossierHandoutBinding.adventureId !== savedAdventureId ||
-              message.dossierHandoutBinding.editionFingerprint !== savedPdf?.adventureDossierFingerprint))) {
-          throw new Error(currentLocale === 'en' ? 'The save does not identify a matching adventure edition.' : 'Zapis nie wskazuje zgodnej przygody i edycji.');
+        const savedAdventureId =
+          savedPdf?.adventureId ?? save.campaignMemory?.adventureId;
+        const savedAdventure = savedAdventureId
+          ? (getAdventureById(savedAdventureId) ?? null)
+          : null;
+        const hasDossier = Boolean(
+          savedPdf?.adventureDossierFingerprint ||
+          save.dossierInventory ||
+          save.dossierWorldState ||
+          save.messages.some((message) => message.dossierHandoutBinding)
+        );
+        if (
+          (savedPdf?.adventureId &&
+            save.campaignMemory?.adventureId &&
+            savedPdf.adventureId !== save.campaignMemory.adventureId) ||
+          (hasDossier &&
+            (!savedAdventure ||
+              !savedPdf?.adventureId ||
+              !savedPdf.adventureDossierFingerprint)) ||
+          save.messages.some(
+            (message) =>
+              message.dossierHandoutBinding &&
+              (message.dossierHandoutBinding.adventureId !== savedAdventureId ||
+                message.dossierHandoutBinding.editionFingerprint !==
+                  savedPdf?.adventureDossierFingerprint)
+          )
+        ) {
+          throw new Error(
+            currentLocale === 'en'
+              ? 'The save does not identify a matching adventure edition.'
+              : 'Zapis nie wskazuje zgodnej przygody i edycji.'
+          );
         }
         if (restoreRequest.current?.save !== save) {
           restoreRequest.current = { save, requestId: crypto.randomUUID() };
@@ -147,6 +224,7 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
           body: JSON.stringify({
             requestId: restoreRequest.current.requestId,
             snapshot: save.memorySnapshot,
+            dossierState: save.dossierState,
             scope: save.campaignMemory,
             messages: save.messages,
             characters: save.characters,
@@ -160,17 +238,28 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
           throw new Error(restored.error || 'Nie udało się odtworzyć pamięci');
         }
         const campaignMemory = restored.scope;
-        if (savedAdventureId && campaignMemory.adventureId !== savedAdventureId) {
-          throw new Error(currentLocale === 'en' ? 'The restored memory belongs to another adventure.' : 'Odtworzona pamięć należy do innej przygody.');
+        const savedScope = save.campaignMemory ?? save.memorySnapshot?.scope;
+        if (
+          savedAdventureId &&
+          campaignMemory.adventureId !== savedAdventureId
+        ) {
+          throw new Error(
+            currentLocale === 'en'
+              ? 'The restored memory belongs to another adventure.'
+              : 'Odtworzona pamięć należy do innej przygody.'
+          );
         }
         clearDeclarations?.();
         resetSessionEndState?.();
+        await immersion.restore(save.activeGameState?.lighting);
         // Wczytaj wiadomości
         const loadedMessages: Message[] = save.messages.map((msg, idx) => ({
           id: msg.id || `loaded_${idx}`,
           role: msg.role,
           content: msg.content
-            ? msg.content.replace(/\[KONIEC_SESJI:POTWIERDZENIE\]/gi, '').trimEnd()
+            ? msg.content
+                .replace(/\[KONIEC_SESJI:POTWIERDZENIE\]/gi, '')
+                .trimEnd()
             : msg.content,
           timestamp: new Date(msg.timestamp),
           gameTime: isGameTime(msg.gameTime) ? msg.gameTime : undefined,
@@ -183,20 +272,42 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
           generatedImages: msg.generatedImages || [],
           generatedImageTypes: msg.generatedImageTypes,
           generatedImageCacheIds: msg.generatedImageCacheIds,
-          skillTests: msg.skillTests,
+          publicJournalVisuals: msg.publicJournalVisuals?.map(
+            (publication) => ({
+              ...publication,
+              scope:
+                publication.scope?.playthroughId ===
+                  savedScope?.playthroughId &&
+                publication.scope?.adventureId === savedScope?.adventureId
+                  ? {
+                      playthroughId: campaignMemory.playthroughId,
+                      adventureId: campaignMemory.adventureId,
+                    }
+                  : publication.scope,
+            })
+          ),
           // Status urwanej narracji (MAX_TOKENS + zamówiona kontynuacja) musi
           // przeżyć pełny load, inaczej przycisk "Kontynuuj narrację" znikał.
           finishReason: msg.finishReason,
           continuationRequested: msg.continuationRequested,
           mechanicsContext: msg.mechanicsContext && {
             ...msg.mechanicsContext,
-            ...(msg.mechanicsContext.skillRollScope && save.campaignMemory &&
-              msg.mechanicsContext.skillRollScope.playthroughId === save.campaignMemory.playthroughId &&
-              msg.mechanicsContext.skillRollScope.adventureId === save.campaignMemory.adventureId &&
-              campaignMemory.adventureId === save.campaignMemory.adventureId
-              ? { skillRollScope: { playthroughId: campaignMemory.playthroughId, adventureId: campaignMemory.adventureId } }
+            ...(msg.mechanicsContext.skillRollScope &&
+            save.campaignMemory &&
+            msg.mechanicsContext.skillRollScope.playthroughId ===
+              save.campaignMemory.playthroughId &&
+            msg.mechanicsContext.skillRollScope.adventureId ===
+              save.campaignMemory.adventureId &&
+            campaignMemory.adventureId === save.campaignMemory.adventureId
+              ? {
+                  skillRollScope: {
+                    playthroughId: campaignMemory.playthroughId,
+                    adventureId: campaignMemory.adventureId,
+                  },
+                }
               : {}),
           },
+          skillTests: msg.skillTests,
         }));
         setMessages(loadedMessages);
 
@@ -206,7 +317,8 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
             ...save.gameSettings.aiSettings,
             sessionId: campaignMemory.playthroughId,
             costControl: save.gameSettings.aiSettings.costControl
-              ? { ...save.gameSettings.aiSettings.costControl } : undefined,
+              ? { ...save.gameSettings.aiSettings.costControl }
+              : undefined,
           } as AISettings & { sessionId: string };
           // Guard: stare/puste save'y (zapisane bez ustawień AI) mogą nie mieć
           // `costControl` - bez tego przypisanie .sessionCost rzucało wyjątkiem.
@@ -224,18 +336,32 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
 
         // Wczytaj postacie
         const saveEquipmentEra = save.equipmentVisualEra ?? equipmentVisualEra;
-        const migratedCharacters = save.characters.map((character) =>
+        let migratedCharacters: Character[] = restorePublicJournalScope(
+          save.characters,
+          savedScope,
+          campaignMemory
+        ).map((character) =>
           ensureCharacterDossier({
             ...character,
             equipment: migrateEquipmentCatalog(
               character.equipment,
               saveEquipmentEra
             ),
-            investigatorBoard: character.investigatorBoard || save.investigatorBoard,
+            investigatorBoard:
+              character.investigatorBoard || save.investigatorBoard,
           })
         );
+        if (restored.dossierState)
+          migratedCharacters = applyStarterStateToCharacters(
+            migratedCharacters,
+            restored.dossierState,
+            save.locale === 'en' ? 'en' : 'pl'
+          );
         setCharacters(migratedCharacters);
-        setActiveCharacter(migratedCharacters.find((c) => c.id === save.activeCharacterId) ?? null);
+        setActiveCharacter(
+          migratedCharacters.find((c) => c.id === save.activeCharacterId) ??
+            null
+        );
         // Postacie niosą portrety inline (~MB base64). Pisanie ich wprost do
         // localStorage przekraczało quota i wywalało CAŁE wczytywanie. Przez
         // `persistCharacters`: obrazy wycinane do IndexedDB, roster lekki,
@@ -274,34 +400,87 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
         } else {
           // Old saves may retain a timestamp in the last message. Do not parse
           // narration or carry a deadline over from another loaded campaign.
-          const lastTime = [...loadedMessages].reverse().find(msg => isGameTime(msg.gameTime))?.gameTime;
+          const lastTime = [...loadedMessages]
+            .reverse()
+            .find((msg) => isGameTime(msg.gameTime))?.gameTime;
           timeManager.setDeadline(null);
           if (lastTime) timeManager.setTime(lastTime);
         }
         if (save.dossierInventory) {
-          storeDossierInventory({ ...save.dossierInventory, playthroughId: campaignMemory.playthroughId });
-        } else if ((save.pdfMemory as PdfMemory)?.adventureDossierFingerprint && (save.pdfMemory as PdfMemory)?.adventureId) {
-          storeDossierInventory(emptyDossierInventory({ playthroughId: campaignMemory.playthroughId,
-            adventureId: (save.pdfMemory as PdfMemory).adventureId!, editionFingerprint: (save.pdfMemory as PdfMemory).adventureDossierFingerprint! }));
+          storeDossierInventory({
+            ...save.dossierInventory,
+            playthroughId: campaignMemory.playthroughId,
+          });
+        } else if (
+          (save.pdfMemory as PdfMemory)?.adventureDossierFingerprint &&
+          (save.pdfMemory as PdfMemory)?.adventureId
+        ) {
+          storeDossierInventory(
+            emptyDossierInventory({
+              playthroughId: campaignMemory.playthroughId,
+              adventureId: (save.pdfMemory as PdfMemory).adventureId!,
+              editionFingerprint: (save.pdfMemory as PdfMemory)
+                .adventureDossierFingerprint!,
+            })
+          );
         }
         if (save.dossierWorldState) {
-          storeDossierWorldState({ ...save.dossierWorldState, playthroughId: campaignMemory.playthroughId });
+          storeDossierWorldState({
+            ...save.dossierWorldState,
+            playthroughId: campaignMemory.playthroughId,
+          });
+        }
+        if (restored.dossierState) {
+          validateStarterState(restored.dossierState);
+          storeStarterState(restored.dossierState);
+        }
+        if (save.adventureContext) {
+          const adventure = isStarterAdventure(save.adventureContext)
+            ? localizeAdventure(
+                {
+                  ...STARTER_HAUNTING_ADVENTURE,
+                  id: save.adventureContext.id,
+                  sourceBookId: 'starter-d100',
+                },
+                save.locale === 'en' ? 'en' : 'pl'
+              )
+            : save.adventureContext;
+          safeSetItem('adventure_context', JSON.stringify(adventure));
+          window.dispatchEvent(new Event('adventure-context-restored'));
         }
 
         // Przywróć listę NPC oraz lokacji z pliku zapisu do pamięci podręcznej
         if (Array.isArray(save.npcs)) {
           // A memory restore forks the saved playthrough. Move only its exact
           // actors, retaining every played fact; foreign/unscoped actors stay foreign.
-          const savedNpcSession = hasDossier && save.campaignMemory?.adventureId === campaignMemory.adventureId
-            ? save.campaignMemory?.playthroughId : undefined;
-          const restoredNpcs = savedNpcSession ? save.npcs.map(npc => npc.sessionId === savedNpcSession
-            ? { ...npc, sessionId: campaignMemory.playthroughId } : npc) : save.npcs;
-          if (savedNpcSession && restoredNpcs.some(npc => npc.sessionId === campaignMemory.playthroughId)) {
-            safeSetItem(`dossier_npcs_session:${encodeURIComponent(campaignMemory.playthroughId)}`, JSON.stringify({
-              schemaVersion: 1, sessionId: campaignMemory.playthroughId,
-              adventureId: campaignMemory.adventureId, editionFingerprint: savedPdf!.adventureDossierFingerprint,
-              npcs: restoredNpcs,
-            }));
+          const savedNpcSession =
+            hasDossier &&
+            save.campaignMemory?.adventureId === campaignMemory.adventureId
+              ? save.campaignMemory?.playthroughId
+              : undefined;
+          const restoredNpcs = savedNpcSession
+            ? save.npcs.map((npc) =>
+                npc.sessionId === savedNpcSession
+                  ? { ...npc, sessionId: campaignMemory.playthroughId }
+                  : npc
+              )
+            : save.npcs;
+          if (
+            savedNpcSession &&
+            restoredNpcs.some(
+              (npc) => npc.sessionId === campaignMemory.playthroughId
+            )
+          ) {
+            safeSetItem(
+              `dossier_npcs_session:${encodeURIComponent(campaignMemory.playthroughId)}`,
+              JSON.stringify({
+                schemaVersion: 1,
+                sessionId: campaignMemory.playthroughId,
+                adventureId: campaignMemory.adventureId,
+                editionFingerprint: savedPdf!.adventureDossierFingerprint,
+                npcs: restoredNpcs,
+              })
+            );
           }
           safeSetItem('gm_npcs', JSON.stringify(restoredNpcs));
         }
@@ -324,8 +503,15 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
 
         // Resume only a saved playable session. Persist the same lifecycle flag
         // as useGameStart before locale navigation can remount either page.
-        const hasPlayableSession = migratedCharacters.some(character => character.id === save.activeCharacterId) &&
-          loadedMessages.some(message => (message.role === 'assistant' || message.role === 'user') && Boolean(message.content?.trim()));
+        const hasPlayableSession =
+          migratedCharacters.some(
+            (character) => character.id === save.activeCharacterId
+          ) &&
+          loadedMessages.some(
+            (message) =>
+              (message.role === 'assistant' || message.role === 'user') &&
+              Boolean(message.content?.trim())
+          );
         safeSetItem('has_started_game', String(hasPlayableSession));
         setHasStartedGame?.(hasPlayableSession);
 
@@ -334,9 +520,9 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
           currentLocale === 'en' || currentLocale === 'pl'
             ? currentLocale
             : typeof window !== 'undefined' &&
-              localStorage.getItem('language_selected') === 'en'
-            ? 'en'
-            : 'pl';
+                localStorage.getItem('language_selected') === 'en'
+              ? 'en'
+              : 'pl';
 
         if (
           (save.locale === 'pl' || save.locale === 'en') &&
@@ -362,7 +548,10 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
         console.error("Błąd podczas wczytywania save'u:", error);
         toast({
           title: "Błąd wczytywania save'u",
-          description: error instanceof Error ? error.message : "Wystąpił błąd podczas wczytywania save'u",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Wystąpił błąd podczas wczytywania save'u",
           variant: 'destructive',
         });
         return false;
@@ -391,6 +580,7 @@ export function useFullSave(options: UseFullSaveOptions): UseFullSaveReturn {
   );
 
   const handleStartNewGame = useCallback(() => {
+    void immersion.end().catch(() => {});
     if (
       confirm(
         'Czy na pewno chcesz rozpocząć nową grę? Wszystkie niezapisane dane zostaną utracone.'

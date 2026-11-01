@@ -8,6 +8,7 @@ import {
   type SceneTechniqueSelection,
 } from '../narrative-engine/scene-director';
 import { pickLovecraftianSensoryTheme } from './lovecraft-lexicon';
+import { extractLatestTagLocation } from '@/lib/parsers/event-parser';
 export * from './dispatcher';
 import type {
   NPCEntity,

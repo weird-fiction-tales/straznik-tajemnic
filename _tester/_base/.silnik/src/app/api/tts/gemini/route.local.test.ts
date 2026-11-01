@@ -45,3 +45,35 @@ it('marks daily quota as non-retryable while retaining the full deadline',async(
  const response=await POST(req({text:'hello',languageCode:'pl-PL'}));
  expect(response.status).toBe(429);expect(response.headers.get('Retry-After')).toBe('63378');expect(await response.json()).toMatchObject({retryable:false,code:'TTS_DAILY_QUOTA_EXCEEDED'});expect(mockGenerate).toHaveBeenCalledTimes(1);
 });
+
+it.each([false,true])('a browser free-tier header does not override the server key; explicit free BYOK=%s remains text-only',async clientKey=>{
+ delete process.env.ZEW_LOCAL_TTS;
+ const request=req({text:'Tekst narracji.',voice:'Charon',languageCode:'pl-PL'});
+ request.headers.set('X-Gemini-Tier','free');
+ if(clientKey)request.headers.set('X-Gemini-Api-Key','synthetic-client-free');
+ const response=await POST(request);const result=await response.json();
+ if(clientKey){expect(result).toMatchObject({success:false,code:'PURE_TEXT_MODE_ACTIVE'});expect(mockGenerate).not.toHaveBeenCalled();}
+ else{expect(result).toMatchObject({success:true,provider:'gemini'});expect(mockGenerate).toHaveBeenCalledTimes(1);}
+});
+
+it.each([
+ ['pl-PL', 'Nie otwieraj tych drzwi.', 'Polish'],
+ ['en-US', 'Do not open that door.', 'English'],
+])('passes silent acting notes and a separate verbatim %s transcript to Gemini', async(languageCode,text,language)=>{
+ delete process.env.ZEW_LOCAL_TTS;
+ const response=await POST(req({text,voice:'Aoede',languageCode,audioDirection:'Read the following in clear Polish with restrained urgency:'}));
+ expect(response.status).toBe(200);
+ const request=mockGenerate.mock.calls[0][0];
+ expect(request.model).toBe('gemini-3.1-flash-tts-preview');
+ expect(request.config.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Aoede');
+ const prompt=request.contents[0].parts[0].text;
+ const [notes,transcript]=prompt.split('\nTRANSCRIPT:\n');
+ expect(notes).toContain('Audio Profile:');
+ expect(notes).toContain('Scene:');
+ expect(notes).toContain("Director's Notes:");
+ expect(notes).toContain('restrained urgency');
+ expect(notes).toContain(language);
+ expect(notes).toContain('Speak only the TRANSCRIPT');
+ if(language==='English')expect(notes).not.toContain('Polish');
+ expect(transcript).toBe(text);
+});

@@ -1,5 +1,5 @@
 import type { SetStateAction, Dispatch } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import type { AISettings } from '@/lib/ai-settings';
 import {
   DEFAULT_GEMINI_VOICE,
@@ -31,6 +31,7 @@ export function GeminiSettings({
   isLoading,
 }: GeminiSettingsProps) {
   const t = useTranslations('TtsGeminiSettings');
+  const locale = useLocale();
   const ROLE_LABELS: Record<GeminiVoiceRole, string> = {
     narrator: t('roleNarrator'),
     male: t('roleMale'),
@@ -51,7 +52,7 @@ export function GeminiSettings({
         body: JSON.stringify({
           text: t('sampleText'),
           voice: settings.voiceSettings.voiceId || DEFAULT_GEMINI_VOICE,
-          languageCode: 'pl-PL',
+          languageCode: locale === 'en' ? 'en-US' : 'pl-PL',
         }),
       });
       if (response.ok) {
@@ -59,7 +60,7 @@ export function GeminiSettings({
         if (data.audioUrl) {
           const audio = new Audio(data.audioUrl);
           audio.volume = (settings.voiceSettings.volume || 85) / 100;
-          audio.playbackRate = settings.voiceSettings.speed || 1.15;
+          audio.playbackRate = settings.voiceSettings.speed ?? 1.0;
           if ('preservesPitch' in audio) {
             (audio as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
           }

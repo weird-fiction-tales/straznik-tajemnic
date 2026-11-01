@@ -43,6 +43,105 @@ describe('GeminiChatProvider.finishReason', () => {
     mockGenerateContent.mockReset();
   });
 
+  afterEach(() => jest.useRealTimers());
+
+  it.each(['chat', 'streamChat'] as const)('recovers a failed connection with the next model in %s', async method => {
+    const mock = method === 'chat' ? mockGenerateContent : mockGenerateContentStream;
+    mock.mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(method === 'chat' ? {text: 'Recovered scene'} : streamResponse([{text: 'Recovered scene'}]));
+    const provider = new GeminiChatProvider('synthetic-key', 'unavailable-model');
+    const result = await provider[method](request);
+    if ('stream' in result) {
+      const chunks = []; for await (const chunk of result.stream) chunks.push(chunk.text);
+      expect(chunks.join('')).toBe('Recovered scene');
+    } else expect(result.text).toBe('Recovered scene');
+    expect(mock).toHaveBeenCalledTimes(2);
+    expect(mock.mock.calls[1][0].model).not.toBe('unavailable-model');
+  });
+
+  it('aborts a model that never returns headers and recovers within the total budget', async () => {
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValueOnce(streamResponse([{text: 'Recovered scene'}]));
+    const pending = new GeminiChatProvider('synthetic-key', 'unavailable-model').streamChat(request);
+    await jest.advanceTimersByTimeAsync(15_000);
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(2);
+    const result = await pending;
+    const chunks = []; for await (const chunk of result.stream) chunks.push(chunk.text);
+    expect(chunks.join('')).toBe('Recovered scene');
+    expect(mockGenerateContentStream.mock.calls[0][0].config.abortSignal.aborted).toBe(true);
+  });
+
+  it('bounds a stalled stream after partial text without joining a second model to it', async () => {
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockResolvedValueOnce((async function* () {
+      yield {text: 'Partial scene'}; await new Promise(() => {});
+    })());
+    const result = await new GeminiChatProvider('synthetic-key', 'stalled-model').streamChat(request);
+    let failure: unknown;
+    const consumed = (async () => {try {for await (const _chunk of result.stream) { /* consume */ }} catch (error) {failure = error;}})();
+    await jest.advanceTimersByTimeAsync(15_000);
+    expect(failure).toMatchObject({name:'TimeoutError',message:'GEMINI_REQUEST_TIMEOUT'});
+    await consumed;
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors player cancellation without starting a fallback', async () => {
+    const controller = new AbortController();
+    mockGenerateContentStream.mockImplementationOnce(() => new Promise(() => {}));
+    const configured = {...request, signal:controller.signal};
+    const pending = new GeminiChatProvider('synthetic-key', 'cancelled-model').streamChat(configured);
+    const rejected = expect(pending).rejects.toMatchObject({name:'AbortError'});
+    controller.abort();
+    await rejected;
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers a connection stalled before its first chunk', async () => {
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockResolvedValueOnce({[Symbol.asyncIterator]:()=>({next:()=>new Promise(()=>{}),return:jest.fn(async()=>({done:true}))})})
+      .mockResolvedValueOnce(streamResponse([{text:'Recovered scene'}]));
+    const pending=new GeminiChatProvider('synthetic-key','stalled-model').streamChat(request);
+    const consumed=(async()=>{const result=await pending;const chunks=[];for await(const chunk of result.stream)chunks.push(chunk.text);return chunks;})();
+    const settled=consumed.catch(error=>error);
+    await jest.advanceTimersByTimeAsync(15_000);
+    expect(await settled).toEqual(['Recovered scene']);
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['timeout','cancel'])('propagates %s from an empty-response retry',async mode=>{
+    jest.useFakeTimers();
+    const controller=new AbortController();
+    mockGenerateContentStream.mockResolvedValueOnce(streamResponse([])).mockImplementationOnce(()=>new Promise(()=>{}));
+    const result=await new GeminiChatProvider('synthetic-key','empty-model').streamChat({...request,signal:controller.signal});
+    let failure:unknown;const texts:string[]=[];
+    const consumed=(async()=>{try{for await(const chunk of result.stream)texts.push(chunk.text);}catch(error){failure=error;}})();
+    await jest.advanceTimersByTimeAsync(0);
+    if(mode==='cancel')controller.abort();else await jest.advanceTimersByTimeAsync(15_000);
+    await consumed;
+    expect(failure).toMatchObject({name:mode==='cancel'?'AbortError':'TimeoutError'});
+    expect(texts).toEqual([]);
+  });
+
+  it('closes the SDK iterator when its consumer leaves early',async()=>{
+    const close=jest.fn(async()=>({done:true,value:undefined}));
+    mockGenerateContentStream.mockResolvedValueOnce({[Symbol.asyncIterator]:()=>({next:async()=>({done:false,value:{text:'Scene'}}),return:close})});
+    const result=await new GeminiChatProvider('synthetic-key','test-model').streamChat(request);
+    for await(const _chunk of result.stream)break;
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(mockGenerateContentStream.mock.calls[0][0].config.abortSignal.aborted).toBe(true);
+  });
+
+  it('ends all stalled model attempts at the shared total deadline',async()=>{
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockImplementation(()=>new Promise(()=>{}));
+    const pending=new GeminiChatProvider('synthetic-key','stalled-model').streamChat({...request,timeoutMs:20_000});
+    const settled=pending.catch(error=>error);
+    await jest.advanceTimersByTimeAsync(20_000);
+    expect(await settled).toMatchObject({name:'TimeoutError'});
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['legacy', 'options'] as const)('blocks %s document attachments before any SDK request', async (location) => {
     const fileAttachments = [{ fileUri: 'https://example.invalid/synthetic.pdf', mimeType: 'application/pdf' }];
     const provider = new GeminiChatProvider('synthetic-key', 'gemini-test');

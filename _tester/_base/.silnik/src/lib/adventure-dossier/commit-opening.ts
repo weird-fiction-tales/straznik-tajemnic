@@ -3,21 +3,17 @@ import type { SSEMetadataEvent } from '../sse-parser';
 import { createDossierResponseGate } from './response-gate';
 import { parseValidatedDossierStream, acknowledgeDossierTurn, prepareDossierTurnOnServer } from './validated-stream';
 import { beginDossierTurnTransaction, resumeDossierTurnTransaction } from './turn-transaction';
-import { acquiredHandoutsFromTurn } from './local-handouts';
+import { presentHandoutsForTurn } from './local-handouts';
 import { appendJournalToParty } from '../journal/apply-journal-tags';
+import { applyPublishedJournalVisuals, buildPublicJournal, journalCardId } from '../journal/public-journal';
 import { stripCharacterImages } from '../character-image-store';
 import { sanitizeHistoryForApi } from '../chat-history-sanitizer';
 import { isGameTime, timeManager } from '../time-manager';
 import type {DossierRagPayload} from './rag-schema';
-import {isAuthoredPrabutyPlaytest} from './authored-prabuty-turn';
-import {resolveAuthoredPrabutyMedia} from './authored-media';
 
-/** Opening access reveals a photograph on the desk, never physical ownership or keeper materials. */
-export function composeOpeningPresentation(payload:DossierRagPayload,content:string,handouts:string[],isNewsroomOpening:boolean){
-  const photo='prabuty.media.clue-photo-prabuty-1947';
-  if(!isNewsroomOpening||!isAuthoredPrabutyPlaytest(payload)||!resolveAuthoredPrabutyMedia(payload,photo))return {content,handouts};
-  const shown=content.includes('[HANDOUT:'+photo+']')||content.includes('[HANDOUT:clue-photo-prabuty-1947]');
-  return {content:shown?content:content+'\n\n[HANDOUT:'+photo+']',handouts:[...new Set([...handouts,photo])]};
+/** An opening has no player action authorizing disclosure of a closed container's contents. */
+export function composeOpeningPresentation(payload:DossierRagPayload,content:string,handouts:string[],_isNewsroomOpening:boolean){
+  return presentHandoutsForTurn(content,handouts,payload,{playerMessage:'',location:''});
 }
 
 /** Capture before fetching. Opening has no player action authorizing inventory or actor transitions. */
@@ -25,25 +21,34 @@ export function createDossierOpeningCommit(input: Parameters<typeof createDossie
   const gate=createDossierResponseGate({...input,writesAllowed:false,playerMessage:''});
   return async (response:Response) => {
     let metadata:SSEMetadataEvent|undefined;
-    const rawText=await parseValidatedDossierStream(response,{onMetadata:value=>{metadata=value;}}, {
+    await parseValidatedDossierStream(response,{onMetadata:value=>{metadata=value;}}, {
       validate:gate.validate,reject:async token=>{await acknowledgeDossierTurn(token,false);},
     });
     gate.assertCurrent();
     const candidate=gate.candidate;
     if(!candidate || !metadata || !gate.token) throw new Error('DOSSIER_FINALIZATION_REQUIRED');
     const ids=(values:unknown)=>Array.isArray(values)?values.filter((value):value is string=>typeof value==='string'):[];
-    const handouts=acquiredHandoutsFromTurn(rawText,ids(metadata.dossierHandoutRecordIds),input.payload);
     const journal=candidate.next.activeCharacter ? appendJournalToParty(candidate.next.characters,candidate.next.activeCharacter,
-      candidate.cleanText,input.turnId,undefined,ids(metadata.dossierClueRecordIds)) : null;
-    const characters=journal?.characters ?? candidate.next.characters;
-    const activeCharacter=journal?.activeCharacter ?? candidate.next.activeCharacter;
-    const presentation=composeOpeningPresentation(input.payload,candidate.cleanText,handouts,Boolean(sceneImage));
+      candidate.cleanText,input.turnId,undefined,ids(metadata.dossierClueRecordIds), {
+        scope: { playthroughId: input.playthroughId, adventureId: input.adventureId },
+        binding: { adventureId: input.adventureId, editionFingerprint: input.editionFingerprint }, handoutRecordIds: gate.handouts, payload: input.payload,
+      }) : null;
+    const openingScope={playthroughId:input.playthroughId,adventureId:input.adventureId};
+    const openingBinding={adventureId:input.adventureId,editionFingerprint:input.editionFingerprint};
+    let characters=journal?.characters ?? candidate.next.characters;
+    const location=buildPublicJournal({characters,chapter:openingScope,binding:openingBinding,locale:'pl'}).scene?.location;
+    const publications=sceneImage && !/^(?:data|blob):/.test(sceneImage) && location ? [{cardId:journalCardId('place',location),
+      scope:openingScope,binding:openingBinding,visual:{imageUrl:sceneImage}}] : [];
+    characters=applyPublishedJournalVisuals(characters,publications);
+    const activeCharacter=characters.find(character=>character.id===(journal?.activeCharacter ?? candidate.next.activeCharacter)?.id) ?? null;
+    const presentation=composeOpeningPresentation(input.payload,candidate.cleanText,gate.handouts,Boolean(sceneImage));
     const nextTime=metadata.timeUpdate ?? undefined;
     if(nextTime!==undefined && !isGameTime(nextTime)) throw new Error('DOSSIER_TIME_INVALID');
     const message:Message={id:input.turnId,role:'assistant',content:presentation.content,timestamp:input.now,
       dossierHandoutBinding:{adventureId:input.adventureId,editionFingerprint:input.editionFingerprint},
       dossierHandoutRecordIds:presentation.handouts,dossierInventoryWritesAllowed:false,
       ...(sceneImage?{generatedImages:[sceneImage],generatedImageTypes:['scene' as const]}:{}),
+      ...(publications.length?{publicJournalVisuals:publications}:{}),
       ...(typeof metadata.finishReason==='string'?{finishReason:metadata.finishReason}:{}),
       ...(metadata.costData?{costData:metadata.costData}:{}),
       ...(isGameTime(nextTime)?{gameTime:nextTime}:{})};

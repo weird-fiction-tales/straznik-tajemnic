@@ -43,7 +43,7 @@ for(const name of names){
 const sourceChangesSha256=digest.digest('hex');
 const buildInfo={version,channel:'showcase',commitSha:revision,shortCommit:revision.slice(0,7),builtAt:createdAt,buildId,sourceChangesSha256};
 writeFileSync(join(runtime,'build-info.json'),JSON.stringify(buildInfo,null,2));
-const receipt={...buildInfo,hasUncommittedChanges:names.length>0,credentialsCopied:false,rulesCopiedIntoBundle:false,userSavesCopied:false,externalWorktreeDependencies:false,node:process.version};
+const receipt={...buildInfo,defaultNarrator:'gemini',hasUncommittedChanges:names.length>0,credentialsCopied:false,rulesCopiedIntoBundle:false,userSavesCopied:false,externalWorktreeDependencies:false,node:process.version};
 writeFileSync(join(target,'build-receipt.json'),JSON.stringify(receipt,null,2));
 writeFileSync(join(bundle,'Contents/Resources/build-receipt.json'),JSON.stringify(receipt,null,2));
 mkdirSync(join(bundle,'Contents/MacOS'),{recursive:true});
@@ -61,11 +61,12 @@ const launcher=[
  'SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"',
  'GAME_DIR="$(cd "$SCRIPT_DIR/../Resources/runtime" && pwd)"',
  'export ZEW_APP_BUNDLE="$(cd "$SCRIPT_DIR/../.." && pwd)"',
- 'export ZEW_DATA_DIR="$HOME/Library/Application Support/ZewCthulhu"',
- 'export RAG_DATA_DIR="$ZEW_DATA_DIR/rag"',
+ 'export ZEW_DATA_DIR="${ZEW_DATA_DIR:-$HOME/Library/Application Support/ZewCthulhu}"',
+ 'export RAG_DATA_DIR="${RAG_DATA_DIR:-$ZEW_DATA_DIR/rag}"',
  'export ZEW_DESKTOP_SHOWCASE=1',
  'export ZEW_DESKTOP_SELF_UPDATE=0',
  'export ZEW_LOCAL_PLAYTEST=showcase-pl-en',
+ 'export ZEW_LOCAL_TTS="${ZEW_LOCAL_TTS:-gemini}"',
  'export ZEW_SHOWCASE_PORT='+showcasePort,
  'export PATH="$GAME_DIR/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"',
  'SHOWCASE_HOME="$ZEW_DATA_DIR/showcase"',
@@ -78,7 +79,7 @@ const launcher=[
  'if ! "$GAME_DIR/bin/node" "$GAME_DIR/scripts/start-showcase.mjs" --check >/dev/null 2>&1; then',
  ' print -u2 "Pokaz nie uruchomił właściwego buildu i obu teczek. Sprawdź $SHOWCASE_HOME/launcher.log."',
  ' exit 1','fi',
- '/usr/bin/open -na "Google Chrome" --args --app=http://127.0.0.1:'+showcasePort+'/pl --user-data-dir="$PROFILE_DIR" --start-fullscreen --autoplay-policy=no-user-gesture-required --no-first-run --no-default-browser-check',
+ '/usr/bin/open -na "Google Chrome" --args --app=http://localhost:'+showcasePort+'/pl --user-data-dir="$PROFILE_DIR" --start-fullscreen --autoplay-policy=no-user-gesture-required --no-first-run --no-default-browser-check',
  '',
 ].join('\n');
 writeFileSync(join(bundle,'Contents/MacOS/launcher'),launcher,{mode:0o755});

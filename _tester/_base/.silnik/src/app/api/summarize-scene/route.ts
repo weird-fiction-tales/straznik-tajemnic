@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
-import { DEFAULT_GEMINI_MODEL } from '@/lib/ai-providers/constants';
+import { DEFAULT_GEMINI_MODEL_LITE } from '@/lib/ai-providers/constants';
+import { calculateGeminiCost } from '@/lib/ai-cost-tracker';
+import { recordUserUsage } from '@/lib/user-usage';
 import type { JournalEntry, JournalEventType } from '@/lib/types';
 
 // IND-206 BYOK + IND-231 (Zew Home): klient Gemini z kluczem testera (nagłówek)
@@ -149,10 +151,12 @@ Zwróć wyłącznie JSON z polami: title (krótki tytuł sceny), type (discovery
     const genAI = getGenAI(apiKey);
 
     const result = await genAI.models.generateContent({
-      model: DEFAULT_GEMINI_MODEL,
+      model: DEFAULT_GEMINI_MODEL_LITE,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         temperature: 0.2,
+        abortSignal: request.signal,
+        httpOptions: { timeout: 20000 },
         // Keep the small JSON recap from spending its response budget on reasoning.
         maxOutputTokens: 2048,
         thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
@@ -162,6 +166,10 @@ Zwróć wyłącznie JSON z polami: title (krótki tytuł sceny), type (discovery
       },
     });
 
+    const usage=result.usageMetadata;
+    if(usage) await recordUserUsage('local', {type:'gemini',
+      cost:calculateGeminiCost(DEFAULT_GEMINI_MODEL_LITE,usage.promptTokenCount??0,usage.candidatesTokenCount??0,
+        usage.cachedContentTokenCount??0,usage.thoughtsTokenCount??0),tokens:usage.totalTokenCount??0}).catch(()=>{});
     const text = result.text ?? '';
 
     // IND-269: parsuj surowy JSON, potem zmapuj na poprawny JournalEntry.

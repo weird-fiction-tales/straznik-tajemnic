@@ -71,14 +71,21 @@ export function QuickSetupModal({
   }, [rawAdventures, selectedAdventureId]);
 
   const availableCharacters = useMemo(() => {
+    const npcNames = new Set((rawAdventures.find(adventure=>adventure.id===selectedAdventureId)?.graph?.npcs ?? []).map(npc=>npc.name.trim().toLowerCase()));
     return getStrefa11CharactersForAdventure(selectedAdventureId)
-      .filter((character) => !showcase || character.id === showcase.characterId)
       .slice(0, 4)
+      .filter(character=>!showcase || locale!=='pl' || !npcNames.has(character.name.trim().toLowerCase()))
       .map((character) => localizeStrefa11Character(character, locale));
-  }, [locale, selectedAdventureId, showcase]);
+  }, [locale, selectedAdventureId, rawAdventures, showcase]);
+
+  const visibleCharacters = showcase
+    ? availableCharacters.filter((character) =>
+        character.id === showcase.characterId || character.id === showcase.companionCharacterId
+      )
+    : availableCharacters;
 
   useEffect(() => {
-    setSelectedCharacter1(showcase ? availableCharacters[0]?.id || '' : '');
+    setSelectedCharacter1(showcase ? availableCharacters.find((character) => character.id === showcase.characterId)?.id || '' : '');
     setSelectedCharacter2('');
     if (showcase) setPlayMode('solo');
   }, [selectedAdventureId, availableCharacters, showcase]);
@@ -135,7 +142,10 @@ export function QuickSetupModal({
               <button
                 type="button"
                 aria-pressed={playMode === 'solo'}
-                onClick={() => { setPlayMode('solo'); setSelectedCharacter2(''); }}
+                onClick={() => {
+                  setPlayMode('solo');
+                  setSelectedCharacter2('');
+                }}
                 className={`min-h-11 p-3.5 border text-left transition-all relative flex items-center gap-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                   playMode === 'solo'
                     ? 'border-primary bg-[#0f1715] shadow-glow text-foreground'
@@ -159,7 +169,6 @@ export function QuickSetupModal({
                 </div>
               </button>
 
-              {!showcase && (
                 <button
                   type="button"
                   aria-pressed={playMode === 'hot-seat'}
@@ -186,7 +195,6 @@ export function QuickSetupModal({
                     <div className="text-sm font-special-elite mt-0.5 opacity-80 tracking-wide">{t('hotSeatDescription')}</div>
                   </div>
                 </button>
-              )}
             </div>
           </div>
 
@@ -221,7 +229,7 @@ export function QuickSetupModal({
                         {adv.title}
                       </div>
                       <div className="text-base leading-relaxed font-serif mt-1.5 line-clamp-3 text-muted-foreground">
-                        {adv.description}
+                        {adv.investigatorIntro || adv.description}
                       </div>
                     </div>
                     <div className="text-sm uppercase font-special-elite mt-3 self-start border border-brass/40 bg-black/60 text-brass px-2 py-0.5 tracking-wider">
@@ -246,7 +254,7 @@ export function QuickSetupModal({
                 {playMode === 'hot-seat' ? t('playerOne') : t('yourCharacter')}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-                {availableCharacters.map(c => {
+                {visibleCharacters.map(c => {
                   const isSelected = selectedCharacter1 === c.id;
                   const isOtherChosen = playMode === 'hot-seat' && selectedCharacter2 === c.id;
                   return (
@@ -325,7 +333,7 @@ export function QuickSetupModal({
                   {t('playerTwo')}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-                  {availableCharacters.map(c => {
+                  {visibleCharacters.map(c => {
                     const isSelected = selectedCharacter2 === c.id;
                     const isOtherChosen = selectedCharacter1 === c.id;
                     return (

@@ -28,7 +28,25 @@ for(const locale of ['pl','en'] as const){
   await expect(modal.getByText(person,{exact:true})).toBeVisible();
   await expect(modal.getByRole('button',{name:locale==='pl'?'Rozpocznij przygodę':'Start adventure',exact:true})).toBeEnabled();
   await expect(page.locator('body')).not.toContainText('MISSING_MESSAGE');
-  await page.screenshot({path:'test-results/quick-start-'+locale+'.png'});
+  const woman=locale==='pl'?'Dr Barbara Zawadzka':'Clara Vance';
+  const biography=locale==='pl'?/Biografia/i:/Biography/i;
+  await expect(modal.getByText(woman,{exact:true})).toBeVisible();
+  await expect(modal.getByRole('button',{name:biography})).toHaveCount(2);
+  await modal.getByRole('button',{name:new RegExp(woman)}).click();
+  await page.screenshot({path:'test-results/quick-start-'+locale+'-solo.png'});
+  await modal.getByRole('button',{name:/Hot Seat/i}).click();
+  await expect(modal.getByRole('button',{name:biography})).toHaveCount(4);
+  await expect(modal.getByText(person,{exact:true})).toHaveCount(2);
+  await expect(modal.getByText(woman,{exact:true})).toHaveCount(2);
+  const start=modal.getByRole('button',{name:locale==='pl'?'Rozpocznij przygodę':'Start adventure',exact:true});
+  await expect(start).toBeDisabled();
+  await modal.getByRole('button',{name:new RegExp(person)}).nth(1).click();
+  await expect(start).toBeEnabled();
+  await page.screenshot({path:'test-results/quick-start-'+locale+'-duet.png'});
+  await modal.getByRole('button',{name:/Solo/i}).click();
+  await expect(modal.getByRole('button',{name:biography})).toHaveCount(2);
+  await expect(modal.getByRole('button',{name:new RegExp(woman)})).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('body')).not.toContainText('MISSING_MESSAGE');
   expect(errors).toEqual([]);
  });
 }

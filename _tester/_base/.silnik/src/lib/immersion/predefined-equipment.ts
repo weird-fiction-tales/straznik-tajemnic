@@ -37,6 +37,12 @@ type EquipmentSeed = Omit<EquipmentItem, 'id' | 'imageUrl'>;
 const CATEGORY_IMAGES: Record<EquipmentCategory, string> =
   CATEGORY_FALLBACK_ASSETS;
 
+const FLASHLIGHT_TEMPLATE_IDS = new Set([
+  'light.flashlight',
+  'tool.heavy-police-flashlight-prl',
+  'tool.tactical-flashlight-modern',
+]);
+
 const PRESET_VISUAL_ERAS: Record<PresetEra, EquipmentVisualEra> = {
   gaslight: '1890s',
   classic: '1920s',
@@ -386,16 +392,17 @@ export function buildPredefinedEquipment(
   [...eraKit, ...archetypeKit].forEach((seed) => {
     const normalized = normalizeName(seed.name);
     if (names.has(normalized)) return;
-    names.add(normalized);
-    result.push(
-      withLocalImage(
-        {
-          ...seed,
-          id: `eq_${slugify(preset.id)}_${slugify(seed.name)}`,
-        },
-        visualEra
-      )
+    const item = withLocalImage(
+      { ...seed, id: `eq_${slugify(preset.id)}_${slugify(seed.name)}` },
+      visualEra
     );
+    // Uzupełniamy zestaw startowy, nie scalamy już posiadanych egzemplarzy.
+    if (
+      item.templateId === 'light.flashlight' &&
+      result.some((owned) => FLASHLIGHT_TEMPLATE_IDS.has(owned.templateId ?? ''))
+    ) return;
+    names.add(normalized);
+    result.push(item);
   });
 
   // Niektóre osobiste elementy celowo pokrywają się z zestawem epoki (np.

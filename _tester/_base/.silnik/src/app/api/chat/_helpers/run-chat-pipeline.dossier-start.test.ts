@@ -222,3 +222,30 @@ test('local explicit withdrawal stages a deterministic ending through the ordina
  expect(text).toContain('[KONIEC_SESJI:POTWIERDZENIE]');expect(text).not.toContain('[TEST:');
  }finally{if(old===undefined)delete process.env.ZEW_LOCAL_PLAYTEST;else process.env.ZEW_LOCAL_PLAYTEST=old;}
 });
+
+
+test('publishes the same code-owned inventory result before SSE memory staging',async()=>{
+ const previous=process.env.ZEW_LOCAL_PLAYTEST;process.env.ZEW_LOCAL_PLAYTEST='showcase-pl-en';
+ try{
+  const {webcrypto}=await import('node:crypto');Object.defineProperty(globalThis.crypto,'subtle',{configurable:true,value:webcrypto.subtle});
+  const {createAuthoredEdition}=await import('@/lib/adventure-dossier/authored-editions');
+  const {emptyDossierInventory,projectDossierInventory}=await import('@/lib/adventure-dossier/inventory-state');
+  const {emptyDossierWorldState,projectDossierWorldState}=await import('@/lib/adventure-dossier/world-object-state');
+  const {payload,editionFingerprint}=await createAuthoredEdition('cien-nad-prabutami');
+  const binding={playthroughId:scope.playthroughId,adventureId:payload.adventure_id,editionFingerprint};
+  jest.mocked(getDossierRagBinding).mockReturnValue({adventureId:payload.adventure_id,editionFingerprint});
+  const request={nextUrl:new URL('http://localhost:4050/api/chat'),headers:{get:(name:string)=>
+    name.toLowerCase()==='host'?'localhost:4050':name.toLowerCase()==='origin'?'http://localhost:4050':name.toLowerCase()==='x-gemini-api-key'?'synthetic-test-key':null}} as unknown as NextRequest;
+  const pc={id:'tomasz',name:'Tomasz Nowicki',equipment:[],skills:{}};
+  jest.mocked(GeminiChatProvider).mockImplementation(()=>({streamChat:jest.fn(async()=>({stream:(async function*(){yield{text:'Tomasz Nowicki sięga po fotografię. [Co robisz?]'};})(),getUsage:async()=>null,getFinishReason:()=> 'STOP'}))}) as unknown as GeminiChatProvider);
+  await runChatPipeline({request,traceId:'source-owned',timer:{elapsed:()=>0},body:{message:'Biorę z biurka fotografię.',character:pc,characters:[pc],messages:[],
+   memoryScope:scope,assistantMessageId:'source-owned',pdfMemory:{adventureDossierFingerprint:editionFingerprint},
+   adventureContext:{id:payload.adventure_id,yearRange:'1973-1974',country:'Polska'},currentLocation:'loc-warszawa-redakcja',
+   gameTime:{year:1973,month:9,day:18,hour:19,minute:30},dossierInventory:projectDossierInventory(emptyDossierInventory(binding)),
+   dossierWorldState:projectDossierWorldState(emptyDossierWorldState(binding,payload)),aiSettings:{...defaultAISettings,imageGenerationEnabled:false},locale:'pl'}});
+  const emitted=jest.mocked(createSseStream).mock.calls.at(-1)![0];let text='';for await(const chunk of emitted.providerStream)text+=chunk.text??'';
+  expect(text).toContain('ten przedmiot ma teraz przy sobie Tomasz Nowicki');
+  expect(text).not.toContain('sięga po');
+  expect(text).toContain('[EKWIPUNEK: DODAJ | @prabuty.item.clue-photo-prabuty-1947]');
+ }finally{if(previous===undefined)delete process.env.ZEW_LOCAL_PLAYTEST;else process.env.ZEW_LOCAL_PLAYTEST=previous;}
+});

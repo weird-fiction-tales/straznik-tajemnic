@@ -141,8 +141,6 @@ export function useEquipmentThumbnails({
         // Krok 1: Wzbogacenie o lokalne assety katalogu (deterministyczne, 0 kosztu, natychmiastowe)
         let catalogUpdated = false;
         const enrichedEquipment = (character.equipment ?? []).map((item) => {
-          if (item.visualSource === 'generated') return item;
-
           const enriched = applyCatalogTemplate(item, era);
           if (item.visualSource === 'catalog' && item.imageUrl === enriched.imageUrl) {
             return item;
@@ -177,6 +175,7 @@ export function useEquipmentThumbnails({
         // Krok 2: Sekwencyjna generacja AI w tle dla przedmiotów bez lokalnego WebP
         const pending = (currentCharacter.equipment ?? [])
           .filter((item) => {
+            if (item.dossierBinding) return false;
             if (
               item.imageUrl &&
               !item.imageUrl.endsWith('.svg') &&

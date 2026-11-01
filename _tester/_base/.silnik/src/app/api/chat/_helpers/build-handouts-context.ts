@@ -7,7 +7,11 @@
  *
  * Pure function, bez side effects. Pusty string gdy przygoda nie ma handoutów ani zagadek.
  */
-import { getAdventureById, type AdventureHandout, type AdventurePuzzle } from '@/lib/adventures-data';
+import {
+  getAdventureById,
+  type AdventureHandout,
+  type AdventurePuzzle,
+} from '@/lib/adventures-data';
 
 export interface BuildHandoutsContextOptions {
   adventureId?: string;
@@ -47,13 +51,20 @@ function matchesChapter(
 
 function nodeLocationNames(adventureId: string, nodeId: string): string[] {
   const graph = getAdventureById(adventureId)?.graph;
-  const node = graph?.nodes?.find(entry => entry.id === nodeId);
+  const node = graph?.nodes?.find((entry) => entry.id === nodeId);
   if (!node) return [];
-  const location = graph?.locations.find(entry => entry.id === node.locationId);
+  const location = graph?.locations.find(
+    (entry) => entry.id === node.locationId
+  );
   // Parenthetical addresses are descriptions, not part of the <=45-character location tag.
   const shortName = node.name.replace(/\s*\([^)]*\)/g, '').trim();
-  return [node.id, node.name, location?.id, location?.name,
-    shortName.length <= 45 ? shortName : undefined].filter((name): name is string => Boolean(name));
+  return [
+    node.id,
+    node.name,
+    location?.id,
+    location?.name,
+    shortName.length <= 45 ? shortName : undefined,
+  ].filter((name): name is string => Boolean(name));
 }
 
 function matchesLocation(
@@ -69,8 +80,10 @@ function matchesLocation(
       const adventureId = options?.adventureId;
       if (!adventureId) return false;
       const nodes = getAdventureById(adventureId)?.graph?.nodes || [];
-      const matches = nodes.filter(node =>
-        nodeLocationNames(adventureId, node.id).some(name => normalizeString(name) === currentLocation)
+      const matches = nodes.filter((node) =>
+        nodeLocationNames(adventureId, node.id).some(
+          (name) => normalizeString(name) === currentLocation
+        )
       );
       // Never keep offering evidence from a stale starting node after travel.
       return matches.length === 1 && normalizeString(matches[0].id) === nodeId;
@@ -129,8 +142,10 @@ export function buildHandoutsContext(
 
   // 2. Scoping handoutów gracza wg aktywnego rozdziału i lokacji
   const scopedPlayerHandouts = playerHandouts.filter((h) => {
-    return matchesChapter(h.chapterId, options?.activeChapterId) &&
-           matchesLocation(h, options);
+    return (
+      matchesChapter(h.chapterId, options?.activeChapterId) &&
+      matchesLocation(h, options)
+    );
   });
 
   // 3. Scoping materiałów Strażnika (wg rozdziału, jeśli podano)
@@ -143,21 +158,43 @@ export function buildHandoutsContext(
   if (options?.adventureId) {
     const names = new Set<string>();
     for (const handout of playerHandouts) {
-      if (!(handout.audioUrl || handout.audioUrlPl || handout.audioUrlEn) || !handout.nodeId) continue;
+      if (
+        !(handout.audioUrl || handout.audioUrlPl || handout.audioUrlEn) ||
+        !handout.nodeId
+      )
+        continue;
       const labels = nodeLocationNames(options.adventureId, handout.nodeId);
-      const shortLabel = labels.find(label => label !== handout.nodeId && label.length <= 45 && !/[:|,\[\]]/.test(label) && !label.startsWith('loc-'));
+      const shortLabel = labels.find(
+        (label) =>
+          label !== handout.nodeId &&
+          label.length <= 45 &&
+          !/[:|,\[\]]/.test(label) &&
+          !label.startsWith('loc-')
+      );
       if (shortLabel) names.add(`- ${handout.nodeId}: [LOKACJA:${shortLabel}]`);
     }
-    if (names.size) context += `\n## NAZWY LOKACJI W GRAFIE\nPo faktycznym dotarciu do wskazanego węzła użyj jego dokładnej krótkiej nazwy lokacji. To nie jest polecenie podróży ani wręczenia rekwizytu:\n${[...names].join('\n')}\n`;
+    if (names.size)
+      context += `\n## NAZWY LOKACJI W GRAFIE\nPo faktycznym dotarciu do wskazanego węzła użyj jego dokładnej krótkiej nazwy lokacji. To nie jest polecenie podróży ani wręczenia rekwizytu:\n${[...names].join('\n')}\n`;
   }
 
   // 4. Sekcja DOSTĘPNE HANDOUTY (materiały do wręczenia graczom)
   if (scopedPlayerHandouts.length > 0) {
     const list = scopedPlayerHandouts
-      .map((h) => `- ${h.title} → wstaw dokładnie: [HANDOUT:${h.slug}]`)
+      .map((h) => {
+        const prepared = h as AdventureHandout & {
+          reveal?: { checks: string[]; requires: string[]; action: string };
+        };
+        const gate = prepared.reveal;
+        return (
+          `- ${h.title} → wstaw dokładnie: [HANDOUT:${h.slug}]` +
+          (gate
+            ? `\n  Warunek ujawnienia / reveal condition: ${gate.action}; checks=${gate.checks.join(',') || '-'}; requires=${gate.requires.join(',') || '-'}. Dostępność w scenie nie oznacza zdobycia. / Scene availability is not acquisition.`
+            : '')
+        );
+      })
       .join('\n');
 
-    context += (
+    context +=
       `\n## DOSTĘPNE HANDOUTY (realne dokumenty tej przygody)\n` +
       `Masz prawdziwe materiały do POKAZANIA graczom (mapy, dokumenty, listy). Reguły:\n` +
       `- Wstaw handout TYLKO gdy postacie fizycznie go widzą/otrzymują w fikcji (znajdują mapę, dostają kopertę).\n` +
@@ -165,8 +202,8 @@ export function buildHandoutsContext(
       `- Silnik gry automatycznie wyświetli graczom oryginalny, autentyczny dokument (100% RAW) na podstawie sluga.\n` +
       `- Nagranie audio wręczaj dopiero gdy postacie zbadają nośnik lub urządzenie w bieżącym węźle. Nie odtwarzaj go automatycznie ani nie zdradzaj treści przed odsłuchem.\n` +
       `- NIE wymyślaj własnych ścieżek ani handoutów spoza tej listy. Każdy pokaż maksymalnie raz, w naturalnym momencie.\n\n` +
-      list + '\n'
-    );
+      list +
+      '\n';
   }
 
   // 5. Sekcja KEEPER-ONLY (tajemnice i plany taktyczne MG - zakaz wręczenia)
@@ -181,33 +218,35 @@ export function buildHandoutsContext(
       })
       .join('\n');
 
-    context += (
+    context +=
       `\n## MATERIAŁY I PLANY STRAŻNIKA (KEEPER-ONLY - ZAKAZ WRĘCZANIA GRACZOM)\n` +
       `Materiały taktyczne i plany przeznaczone WYŁĄCZNIE dla Ciebie jako Strażnika Tajemnic (tajemnice MG, plany kondygnacji):\n` +
       `- BEZWZGLĘDNY ZAKAZ: Nigdy nie emituj tagu [HANDOUT:...] dla tych materiałów!\n` +
       `- ZAKAZ bezpośredniego wręczania, pokazywania lub cytowania 1:1 tych materiałów graczom.\n` +
       `- Możesz opisywać słownie w narracji jedynie to, co postacie bezpośrednio widzą i badają.\n\n` +
-      keeperList + '\n'
-    );
+      keeperList +
+      '\n';
   }
 
   // 6. Sekcja ZAGADKI LOGICZNE (bez zmian)
   if (puzzles && puzzles.length > 0) {
     const puzzleList = puzzles
       .map((p) => {
-        const clues = (p.clues || []).map((c) => `  * Poszlaka: ${c}`).join('\n');
+        const clues = (p.clues || [])
+          .map((c) => `  * Poszlaka: ${c}`)
+          .join('\n');
         return `### Zagadka: ${p.title}\n- Opis: ${p.description}\n- Rozwiązanie (Tylko dla MG): ${p.solutionSummary}\n- Poszlaki:\n${clues}\n- Reguła Idea Roll (RAW CoC 7e): ${p.ideaRollPrompt}`;
       })
       .join('\n\n');
 
-    context += (
+    context +=
       `\n## ZAGADKI LOGICZNE I ŁAMIGŁÓWKI ŚLEDZTWA (RAW)\n` +
       `Scenariusz zawiera zdefiniowane wyzwania dedukcyjne dla graczy:\n` +
       `- Nie zdradzaj rozwiązania od razu! Pozwól graczom analizować zebrane materiały (handouty) i dedukować.\n` +
       `- ZASADA IDEA ROLL (Rzut na Pomysł - INT): Jeśli gracze utkną lub deklarują próbę dedukcji/powiązania faktów, zaproponuj Rzut na Pomysł (Idea Roll).\n` +
       `- ZASADA FAIL-FORWARD: Sukces w Idea Roll oznacza bezpośrednią dedukcję/wskazówkę. Porażka w rzucie na pomysł RÓWNIEŻ popycha śledztwo naprzód (gracze wpadają na trop), ale sprowadza natychmiastowe zagrożenie lub komplikację (zasadzka, alarm, utrata cennego czasu).\n\n` +
-      puzzleList + '\n'
-    );
+      puzzleList +
+      '\n';
   }
 
   return context;
