@@ -11,12 +11,16 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
 });
 
+const localDesktop = process.env.NEXT_PUBLIC_LOCAL_MODE === 'true' || process.env.STRAZNIK_DESKTOP_UPDATE === '1';
+
 const nextConfig: NextConfig = {
   // Desktop serves original local files and never writes an image cache into the signed app.
-  images: { unoptimized: process.env.NEXT_PUBLIC_LOCAL_MODE === 'true' || process.env.STRAZNIK_DESKTOP_UPDATE === '1' },
+  images: { unoptimized: localDesktop },
   // PDF-y przygód są wysyłane jako multipart/form-data do Route Handlera.
   // Domyślny limit proxy Next.js (10 MB) ucinał większe startery przed endpointem.
   experimental: {
+    // A signed desktop bundle is immutable, including metadata routes such as favicon.
+    isrFlushToDisk: !localDesktop,
     proxyClientMaxBodySize: '500mb',
     serverActions: {
       bodySizeLimit: '100mb',
