@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "version": "0.9.5",
-  "updatedAt": "2026-10-20T18:35:00.000Z",
+  "version": "0.9.6",
+  "updatedAt": "2026-11-01T09:26:00.000Z",
   "locales": [
     "pl",
     "en"
@@ -457,6 +457,14 @@
         "en": "Audio handout"
       },
       "e2e": true
+    },
+    {
+      "id": "starter-dossier",
+      "kind": "modal",
+      "label": {
+        "pl": "Teczka Startera - poznane materiały i mapa",
+        "en": "Starter dossier - discovered materials and map"
+      }
     }
   ],
   "actions": [
@@ -990,6 +998,15 @@
         "en": "Play or pause recording"
       },
       "component": "src/components/ui/audio-reel-player.tsx"
+    },
+    {
+      "source": "home",
+      "target": "starter-dossier",
+      "label": {
+        "pl": "Otwórz teczkę Startera",
+        "en": "Open Starter dossier"
+      },
+      "component": "src/components/dialogs/StarterDossier.tsx"
     }
   ],
   "lastUpdated": "2026-10-09T19:20:00.000Z"
