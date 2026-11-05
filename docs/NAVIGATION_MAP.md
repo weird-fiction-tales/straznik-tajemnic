@@ -34,7 +34,7 @@ graph TD
     character_sheet["Karta badacza (Dark Art Déco d100 Weird Fiction) / Investigator sheet (Dark Art Déco d100 Weird Fiction)"]
     equipment["Ekwipunek (Broń, Wyposażenie, Fabularne) / Equipment (Weapons, Gear, Story Items)"]
     equipment_detail["Szczegóły przedmiotu / Equipment detail"]
-    journal["Akta sprawy - styl Karty Badacza, najnowsze wpisy na górze / Case Files - Character Sheet style, newest entries first"]
+    journal["Dziennik przygody - kronika i kartoteka poznanych informacji / Adventure journal - chronicle and known people, places and materials"]
     idea_roll_modal["Test Pomysłu d100 Weird Fiction (Idea Roll) / Idea Roll d100 Weird Fiction"]
     dice["Rzuty kośćmi / Dice rolls"]
     gm_tools["Narzędzia MG / GM tools"]
@@ -169,8 +169,8 @@ graph TD
 | Aktywna sesja | Karta postaci / Character sheet | Karta badacza (Dark Art Déco d100 Weird Fiction) | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Aktywna sesja | Ekwipunek / Equipment | Ekwipunek (Broń, Wyposażenie, Fabularne) | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Ekwipunek (Broń, Wyposażenie, Fabularne) | Szczegóły przedmiotu / Equipment details | Szczegóły przedmiotu | `src/components/ui/equipment-detail-dialog.tsx` |
-| Aktywna sesja | Akta sprawy / Case Files | Akta sprawy - styl Karty Badacza, najnowsze wpisy na górze | `src/components/sidebar/CthulhuSidebar.tsx` |
-| Akta sprawy - styl Karty Badacza, najnowsze wpisy na górze | Zamknij akta sprawy / Close Case Files | Aktywna sesja | `src/components/ui/session-journal.tsx` |
+| Aktywna sesja | Akta sprawy / Case Files | Dziennik przygody - kronika i kartoteka poznanych informacji | `src/components/sidebar/CthulhuSidebar.tsx` |
+| Dziennik przygody - kronika i kartoteka poznanych informacji | Zamknij akta sprawy / Close Case Files | Aktywna sesja | `src/components/ui/session-journal.tsx` |
 | Aktywna sesja | Rzuć kośćmi / Roll dice | Rzuty kośćmi | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Aktywna sesja | Narzędzia MG / GM tools | Narzędzia MG | `src/components/sidebar/CthulhuSidebar.tsx` |
 | Aktywna sesja | Faza rozwoju (po sesji) / Development phase (after session) | Faza rozwoju | `src/components/sidebar/CthulhuSidebar.tsx` |

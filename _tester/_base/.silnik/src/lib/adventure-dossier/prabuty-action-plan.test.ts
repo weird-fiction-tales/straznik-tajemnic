@@ -165,8 +165,8 @@ test.each(['Oglądam fotografię?', 'Jeśli Pan pozwoli,\noglądam fotografię. 
 test('publishes present authored actors only from visible narration, without keeper or off-scene content',()=>{
  const plan=planPrabutyTurn(input('Rozglądam się.'))!;
  const result=applyPrabutyPlanToText('Helena kładzie teczkę na biurku. Dr Skrzyński czeka przy oknie. [GM_THOUGHTS]Klimuszko zna SEKRET.[/GM_THOUGHTS][DZIENNIK:npc:Nieznajomy]SEKRET[/DZIENNIK]',plan);
- expect(result).toMatch(/\[DZIENNIK:npc:Helena[^\]]*\]Helena kładzie teczkę na biurku\./);
- expect(extractJournalTags(result).find(tag => tag.title === 'dr Jarosław Skrzyński')?.content).toContain('Dr Skrzyński czeka przy oknie.');
+ expect(extractJournalTags(result).find(tag => tag.title === 'Helena Krawczyk')?.content).toBe('Redaktorka programu „Sygnały Nieznanego” w Telewizji Polskiej.');
+ expect(extractJournalTags(result).find(tag => tag.title === 'dr Jarosław Skrzyński')?.content).toBe('Konsultant naukowy zajmujący się bioelektroniką i psychotroniką.');
  const tags=result.match(/\[DZIENNIK:npc:[\s\S]*?\[\/DZIENNIK\]/g)??[];
  expect(tags).toHaveLength(2);
  expect(tags.join('')).not.toMatch(/SEKRET|Klimuszko|keeperSecret/);
@@ -306,6 +306,15 @@ describe('public narration source fidelity',()=>{
  });
 });
 
+
+test('does not file the same scene paragraph as personal knowledge for every present actor', () => {
+  const plan = planPrabutyTurn(input('Rozglądam się.'))!;
+  const paragraph = 'Helena Krawczyk siedzi przy biurku. Obok dr Jarosław Skrzyński czeka przy oknie.';
+  const result = applyPrabutyPlanToText(paragraph, plan);
+  const people = extractJournalTags(result).filter(tag => tag.type === 'npc');
+  expect(people.every(tag => tag.content !== paragraph)).toBe(true);
+  expect(result).toContain(paragraph);
+});
 
 test('keeps the complete public NPC quotation across doctor abbreviations', () => {
   const plan = planPrabutyTurn(input('Rozmawiam z Heleną.'))!;

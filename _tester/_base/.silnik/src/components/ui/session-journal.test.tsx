@@ -99,7 +99,7 @@ describe('shared visual journal', () => {
         })
       ).toBeVisible();
       expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
-        fixture.labels.place
+        locale === 'pl' ? 'Kronika śledztwa' : 'Investigation Chronicle'
       );
       const nav = within(screen.getByTestId('journal-contents'));
       for (const label of locale === 'pl'
@@ -141,7 +141,9 @@ describe('shared visual journal', () => {
     expect(detail).toHaveTextContent(fixture.labels.first);
     expect(detail).toHaveTextContent(fixture.labels.second);
     fireEvent.click(
-      within(detail).getAllByRole('button', { name: 'Źródło: Dozorca' })[0]
+      within(detail).getAllByRole('button', {
+        name: 'Zobacz rozmowę: Dozorca',
+      })[0]
     );
     expect(screen.getByTestId('journal-source')).toHaveTextContent(
       fixture.labels.first
@@ -275,7 +277,7 @@ describe('shared visual journal', () => {
     );
     fireEvent.click(
       within(screen.getByTestId('journal-card-detail')).getAllByRole('button', {
-        name: 'Źródło: Dozorca',
+        name: 'Zobacz rozmowę: Dozorca',
       })[0]
     );
     expect(screen.getByRole('heading', { level: 2 })).toHaveFocus();
@@ -308,61 +310,124 @@ describe('shared visual journal', () => {
   });
 });
 
-
 describe('journal without empty illustration panels', () => {
-  afterEach(() => { delete process.env.NEXT_INTL_TEST_LOCALE; });
-  it.each(['pl', 'en'] as const)('keeps a compact symbol and readable source labels (%s)', locale => {
-    process.env.NEXT_INTL_TEST_LOCALE = locale;
-    const fixture = makePublicJournalFixture(locale);
-    const event = fixture.model.cards.find(card => card.kind === 'event')!;
-    render(<SessionJournal character={fixture.characters[0]} model={fixture.model} />);
-    const nav = within(screen.getByTestId('journal-contents'));
-    fireEvent.click(nav.getByRole('button', {name: locale === 'pl' ? /^Wydarzenia/ : /^Events/}));
-    fireEvent.click(screen.getByRole('button', {name: `${locale === 'pl' ? 'Otwórz' : 'Open'}: ${event.title}`}));
-    const detail = screen.getByTestId('journal-card-detail');
-    expect(detail.querySelector('.aspect-\\[4\\/3\\]')).toBeNull();
-    const labels = within(detail).getAllByRole('button').map(button => button.textContent);
-    expect(labels.some(label => /(?:Źródło|Source): \d+$/.test(label ?? ''))).toBe(false);
-    expect(labels.some(label => label?.includes(locale === 'pl' ? 'Przebieg sceny:' : 'Scene record:'))).toBe(true);
+  afterEach(() => {
     delete process.env.NEXT_INTL_TEST_LOCALE;
   });
+  it.each(['pl', 'en'] as const)(
+    'keeps a compact symbol and readable source labels (%s)',
+    (locale) => {
+      process.env.NEXT_INTL_TEST_LOCALE = locale;
+      const fixture = makePublicJournalFixture(locale);
+      const event = fixture.model.cards.find((card) => card.kind === 'event')!;
+      render(
+        <SessionJournal
+          character={fixture.characters[0]}
+          model={fixture.model}
+        />
+      );
+      const nav = within(screen.getByTestId('journal-contents'));
+      fireEvent.click(
+        nav.getByRole('button', {
+          name: locale === 'pl' ? /^Wydarzenia/ : /^Events/,
+        })
+      );
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: `${locale === 'pl' ? 'Otwórz' : 'Open'}: ${event.title}`,
+        })
+      );
+      const detail = screen.getByTestId('journal-card-detail');
+      expect(detail.querySelector('.aspect-\\[4\\/3\\]')).toBeNull();
+      const labels = within(detail)
+        .getAllByRole('button')
+        .map((button) => button.textContent);
+      expect(
+        labels.some((label) => /(?:Źródło|Source): \d+$/.test(label ?? ''))
+      ).toBe(false);
+      expect(
+        labels.some((label) =>
+          label?.includes(locale === 'pl' ? 'Zobacz zapis:' : 'View record:')
+        )
+      ).toBe(true);
+      expect(
+        labels.some((label) =>
+          /Przebieg sceny:|Scene record:/.test(label ?? '')
+        )
+      ).toBe(false);
+      delete process.env.NEXT_INTL_TEST_LOCALE;
+    }
+  );
 
-  it.each(['pl', 'en'] as const)('separates a public profile from evidence and makes it searchable (%s)', locale => {
-    process.env.NEXT_INTL_TEST_LOCALE = locale;
-    const fixture = makePublicJournalFixture(locale);
-    const person = fixture.model.cards.find(card => card.kind === 'person' && !card.mentioned)!;
-    person.publicDescription = locale === 'pl' ? 'Redaktorka telewizyjna.' : 'A television editor.';
-    render(<SessionJournal character={fixture.characters[0]} model={fixture.model} />);
-    fireEvent.change(screen.getByRole('textbox'), {target: {value: locale === 'pl' ? 'redaktorka' : 'television'}});
-    const tile = screen.getByTestId('journal-card');
-    expect(tile).toHaveTextContent(person.publicDescription);
-    fireEvent.click(tile);
-    expect(screen.getByTestId('journal-public-profile')).toHaveTextContent(person.publicDescription);
-    expect(screen.getByTestId('journal-card-detail')).toHaveTextContent(person.paragraphs[0].text);
-    const source = screen.getAllByTestId('journal-source-link')[0];
-    fireEvent.click(source);
-    expect(screen.getByTestId('journal-source')).not.toHaveTextContent(person.publicDescription);
-  });
+  it.each(['pl', 'en'] as const)(
+    'separates a public profile from evidence and makes it searchable (%s)',
+    (locale) => {
+      process.env.NEXT_INTL_TEST_LOCALE = locale;
+      const fixture = makePublicJournalFixture(locale);
+      const person = fixture.model.cards.find(
+        (card) => card.kind === 'person' && !card.mentioned
+      )!;
+      person.publicDescription =
+        locale === 'pl' ? 'Redaktorka telewizyjna.' : 'A television editor.';
+      render(
+        <SessionJournal
+          character={fixture.characters[0]}
+          model={fixture.model}
+        />
+      );
+      fireEvent.change(screen.getByRole('textbox'), {
+        target: { value: locale === 'pl' ? 'redaktorka' : 'television' },
+      });
+      const tile = screen.getByTestId('journal-card');
+      expect(tile).toHaveTextContent(person.publicDescription);
+      fireEvent.click(tile);
+      expect(screen.getByTestId('journal-public-profile')).toHaveTextContent(
+        person.publicDescription
+      );
+      expect(screen.getByTestId('journal-card-detail')).toHaveTextContent(
+        person.paragraphs[0].text
+      );
+      const source = screen.getAllByTestId('journal-source-link')[0];
+      fireEvent.click(source);
+      expect(screen.getByTestId('journal-source')).not.toHaveTextContent(
+        person.publicDescription
+      );
+    }
+  );
 
   it('resets new destinations and restores scroll and focus when returning from a related card', () => {
     const fixture = makePublicJournalFixture('pl');
-    render(<SessionJournal character={fixture.characters[0]} model={fixture.model} />);
+    render(
+      <SessionJournal character={fixture.characters[0]} model={fixture.model} />
+    );
     const reader = screen.getByTestId('journal-reader');
     reader.scrollTop = 210;
-    const tile = screen.getByRole('button', {name: `Otwórz: ${fixture.labels.finding}`});
-    tile.focus(); fireEvent.click(tile);
+    const tile = screen.getByRole('button', {
+      name: `Otwórz: ${fixture.labels.finding}`,
+    });
+    tile.focus();
+    fireEvent.click(tile);
     expect(reader.scrollTop).toBe(0);
     reader.scrollTop = 135;
-    const related = screen.getByRole('button', {name: fixture.labels.place});
-    related.focus(); fireEvent.click(related);
+    const related = screen.getByRole('button', { name: fixture.labels.place });
+    related.focus();
+    fireEvent.click(related);
     expect(reader.scrollTop).toBe(0);
-    fireEvent.click(screen.getByRole('button', {name: 'Wróć'}));
+    fireEvent.click(screen.getByRole('button', { name: 'Wróć' }));
     expect(reader.scrollTop).toBe(135);
-    expect(screen.getByRole('button', {name: fixture.labels.place})).toHaveFocus();
-    fireEvent.click(screen.getByRole('button', {name: 'Wróć'}));
+    expect(
+      screen.getByRole('button', { name: fixture.labels.place })
+    ).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Wróć' }));
     expect(reader.scrollTop).toBe(210);
-    expect(screen.getByRole('button', {name: `Otwórz: ${fixture.labels.finding}`})).toHaveFocus();
-    fireEvent.click(within(screen.getByTestId('journal-contents')).getByRole('button', {name: /^Wydarzenia/}));
+    expect(
+      screen.getByRole('button', { name: `Otwórz: ${fixture.labels.finding}` })
+    ).toHaveFocus();
+    fireEvent.click(
+      within(screen.getByTestId('journal-contents')).getByRole('button', {
+        name: /^Wydarzenia/,
+      })
+    );
     expect(reader.scrollTop).toBe(0);
   });
 });

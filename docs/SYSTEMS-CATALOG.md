@@ -99,3 +99,9 @@ Lokalna edycja PL/EN: `docs/adventure-dossiers/STARTER-PREPARATION.md`. Podgląd
 ### Baza 0.9.6
 
 Skonsolidowane wydanie lokalne łączy powyższe moduły. Pakowanie zachowuje profil gracza, identyfikuje build przed otwarciem przeglądarki i wyłącza samoczynną aktualizację. Scalenie `main` nie publikuje instalatorów. Zakres i ograniczenia: [RELEASE-0.9.6.md](RELEASE-0.9.6.md).
+
+### Czytelnik dziennika i słuchowisko Ultra
+
+`public-journal` projektuje zapisane sceny do kroniki bez odpytywania AI przy otwarciu. `SessionJournal` oddziela krótką wizytówkę od rozwijanego zapisu, pokazuje jeden odnośnik do rozmowy/materiału i dobiera proporcje obrazu do rodzaju karty. `prabuty-action-plan` publikuje publiczną rolę wyłącznie osoby występującej w widocznej narracji; nie kopiuje całego akapitu sceny do każdej postaci.
+
+`dialogue-parser` jest wspólną granicą podpisanych wypowiedzi dla czatu, źródeł dziennika i TTS; kolejka bierze aktualne ustawienie narratorOnly po zmianie presetu. `scene-soundscape` wykorzystuje istniejące nagrania maszyny do pisania w redakcji i zegara w klasztorze. Tło startuje przy odtwarzaniu mowy i kończy się przy stop, końcu kolejki lub zmianie sceny; nie wymaga lamp. Pozostałe sceny nie otrzymują zgadywanego tła.

@@ -27,6 +27,8 @@ import {
 import { playSFX, SFX_ENABLED, stopCurrentSFX } from '@/lib/audio/sfx-catalog';
 import { persistentMediaCache } from '@/lib/persistent-media-cache';
 import { GEMINI_TTS_PROMPT_VERSION } from '@/lib/audio/gemini-tts-prompt';
+import { separateAttributedDialogue } from '@/lib/parsers/dialogue-parser';
+import { sceneSoundscape } from '@/lib/audio/scene-soundscape';
 
 interface QueueItem {
   text: string;
@@ -509,6 +511,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
     (preserveBuffering = false, preserveImmersion = false) => {
       console.log('🔊 TTS: STOP called. Resetting state.');
       stopCurrentSFX();
+      sceneSoundscape.stop();
       sfxQueueRef.current.clear();
       generationIdRef.current++;
 
@@ -534,7 +537,9 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
       });
       preloadedAudioRef.current.clear();
       segmentSourceRef.current.clear();
-      if (!preserveImmersion) immersion.cancel();
+      if (!preserveImmersion) {
+        immersion.cancel();
+      }
       queueRef.current = [];
       pendingQueueRef.current = [];
       isProcessingQueueRef.current = false;
@@ -615,10 +620,13 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
     const audio = currentAudioRef.current;
     if (audio) {
       if (audio.paused) {
+        sceneSoundscape.resume();
         void immersion.resumePlayback().catch(() => {});
         audio.play().catch(console.error);
         setIsAudioPaused(false);
       } else {
+        sceneSoundscape.pause();
+        stopCurrentSFX();
         void immersion.pausePlayback().catch(() => {});
         audio.pause();
         setIsAudioPaused(true);
@@ -630,6 +638,12 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
     providerRef.current = null;
     stopCurrentAudio();
   }, [locale, stopCurrentAudio]);
+
+  useEffect(() => {
+    const stopAmbience = () => sceneSoundscape.stop();
+    window.addEventListener('hue-scene-changed', stopAmbience);
+    return () => window.removeEventListener('hue-scene-changed', stopAmbience);
+  }, []);
 
   // Worker przetwarzający kolejkę
   const runQueueWorker = useCallback(async () => {
@@ -1013,6 +1027,23 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
         sfxQueueRef.current.delete(currentIndex);
         audio.onplaying = () => {
           audio.onplaying = null;
+          const settings = loadAISettings();
+          if (
+            settings.qualityPreset === 'ultra' &&
+            !settings.voiceSettings?.narratorOnly
+          ) {
+            try {
+              const context = JSON.parse(
+                localStorage.getItem('adventure_context') || 'null'
+              ) as { id?: string } | null;
+              sceneSoundscape.play(
+                context?.id ?? '',
+                immersion.snapshot().sceneId ?? ''
+              );
+            } catch {
+              sceneSoundscape.stop();
+            }
+          } else sceneSoundscape.stop();
           const source = segmentSourceRef.current.get(currentIndex);
           const emitted = source
             ? immersion.timeline.segment(
@@ -1038,6 +1069,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
           audio.onended = safeResolve;
           audio.onerror = () => {
             immersion.cancel();
+            sceneSoundscape.stop();
             safeResolve();
           };
           audio.play().catch(safeResolve);
@@ -1061,6 +1093,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
       }
     } finally {
       if (generationIdRef.current === currentGen) {
+        sceneSoundscape.stop();
         isPlayingQueueRef.current = false;
         if (currentAudioRef.current) {
           releaseAudioElement(currentAudioRef.current);
@@ -1198,6 +1231,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
       // HIGH i ULTRA → per-zdanie z parserem mówców (multi-voice NPC). Marker
       // `Imię: „dialog”` i legacy `@Imię:` rozdziela mówców. Preset jest stały w
       // obrębie wiadomości, więc processedSentenceCountRef liczy spójnie.
+      stripped = separateAttributedDialogue(stripped);
       const settingsForQueue = loadAISettings();
       const isUltraOrHigh =
         settingsForQueue.qualityPreset === 'ultra' ||
@@ -1432,8 +1466,9 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
           let inlineNarratorMoodDirection: string | undefined;
           let hasExplicitInsideQuoteOverride = false;
 
+          // Storage is updated synchronously; the settings event/React render may arrive later.
           const isNarratorOnlyMode =
-            isNarratorOnly || !!settingsForQueue.voiceSettings?.narratorOnly;
+            !!settingsForQueue.voiceSettings?.narratorOnly;
 
           // Issue #544 + Issue #562: Ekstrakcja nastroju/emocji z surowego tekstu przed czyszczeniem
           const priorPendingMood = pendingStandaloneMoodRef.current;
