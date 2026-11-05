@@ -574,6 +574,7 @@ export function useTTS(locale: 'pl' | 'en' = 'pl'): UseTTSReturn {
         setIsInitialBuffering(false);
       }
 
+      setIsGeneratingVoice(false);
       setIsAudioPaused(false);
       setQueueStatus({ queueLength: 0, totalCharacters: 0, processing: false });
     },
