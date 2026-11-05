@@ -2027,6 +2027,7 @@ export async function runChatPipeline({
     (Array.isArray(characters) && characters.length >= 2);
 
   let collected = await collectStreamChunks(providerStream);
+  if (isGameStart && getFinishReason() !== 'STOP') throw new Error('OPENING_TEXT_INCOMPLETE');
   const initialNarration = filterSourceOwnedInventoryNarration(
     collected.fullText,
     investigatorNames,
@@ -2203,6 +2204,8 @@ export async function runChatPipeline({
       { status: 422 }
     );
   }
+  // Regenerated drafts must also be complete before any opening state/memory is staged.
+  if (isGameStart && getFinishReason() !== 'STOP') throw new Error('OPENING_TEXT_INCOMPLETE');
   const starterCommit = starter?.finish(collected.fullText, message);
   if (starterCommit)
     collected = {

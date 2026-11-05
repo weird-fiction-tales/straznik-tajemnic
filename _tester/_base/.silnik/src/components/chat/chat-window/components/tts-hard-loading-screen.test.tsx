@@ -331,3 +331,10 @@ describe('TTSHardLoadingScreen (Issue #177, #364 & #482)', () => {
   });
 });
 
+
+
+it('never unlocks entry from progress alone while readiness is false', () => {
+  render(<TTSHardLoadingScreen isStarting isBuffering startProgress={100} isReadyToEnter={false} />);
+  expect(screen.queryByTestId('loading-screen-enter-cta')).not.toBeInTheDocument();
+  expect(screen.getByText('99%')).toBeInTheDocument();
+});

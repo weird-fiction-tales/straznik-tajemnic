@@ -49,7 +49,7 @@ describe('useGameStart - finishReason intra', () => {
     localStorage.clear();
   });
 
-  it('zachowuje częściowe intro i przypisuje mu MAX_TOKENS', async () => {
+  it('odrzuca częściowe intro MAX_TOKENS i blokuje wejście', async () => {
     const worldSetup: WorldSetupBundleV1 = {
       schemaVersion: 1,
       id: 'world-prabuty',
@@ -144,12 +144,9 @@ describe('useGameStart - finishReason intra', () => {
       await result.current.handleStartGame();
     });
 
-    expect(messages).toHaveLength(1);
-    expect(messages[0]).toMatchObject({
-      role: 'assistant',
-      content: 'Mgła przesuwa się nad portem...',
-      finishReason: 'MAX_TOKENS',
-    });
+    expect(messages).toHaveLength(0);
+    expect(result.current.isReadyToEnter).toBe(false);
+    expect(result.current.startError?.category).toBe('opening_incomplete');
     expect(fetchWithApiKeys).toHaveBeenCalledTimes(1);
     expect(fetchWithApiKeys).toHaveBeenCalledWith(
       '/api/chat',
@@ -308,6 +305,7 @@ describe('useGameStart - finishReason intra', () => {
         callbacks?.onText?.('Mgła unosi się nad rzeką. Cienie przemykają w zaułkach.');
         expect(hasStartedDuringStream).toBe(false);
 
+        callbacks?.onMetadata?.({ type: 'metadata', finishReason: 'STOP' });
         return 'Mgła unosi się nad rzeką. Cienie przemykają w zaułkach.';
       });
 
@@ -361,7 +359,11 @@ describe('useGameStart - finishReason intra', () => {
       .mockResolvedValueOnce({ ok: true } as Response);
     jest
       .mocked(parseSSEStream)
-      .mockResolvedValueOnce('Mgła przesuwa się nad portem...');
+      .mockImplementationOnce(async (_response, callbacks) => {
+        callbacks?.onText?.('Mgła przesuwa się nad portem...');
+        callbacks?.onMetadata?.({ type: 'metadata', finishReason: 'STOP' });
+        return 'Mgła przesuwa się nad portem...';
+      });
 
     const setHasStartedGame = jest.fn();
     const waitForInitialBuffer = jest.fn().mockResolvedValue(undefined);
@@ -405,8 +407,8 @@ describe('useGameStart - finishReason intra', () => {
       await result.current.handleStartGame();
     });
 
-    // Weryfikacja: buforowanie lektora zostało wywołane z 15s timeoutem
-    expect(waitForInitialBuffer).toHaveBeenCalledWith(15000);
+    // Full opening audio has its own bounded preparation deadline.
+    expect(waitForInitialBuffer).toHaveBeenCalledWith(60000);
     expect(setHasStartedGame).toHaveBeenCalledWith(true);
   });
 
@@ -416,7 +418,11 @@ describe('useGameStart - finishReason intra', () => {
       .mockResolvedValueOnce({ ok: true } as Response);
     jest
       .mocked(parseSSEStream)
-      .mockResolvedValueOnce('Mgła przesuwa się nad portem...');
+      .mockImplementationOnce(async (_response, callbacks) => {
+        callbacks?.onText?.('Mgła przesuwa się nad portem...');
+        callbacks?.onMetadata?.({ type: 'metadata', finishReason: 'STOP' });
+        return 'Mgła przesuwa się nad portem...';
+      });
 
     const setHasStartedGame = jest.fn();
     const playInitialNarration = jest.fn();

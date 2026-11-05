@@ -82,7 +82,7 @@ function geminiRequestGuard(timeoutMs: number, parent?: AbortSignal) {
   void aborted.catch(() => {});
   const stop = (reason: unknown) => { controller.abort(reason); rejectAbort(reason); };
   const cancel = () => stop(parent?.reason ?? new DOMException('Request cancelled', 'AbortError'));
-  const timer = setTimeout(() => stop(timeout), Math.max(0, timeoutMs));
+  let timer = setTimeout(() => stop(timeout), Math.max(0, timeoutMs));
   if (typeof timer === 'object' && 'unref' in timer) timer.unref();
   parent?.addEventListener('abort', cancel, {once:true});
   if (parent?.aborted) cancel();
@@ -90,6 +90,11 @@ function geminiRequestGuard(timeoutMs: number, parent?: AbortSignal) {
   return {
     signal: controller.signal,
     stop,
+    extend(remainingMs: number) {
+      clearTimeout(timer);
+      timer = setTimeout(() => stop(timeout), Math.max(0, remainingMs));
+      if (typeof timer === 'object' && 'unref' in timer) timer.unref();
+    },
     wait<T>(promise: Promise<T>): Promise<T> {
       return controller.signal.aborted ? Promise.reject(controller.signal.reason) : Promise.race([promise, aborted]);
     },
@@ -391,7 +396,7 @@ export class GeminiChatProvider implements IChatProvider {
       try {
         if (guard.signal.aborted) throw guard.signal.reason;
         const response = await guard.wait(ai.models.generateContentStream({model:modelToUse,contents,
-          config:{...cfg,abortSignal:guard.signal,httpOptions:{timeout:MODEL_ATTEMPT_TIMEOUT_MS}}}));
+          config:{...cfg,abortSignal:guard.signal,httpOptions:{timeout:Math.max(1, deadlineAt - Date.now())}}}));
         const iterator = response[Symbol.asyncIterator]();
         let completed = false;
         // Wait for the first chunk inside the model cascade, before any prose is published.
@@ -402,6 +407,9 @@ export class GeminiChatProvider implements IChatProvider {
           void Promise.resolve(iterator.return?.(undefined)).catch(() => {});
           throw error;
         }
+        // The short budget only protects connection/first-chunk acquisition.
+        // Once generation starts, the shared deadline bounds the entire narration.
+        guard.extend(deadlineAt - Date.now());
         return (async function* () {
           try {
             let next = first;
@@ -431,8 +439,6 @@ export class GeminiChatProvider implements IChatProvider {
     async function* pump(
       response: Awaited<ReturnType<typeof streamOnce>>
     ): AsyncGenerator<string> {
-      let yieldedCount = 0;
-      try {
         for await (const chunk of response) {
           try {
             if (chunk.usageMetadata) lastUsage = chunk.usageMetadata;
@@ -440,7 +446,6 @@ export class GeminiChatProvider implements IChatProvider {
             if (fr) lastFinishReason = fr;
             const text = chunk.text;
             if (text) {
-              yieldedCount++;
               yield text;
             }
           } catch (e) {
@@ -449,20 +454,6 @@ export class GeminiChatProvider implements IChatProvider {
             continue;
           }
         }
-      } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        const isIncompleteJson = /Incomplete JSON segment at the end/i.test(errMsg);
-        if (isIncompleteJson) {
-          console.warn(
-            `⚠️ Gemini stream reader (Issue #1342: Incomplete JSON segment at the end). Wyemitowano chunków: ${yieldedCount}.`
-          );
-          // Jeśli wyemitowano już treść narracji, zamykamy generator czysto bez rzucania fatalnego błędu.
-          if (yieldedCount > 0) {
-            return;
-          }
-        }
-        throw err;
-      }
     }
 
     // Kaskada fallbacku (activeModel -> 3.6 -> 3.1-flash-lite -> flash-lite-latest)

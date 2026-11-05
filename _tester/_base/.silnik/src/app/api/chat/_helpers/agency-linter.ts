@@ -983,18 +983,11 @@ export async function collectStreamChunks(
 ): Promise<{ chunks: StreamChunk[]; fullText: string }> {
   const chunks: StreamChunk[] = [];
   let fullText = '';
-  try {
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-      if (chunk.text) {
-        fullText += chunk.text;
-      }
-    }
-  } catch (err) {
-    if (chunks.length === 0) {
-      throw err;
-    }
-    console.warn('⚠️ Strumień dostawcy został przerwany w trakcie, kontynuacja z zebranymi chunkami:', err);
+  // A collected draft is published and committed as one complete turn.
+  // Propagate transport failures even after text was received.
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+    if (chunk.text) fullText += chunk.text;
   }
   return { chunks, fullText };
 }

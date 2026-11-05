@@ -516,16 +516,14 @@ describe('Agency Linter & Detector (CoC 7e RAW)', () => {
       expect(san3).toContain('[Co robisz?]');
     });
 
-    it('collectStreamChunks zachowuje odebrane chunki w razie przerwania strumienia w trakcie transmisji', async () => {
+    it('collectStreamChunks rejects partial narration when the provider disconnects', async () => {
       async function* faultyStream() {
         yield { text: 'Początek narracji. ' };
         yield { text: 'Kareta staje przed dworem.' };
         throw new Error('Connection reset by peer');
       }
 
-      const result = await collectStreamChunks(faultyStream());
-      expect(result.chunks).toHaveLength(2);
-      expect(result.fullText).toBe('Początek narracji. Kareta staje przed dworem.');
+      await expect(collectStreamChunks(faultyStream())).rejects.toThrow('Connection reset by peer');
     });
 
     it('collectStreamChunks rzuca błąd gdy strumień zawiedzie przed odebraniem jakichkolwiek chunków', async () => {

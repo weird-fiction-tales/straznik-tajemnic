@@ -303,6 +303,7 @@ export interface GameStartError {
     | 'auth_error'
     | 'network_error'
     | 'opening_mismatch'
+    | 'opening_incomplete'
     | 'general_error';
   title: string;
   userAdvice: string;
@@ -1350,6 +1351,7 @@ export function useGameStart({
       // połykany przez try/catch parsera, surfaced przez onParseError → Sentry
       // na każdym starcie gry). Ten sam fix co useChat.ts:293.
       let streamedFullText = '';
+      let openingFinishReason: string | undefined;
       let introImageTriggered = Boolean(openingSceneImage);
       const parseOpeningStream = dossierOpening
         ? async (stream: Response, callbacks: SSECallbacks) => {
@@ -1397,6 +1399,7 @@ export function useGameStart({
           }
         },
         onMetadata: (metadata) => {
+          openingFinishReason = typeof metadata.finishReason === 'string' ? metadata.finishReason : undefined;
           if (!dossierOpening) notifyMemoryCommit(metadata, locale);
           if (metadata.starterState) {
             validateStarterState(metadata.starterState);
@@ -1456,18 +1459,7 @@ export function useGameStart({
             );
           }
 
-          if (tts.voiceEnabled && tts.isTTSEnabled) {
-            // M6 sesja 146: drop multi-voice branch per D3.
-            tts.generateVoiceForMessage(
-              {
-                id: assistantMessageId,
-                role: 'assistant',
-                content: streamedFullText,
-                timestamp: new Date(),
-              },
-              []
-            );
-          }
+
         },
         // Defensive-in-depth (po IND-256): eskaluje prawdziwe błędy z
         // onText/onMetadata (np. generowanie obrazu intro) do Sentry + konsoli
@@ -1491,15 +1483,20 @@ export function useGameStart({
         );
       }
 
-      // Oczekiwanie na zbuforowanie głosu lektora przed wejściem gracza do sceny (Issue #142)
-      if (tts.voiceEnabled && tts.isTTSEnabled && tts.waitForInitialBuffer) {
+      if (!fullText.trim() || openingFinishReason !== 'STOP') {
+        throw new Error('OPENING_TEXT_INCOMPLETE');
+      }
+
+      // Flush only an accepted, complete opening. The narrator barrier covers
+      // every segment, including decoding; a deadline is an error, not readiness.
+      if (tts.voiceEnabled && tts.isTTSEnabled) {
+        if (!tts.waitForInitialBuffer) throw new Error('OPENING_AUDIO_UNAVAILABLE');
         setStartProgress(95);
-        setStartStatus(
-          locale === 'en'
-            ? 'Buffering narrator voice...'
-            : 'Buforowanie głosu lektora...'
-        );
-        await tts.waitForInitialBuffer(15000);
+        setStartStatus(t('bufferingFullNarration'));
+        await tts.generateVoiceForMessage({
+          id: assistantMessageId, role: 'assistant', content: fullText, timestamp: new Date(),
+        }, []);
+        await tts.waitForInitialBuffer(60000);
       }
 
       if (startController.signal.aborted) throw startController.signal.reason;
@@ -1556,7 +1553,9 @@ export function useGameStart({
         tts.cancelInitialBuffering?.();
         return;
       }
-      console.error('Game start intro failed:', error);
+      if (error instanceof Error && /^OPENING_(TEXT|AUDIO)_/.test(error.message)) {
+        console.warn('Opening preparation incomplete:', error.message);
+      } else console.error('Game start intro failed:', error);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('zew:stop-music'));
       }
@@ -1591,7 +1590,9 @@ export function useGameStart({
         /network|failed to fetch|aborted|econnreset|enotfound/i.test(errorStr);
 
       let category: GameStartError['category'] = 'general_error';
-      if (errorStr.includes('OPENING_LOCATION_MISMATCH')) {
+      if (/OPENING_TEXT_INCOMPLETE|OPENING_AUDIO_/.test(errorStr)) {
+        category = 'opening_incomplete';
+      } else if (errorStr.includes('OPENING_LOCATION_MISMATCH')) {
         category = 'opening_mismatch';
       } else if (is503) {
         category = 'server_overloaded';
@@ -1649,11 +1650,15 @@ export function useGameStart({
         statusCode,
         category,
         title:
-          category === 'opening_mismatch'
+          category === 'opening_incomplete'
+            ? t('openingIncompleteTitle')
+            : category === 'opening_mismatch'
             ? t('openingMismatchTitle')
             : errorTitle,
         userAdvice:
-          category === 'opening_mismatch'
+          category === 'opening_incomplete'
+            ? t('openingIncompleteAdvice')
+            : category === 'opening_mismatch'
             ? t('openingMismatchAdvice')
             : userAdvice,
         technicalDetails: errorStr,

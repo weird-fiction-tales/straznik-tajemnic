@@ -64,3 +64,20 @@ describe('opening gate before SSE and campaign-memory writes', () => {
     expect(createSseStream).not.toHaveBeenCalled();
   });
 });
+
+
+beforeEach(() => { localStorage.clear(); jest.clearAllMocks(); mockStreamChat.mockReset(); });
+
+it.each(['MAX_TOKENS', undefined])('rejects an incomplete opening (%s) before SSE or memory finalization', async reason => {
+  mockStreamChat.mockResolvedValue({ ...draft('Helena waits at her desk.'), getFinishReason: () => reason });
+  await expect(start('pl')).rejects.toThrow('OPENING_TEXT_INCOMPLETE');
+  expect(createSseStream).not.toHaveBeenCalled();
+});
+
+it('rejects a mid-stream timeout before publishing or committing a partial opening', async () => {
+  mockStreamChat.mockResolvedValue({stream: (async function* () {
+    yield {text: 'Partial opening.'}; throw new Error('GEMINI_REQUEST_TIMEOUT');
+  })(), getUsage: async () => null, getFinishReason: () => undefined });
+  await expect(start('pl')).rejects.toThrow('GEMINI_REQUEST_TIMEOUT');
+  expect(createSseStream).not.toHaveBeenCalled();
+});

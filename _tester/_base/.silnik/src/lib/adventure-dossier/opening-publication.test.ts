@@ -8,7 +8,7 @@ import {createDossierOpeningCommit} from './commit-opening';
 import {acknowledgeDossierTurn} from './validated-stream';
 jest.mock('./validated-stream',()=>({
  parseValidatedDossierStream:jest.fn(async(_response,callbacks,gate)=>{
-  const metadata={type:'metadata',dossierFinalizationToken:'opening-token',dossierInventoryWritesAllowed:false};
+  const metadata={type:'metadata',finishReason:'STOP',dossierFinalizationToken:'opening-token',dossierInventoryWritesAllowed:false};
   callbacks.onMetadata(metadata);gate.validate('Helena kładzie fotografię na biurku.',metadata);
   return 'Helena kładzie fotografię na biurku.';
  }),

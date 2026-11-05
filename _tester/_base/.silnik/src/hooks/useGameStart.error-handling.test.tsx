@@ -182,6 +182,7 @@ describe('useGameStart - Error Handling & Retry Gates (Issue #520)', () => {
     } as Response);
     jest.mocked(parseSSEStream).mockImplementationOnce(async (_res, callbacks) => {
       callbacks?.onText?.('Pomyślne otwarcie kroniki po retry.');
+      callbacks?.onMetadata?.({ type: 'metadata', finishReason: 'STOP' });
       return 'Pomyślne otwarcie kroniki po retry.';
     });
 

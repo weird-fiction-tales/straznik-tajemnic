@@ -58,7 +58,9 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     originalAudio = global.Audio;
     createdAudio = [];
 
-    class MockAudio {
+    class MockAudio extends EventTarget {
+      readyState = 4;
+      load = jest.fn();
       src = '';
       volume = 1;
       currentTime = 0;
@@ -69,6 +71,7 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
       onended: (() => void) | null = null;
       onerror: (() => void) | null = null;
       constructor(src?: string) {
+        super();
         if (src) this.src = src;
         createdAudio.push(this);
       }
@@ -184,7 +187,7 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     expect(payload.text).toContain('Deszcz bębnił bezlitośnie');
   });
 
-  it('poprawnie zarządza stanem isInitialBuffering i czeka na zbuforowanie 3 segmentów', async () => {
+  it('czeka na wszystkie segmenty i zamknięcie pełnego tekstu otwarcia', async () => {
     const { result } = renderHook(() => useTTS('pl'));
 
     act(() => {
@@ -223,7 +226,9 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
       result.current.addToQueue(sentence3, 'msg-intro-2', false);
     });
 
-    // Osiągnięto cel 3 segmentów: buforowanie zwalnia blokadę
+    // Three ready segments do not establish that the opening has ended.
+    expect(result.current.isInitialBuffering).toBe(true);
+    await act(async () => { result.current.addToQueue(sentence3, 'msg-intro-2', true); });
     expect(result.current.isInitialBuffering).toBe(false);
   });
 

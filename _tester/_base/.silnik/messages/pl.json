@@ -2775,6 +2775,9 @@
     "continueDeclaration": "[DEKLARACJA: {successor} przejmuje Dossier i spuściznę po {previous}. Śledztwo jest kontynuowane!]"
   },
   "GameStart": {
+    "bufferingFullNarration": "Przygotowanie całego nagrania lektora...",
+    "openingIncompleteTitle": "Otwarcie nie jest jeszcze gotowe",
+    "openingIncompleteAdvice": "Nie udało się przygotować całego tekstu lub nagrania lektora. Przygoda nie wystartowała. Kliknij „Spróbuj ponownie”.",
     "openingMismatchTitle": "Nieprawidłowa scena otwarcia",
     "openingMismatchAdvice": "Strażnik pominął początek z teczki. Odrzuciliśmy tę odpowiedź. Kliknij „Spróbuj ponownie”, aby rozpocząć we właściwym miejscu."
   },

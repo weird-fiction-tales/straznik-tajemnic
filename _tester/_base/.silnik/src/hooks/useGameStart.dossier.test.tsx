@@ -26,13 +26,13 @@ function setup(character:Character|null=null, adventureContext:Parameters<typeof
   pdfMemory:{adventureDossierFingerprint:fingerprint},activateDossierForSession:jest.fn(async()=>({ok:true,adventureDossierFingerprint:fingerprint})),
   adventureContext,hotSeatConfig:{enabled:false,players:[]},
   setMessages:update=>{messages=typeof update==='function'?update(messages):update;},
-  tts:{voiceEnabled:true,isTTSEnabled:true,generateVoiceForMessage:jest.fn(async()=>{}),addToQueue:jest.fn(),startInitialBuffering:jest.fn(),stopCurrentAudio:jest.fn()},
+  tts:{voiceEnabled:true,isTTSEnabled:true,generateVoiceForMessage:jest.fn(async()=>{}),addToQueue:jest.fn(),startInitialBuffering:jest.fn(),waitForInitialBuffer:jest.fn(async()=>{}),stopCurrentAudio:jest.fn()},
   aiSettings:{...defaultAISettings,imageGenerationEnabled:false}};
  return {props,...renderHook(()=>useGameStart(props))};
 }
 beforeEach(()=>{
  jest.clearAllMocks();localStorage.clear();messages=[];text='A quiet opening.';
- metadata={type:'metadata',dossierFinalizationToken:'opening-token',dossierInventoryWritesAllowed:true,dossierHandoutRecordIds:['not-retrieved-media']};
+ metadata={type:'metadata',finishReason:'STOP',dossierFinalizationToken:'opening-token',dossierInventoryWritesAllowed:true,dossierHandoutRecordIds:['not-retrieved-media']};
  jest.mocked(loadRuntimeDossierPayload).mockResolvedValue(payload);
  jest.mocked(fetchWithApiKeys).mockResolvedValue({ok:true} as Response);
  jest.mocked(parseSSEStream).mockImplementation(async(_response,callbacks)=>{callbacks?.onText?.(text);callbacks?.onMetadata?.(metadata);return text;});
@@ -223,4 +223,14 @@ test('quick-start opening uses its canonical node rather than the regional adven
  const {result}=setup(null,{id:'cien-nad-prabutami',title:'Prabuty',yearRange:'1973',location:'Warszawa - Elbląg - Prabuty',activeNodeId:'node-warszawa-redakcja'});
  await act(async()=>{await result.current.handleStartGame();});
  expect(createDossierOpeningCommit).toHaveBeenCalledWith(expect.objectContaining({location:'loc-warszawa-redakcja'}),expect.anything());
+});
+
+test.each(['MAX_TOKENS', undefined])('incomplete opening %s never acknowledges or persists a dossier turn',async finishReason=>{
+ metadata={...metadata,finishReason};
+ const {result,props}=setup();
+ await act(async()=>{await result.current.handleStartGame();});
+ expect(jest.mocked(fetch).mock.calls.map(([,init])=>JSON.parse(String(init?.body)))).toEqual([{dossierFinalizationToken:'opening-token',accepted:false}]);
+ expect(props.tts.addToQueue).not.toHaveBeenCalled();
+ expect(localStorage.getItem('zew_chat_messages')).toBeNull();
+ expect(result.current.isReadyToEnter).toBe(false);
 });

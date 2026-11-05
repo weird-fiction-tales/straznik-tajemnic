@@ -2775,6 +2775,9 @@
     "continueDeclaration": "[DECLARATION: {successor} inherits the Dossier and legacy of {previous}. The investigation continues!]"
   },
   "GameStart": {
+    "bufferingFullNarration": "Preparing the complete opening narration...",
+    "openingIncompleteTitle": "The opening is not ready",
+    "openingIncompleteAdvice": "The full opening text or narrator recording could not be prepared. The adventure has not started. Click “Try Again”.",
     "openingMismatchTitle": "Incorrect opening scene",
     "openingMismatchAdvice": "The Keeper skipped the dossier opening. We rejected that response. Click “Try Again” to begin in the correct place."
   },
