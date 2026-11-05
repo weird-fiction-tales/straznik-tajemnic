@@ -179,7 +179,7 @@ describe('chat pipeline context budget', () => {
   let directory: string;
   let ledger: CampaignMemoryLedgerStore;
   const compress = jest.fn(async ({ contents }: { contents: string }) => ({
-    text: JSON.stringify({ events: contents.match(/MARKER_\d+/g) ?? [] }),
+    text: JSON.stringify({ sourceIds: (JSON.parse(contents) as Array<{id: string}>).map(e => e.id) }),
   }));
   const messages = Array.from({ length: 41 }, (_, i) => ({
     id: `history-${i}`,
@@ -202,6 +202,10 @@ describe('chat pipeline context budget', () => {
       .mockReturnValue({
         models: { generateContent: compress },
       } as unknown as NonNullable<ReturnType<typeof getGeminiClient>>);
+    for (const [i, message] of messages.entries()) ledger.append({
+      id: `fact-${i}`, scope, sessionId: 's', sequence: i + 1, role: 'assistant', kind: 'clue',
+      text: `MARKER_${i}`, sourceMessageIds: [message.id], tags: [], active: true, revealedAt: new Date(0).toISOString(),
+    });
     compress.mockClear();
     jest.mocked(resolveGeminiCache).mockResolvedValue(null);
     jest.mocked(createSseStream).mockClear();

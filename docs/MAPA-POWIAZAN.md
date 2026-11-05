@@ -67,6 +67,10 @@ flowchart LR
 
 Scenariusz + prywatny szkic teczki + inwentaryzacja mediów + opcjonalny początek gracza -> `adventure-map-model.mjs` -> węzły i relacje autora -> prywatna paczka `build-adventure-map.mjs` -> przestrzenny HTML `adventure-map-render.mjs`. Źródłowe sceny, zdarzenia adaptacji, materiały i sekrety zachowują odrębne znaczenie. [Opis mapy](adventure-dossiers/ADVENTURE-MAP.md).
 
+### Wspólna pamięć i bezpieczne wznowienie (2026-11-04)
+
+Ujawnione fakty drużyny → `core/memory/knowledge-policy.ts` → retrieval i kompresja oparta na identyfikatorach źródeł → kontekst. `recipients` opisuje odkrywcę, nie ogranicza wspólnej wiedzy. SQLite pozostaje źródłem faktów; checkpoint jest pochodny i wymaga zgodnej wersji polityki oraz hasha źródeł. Zapis i odtworzenie zachowują izolację przejść.
+
 ### Szybki pokaz Prabut PL (29.10.2026)
 
 QuickSetupModal -> page.tsx -> useGameStart/useChat -> response-gate -> prabuty-action-plan. player-action-clauses rozdziela zbiorczą turę na deklaracje postaci; local-handouts wiąże dostęp do materiału z jawnym działaniem. Wynik trafia przez apply-inventory-turn do właściciela przedmiotu i przez public-journal do kart wspólnego dziennika. Tożsamość miejsca pozostaje kanoniczna, zmienia się tylko etykieta. run-chat-pipeline przekazuje sygnał anulowania do Gemini; useTTS i endpoint syntezy rozróżniają jawny free BYOK od zweryfikowanego lokalnego klucza serwera. Zamrożony pakiet ma tę samą operacyjną teczkę 47 kart przy starcie z Biurka.

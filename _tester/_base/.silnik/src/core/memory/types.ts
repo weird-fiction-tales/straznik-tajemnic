@@ -61,6 +61,8 @@ export interface CampaignCompressionCheckpoint {
   createdAt: string;
   failureCount: number;
   retryAfter: string | null;
+  knowledgePolicy?: string;
+  knowledgeHash?: string;
   sourceHash?: string;
   locale?: 'pl' | 'en';
   modelId?: string;

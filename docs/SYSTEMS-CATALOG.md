@@ -60,6 +60,10 @@ Dokumentacja w root `docs/` jest źródłem prawdy. Kopie w runtime nie są źr�
 
 `draft`: [przestrzenna mapa teczki](adventure-dossiers/ADVENTURE-MAP.md) łączy kanon, rekordy i media przez `adventure-map-model.mjs`; lokalny HTML z `adventure-map-render.mjs` pokazuje powiązania XYZ i pełne karty autora. `build-adventure-map.mjs` kopiuje media do prywatnej paczki. Narzędzie nie aktywuje teczki w grze ani nie nadaje zgód.
 
+### Wspólna pamięć i bezpieczne wznowienie (2026-11-04)
+
+Ujawnione fakty drużyny → `core/memory/knowledge-policy.ts` → retrieval i kompresja oparta na identyfikatorach źródeł → kontekst. `recipients` opisuje odkrywcę, nie ogranicza wspólnej wiedzy. SQLite pozostaje źródłem faktów; checkpoint jest pochodny i wymaga zgodnej wersji polityki oraz hasha źródeł. Zapis i odtworzenie zachowują izolację przejść.
+
 ### Lokalny pokaz Prabuty PL - naprawa 29.10.2026
 
 Szybki start udostępnia solo i duet, zachowuje tożsamość postaci i dobiera lokalnie zmierzoną konfigurację AI. Segmenty wspólnej tury niosą właściciela deklaracji do planu Prabut. Mechanika emituje przypisane testy i operacje przedmiotów; AI nadal opisuje wynik. Publiczny dziennik wyświetla kanoniczne nazwy miejsc bez zmiany identyfikatorów zapisu oraz zapisuje poznane osoby wyłącznie z widocznej narracji. Transport Gemini ma limit czasu, anulowanie i zamykanie strumienia. Szczegółowy kontrakt i dowody: docs/audits/prabuty-demo-repair-2026-10-29/.

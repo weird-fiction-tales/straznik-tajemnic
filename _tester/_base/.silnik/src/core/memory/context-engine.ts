@@ -5,9 +5,10 @@ import { DEFAULT_GEMINI_MODEL } from '@/lib/ai-providers/constants';
 import { getGeminiClient } from '@/lib/gemini-client-pool';
 import { getContextLimit } from '@/lib/model-registry';
 import type { Message } from '@/lib/types';
-import { cleanResponseText } from '@/lib/parsers/text-cleaner';
 import { getCampaignMemoryLedgerStore, type CampaignMemoryLedgerStore } from './ledger-store';
 import { searchCampaignMemory, type CampaignMemoryRetrieval } from './retrieval';
+import { sharedKnowledge, publicMemoryText, SHARED_KNOWLEDGE_POLICY } from './knowledge-policy';
+import type { MemoryLedgerEntry } from './types';
 import type { CampaignMemoryScope, RevealedMemoryFact } from './types';
 
 export const COMPRESSION_THRESHOLD_RATIO = 0.5;
@@ -60,7 +61,7 @@ function sourceHash(messages: Message[]): string {
   return createHash('sha256').update(JSON.stringify(messages.map((message) => ({
     id: message.id,
     role: message.role,
-    content: message.role === 'assistant' ? cleanResponseText(message.content) : message.content,
+    content: publicMemoryText(message.content),
   })))).digest('hex');
 }
 
@@ -102,46 +103,26 @@ function takeWithinBudget(messages: Message[], budget: number, fromEnd: boolean,
   return fromEnd ? selected.reverse() : selected;
 }
 
-function formatMessages(messages: Message[], start: number): string {
-  return messages
-    .map((entry, index) => {
-      const content = entry.role === 'assistant' ? cleanResponseText(entry.content) : entry.content;
-      return `[${start + index}] ${entry.role === 'user' ? 'GRACZ' : 'MG'}: ${content}`;
-    })
-    .join('\n\n');
-}
-
 function buildSummarySection(summary: string, start: number, end: number, locale: 'pl' | 'en'): string {
   const heading = locale === 'en' ? 'CAMPAIGN CONTEXT SUMMARY' : 'PODSUMOWANIE KONTEKSTU KAMPANII';
   return `\n## ${heading} (messages ${start}-${end})\n${summary}`;
 }
 
-const SUMMARY_INSTRUCTION = `Jesteś kompresorem kontekstu kampanii RPG. Podsumowujesz wyłącznie fakty ujawnione graczom. Nie dopowiadaj sekretów ani rozwiązania scenariusza. Zwróć poprawny JSON z polami: events, investigatorDecisions, revealedClues, npcStatus, consequences, unresolvedThreads. Każde pole jest tablicą krótkich zdań. Zachowaj nazwy własne, chronologię i skutki decyzji.`;
+const SUMMARY_INSTRUCTION = `Select relevant source IDs from the supplied revealed campaign records. Return only JSON {"sourceIds": ["id"]}. Never invent IDs or rewrite facts. Player declarations are not confirmed facts.`;
 
-function parseSummary(raw: string, locale: 'pl' | 'en'): string | null {
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  const parsed = JSON.parse(match[0]) as Record<string, unknown>;
-  const labels: Record<string, [string, string]> = {
-    events: ['Wydarzenia', 'Events'],
-    investigatorDecisions: ['Decyzje Badaczy', 'Investigator decisions'],
-    revealedClues: ['Ujawnione tropy', 'Revealed clues'],
-    npcStatus: ['Status NPC', 'NPC status'],
-    consequences: ['Konsekwencje', 'Consequences'],
-    unresolvedThreads: ['Nierozwiązane wątki', 'Unresolved threads'],
-  };
-  const lines: string[] = [];
-  for (const [key, [pl, en]] of Object.entries(labels)) {
-    const values = parsed[key];
-    if (Array.isArray(values) && values.length > 0) {
-      const safeValues = values
-        .filter((value): value is string => typeof value === 'string')
-        .map((value) => cleanResponseText(value))
-        .filter(Boolean);
-      if (safeValues.length > 0) lines.push(`- ${locale === 'en' ? en : pl}: ${safeValues.join('; ')}`);
-    }
-  }
-  return lines.length > 0 ? lines.join('\n') : null;
+function groundedSummary(raw: string, entries: MemoryLedgerEntry[]): string | null {
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== 'object' || !('sourceIds' in value) || !Array.isArray(value.sourceIds)) return null;
+    const ids: unknown[] = value.sourceIds;
+    const byId = new Map(entries.map(e => [e.id, e]));
+    if (!ids.length || ids.some(id => typeof id !== 'string' || !byId.has(id))) return null;
+    return renderSources(entries.filter(e => ids.includes(e.id)));
+  } catch { return null; }
+}
+
+function renderSources(entries: MemoryLedgerEntry[]): string {
+  return entries.map(e => `- [${e.status ?? (e.role === 'user' ? 'player declaration' : 'revealed narration')}; ${e.sourceMessageIds.join(', ')}] ${e.text}`).join('\n');
 }
 
 export class CampaignContextEngine {
@@ -164,23 +145,24 @@ export class CampaignContextEngine {
     adaptiveTurnThreshold?: number;
   }): Promise<PreparedCampaignContext> {
     const messages = input.messages ?? [];
-    const [compaction, retrieval] = await Promise.all([
-      this.compactIfNeeded({
+    const retrieval = input.scope ? await this.searchCampaignMemory(input.scope, input.query, {
+      queryEmbedding: input.queryEmbedding, locale: input.locale,
+      recipientIds: input.recipientIds, sceneEntityIds: input.sceneEntityIds,
+    }) : null;
+    const totalBudget = input.availableContextTokens ?? input.contextLimitOverride ?? getContextLimit(input.modelId);
+    const protectedCost = messages.slice(protectedHistoryStart(messages)).reduce((sum, m) => sum + messageTokens(m), 0);
+    const reserve = Math.min(1200, estimateTokens(retrieval?.promptSection ?? ''), Math.max(0, totalBudget - protectedCost));
+    const compaction = await this.compactIfNeeded({
         messages,
         modelId: input.modelId,
         apiKey: input.apiKey,
         scope: input.scope,
         locale: input.locale,
         contextLimitOverride: input.contextLimitOverride,
-        availableContextTokens: input.availableContextTokens,
+        availableContextTokens: totalBudget - reserve,
         adaptiveTokenThreshold: input.adaptiveTokenThreshold,
         adaptiveTurnThreshold: input.adaptiveTurnThreshold,
-      }),
-      input.scope ? this.searchCampaignMemory(input.scope, input.query, {
-        queryEmbedding: input.queryEmbedding, locale: input.locale,
-        recipientIds:input.recipientIds,sceneEntityIds:input.sceneEntityIds,
-      }) : Promise.resolve(null),
-    ]);
+      });
     const budget = input.availableContextTokens ?? input.contextLimitOverride ?? getContextLimit(input.modelId);
     const remaining = Math.max(0, Math.floor(budget)
       - compaction.messages.reduce((sum, message) => sum + messageTokens(message), 0)
@@ -229,6 +211,7 @@ export class CampaignContextEngine {
     adaptiveTokenThreshold?: number;
     adaptiveTurnThreshold?: number;
   }): Promise<Pick<PreparedCampaignContext, 'messages' | 'summarySection' | 'compacted'>> {
+    input = { ...input, messages: input.messages.map(m => ({ ...m, content: publicMemoryText(m.content) })) };
     const limit = input.availableContextTokens ?? input.contextLimitOverride ?? getContextLimit(input.modelId);
     if (!Number.isFinite(limit) || limit < 0) throw new RangeError('Invalid available context token budget');
     const budget = Math.floor(limit);
@@ -275,9 +258,17 @@ export class CampaignContextEngine {
       return fallback();
     }
 
+    const knowledge = sharedKnowledge(this.ledger.list(input.scope));
+    const hashKnowledge = (ids: string[]) => createHash('sha256').update(JSON.stringify(knowledge
+      .filter(e => e.sourceMessageIds.some(id => ids.includes(id)))
+      .map(({ active, ...entry }) => entry))).digest('hex');
+    const middleIds = new Set(input.messages.slice(start, endExclusive).map(m => m.id));
+    const sources = knowledge.filter(e => e.sourceMessageIds.some(id => middleIds.has(id)));
     const cached = this.ledger.getLatestCheckpoint(input.scope.playthroughId);
     if (
       cached &&
+      cached.knowledgePolicy === SHARED_KNOWLEDGE_POLICY &&
+      cached.knowledgeHash === hashKnowledge(cached.sourceMessageIds) &&
       cached.playthroughId === input.scope.playthroughId &&
       cached.locale === input.locale &&
       cached.modelId === input.modelId &&
@@ -312,7 +303,7 @@ export class CampaignContextEngine {
       if (!client) throw new Error('Gemini client unavailable');
       const result = await client.models.generateContent({
         model: DEFAULT_GEMINI_MODEL,
-        contents: formatMessages(input.messages.slice(start, endExclusive), start),
+        contents: JSON.stringify(sources.map(e => ({ id: e.id, role: e.role, status: e.status, text: e.text }))),
         config: {
           systemInstruction: `${SUMMARY_INSTRUCTION}\nWrite all summary values in ${input.locale === 'en' ? 'English' : 'Polish'}.`,
           temperature: 0.1,
@@ -320,8 +311,8 @@ export class CampaignContextEngine {
           maxOutputTokens: 1200,
         },
       });
-      const summary = result.text ? parseSummary(result.text, input.locale) : null;
-      if (!summary) throw new Error('Invalid compression response');
+      const summary = (result.text ? groundedSummary(result.text, sources) : null) || renderSources(sources);
+      if (!summary) throw new Error('No grounded compression sources');
       const prepared = fitContext({
         messages: [...head, ...tail],
         summarySection: buildSummarySection(summary, start, endExclusive - 1, input.locale),
@@ -340,6 +331,8 @@ export class CampaignContextEngine {
         sourceStartSequence: start,
         sourceEndSequence: endExclusive - 1,
         sourceMessageIds: input.messages.slice(start, endExclusive).map((message) => message.id),
+        knowledgePolicy: SHARED_KNOWLEDGE_POLICY,
+        knowledgeHash: hashKnowledge(input.messages.slice(start, endExclusive).map(m => m.id)),
         sourceHash: sourceHash(input.messages.slice(start, endExclusive)),
         locale: input.locale,
         modelId: input.modelId,
