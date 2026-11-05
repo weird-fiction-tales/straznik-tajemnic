@@ -80,7 +80,7 @@ describe('GeminiChatProvider.finishReason', () => {
     const result = await new GeminiChatProvider('synthetic-key', 'stalled-model').streamChat(request);
     let failure: unknown;
     const consumed = (async () => {try {for await (const _chunk of result.stream) { /* consume */ }} catch (error) {failure = error;}})();
-    await jest.advanceTimersByTimeAsync(15_000);
+    await jest.advanceTimersByTimeAsync(60_000);
     expect(failure).toMatchObject({name:'TimeoutError',message:'GEMINI_REQUEST_TIMEOUT'});
     await consumed;
     expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
@@ -173,23 +173,32 @@ describe('GeminiChatProvider.finishReason', () => {
     expect(result.getFinishReason()).toBe('MAX_TOKENS');
   });
 
-  it('ignoruje błąd SDK Incomplete JSON segment at the end jeśli treść narracji została już wyemitowana', async () => {
-    mockGenerateContentStream.mockResolvedValue(
-      (async function* () {
-        yield { text: 'Wkraczasz do ruin kościoła w Prabutach.' };
-        throw new Error('Incomplete JSON segment at the end');
-      })()
-    );
+  it('rejects an incomplete SDK stream instead of accepting partial prose', async () => {
+    mockGenerateContentStream.mockResolvedValueOnce((async function* () {
+      yield {text: 'Partial scene.'};
+      throw new Error('Incomplete JSON segment at the end');
+    })());
+    const result = await new GeminiChatProvider('synthetic-key', 'test-model').streamChat(request);
+    const consume = async () => { for await (const _chunk of result.stream) { /* consume */ } };
+    await expect(consume()).rejects.toThrow('Incomplete JSON segment at the end');
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
+  });
 
-    const provider = new GeminiChatProvider('test-key', 'gemini-test');
-    const result = await provider.streamChat(request);
-
-    const text: string[] = [];
-    for await (const chunk of result.stream) {
-      text.push(chunk.text);
-    }
-
-    expect(text).toEqual(['Wkraczasz do ruin kościoła w Prabutach.']);
+  it('allows an active narration to finish after 15 seconds within its total budget', async () => {
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockResolvedValueOnce((async function* () {
+      yield {text: 'First paragraph. '};
+      await new Promise(resolve => setTimeout(resolve, 20000));
+      yield {text: 'Last paragraph.', candidates: [{finishReason: 'STOP'}]};
+    })());
+    const result = await new GeminiChatProvider('synthetic-key', 'test-model').streamChat(request);
+    const consume = async () => { const chunks: string[] = []; for await (const chunk of result.stream) chunks.push(chunk.text); return chunks.join(''); };
+    const consumed = consume();
+    const settled = consumed.catch(error => error);
+    await jest.advanceTimersByTimeAsync(20000);
+    expect(await settled).toBe('First paragraph. Last paragraph.');
+    expect(result.getFinishReason()).toBe('STOP');
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
   });
 
   it('ponawia zapytanie (retry) gdy błąd Incomplete JSON segment at the end wystąpi przed emisją jakichkolwiek danych', async () => {

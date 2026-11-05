@@ -22,7 +22,10 @@ export function createDossierOpeningCommit(input: Parameters<typeof createDossie
   return async (response:Response) => {
     let metadata:SSEMetadataEvent|undefined;
     await parseValidatedDossierStream(response,{onMetadata:value=>{metadata=value;}}, {
-      validate:gate.validate,reject:async token=>{await acknowledgeDossierTurn(token,false);},
+      validate:(text,value)=>{
+        if(value.finishReason!=='STOP') throw new Error('OPENING_TEXT_INCOMPLETE');
+        gate.validate(text,value);
+      },reject:async token=>{await acknowledgeDossierTurn(token,false);},
     });
     gate.assertCurrent();
     const candidate=gate.candidate;

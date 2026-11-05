@@ -12,7 +12,7 @@ let mockPlay: jest.Mock;
 beforeEach(()=>{
  jest.useFakeTimers();jest.clearAllMocks();jest.mocked(isPureTextMode).mockReturnValue(false);jest.mocked(persistentMediaCache.isAvailable).mockReturnValue(false);
  mockPlay=jest.fn().mockResolvedValue(undefined);
- class TestAudio {src:string;volume=1;playbackRate=1;paused=false;onended=null;onerror=null;constructor(src=''){this.src=src;}play=mockPlay;pause=jest.fn();load=jest.fn();}
+ class TestAudio extends EventTarget {readyState=4;src:string;volume=1;playbackRate=1;paused=false;onended=null;onerror=null;constructor(src=''){super();this.src=src;}play=mockPlay;pause=jest.fn();load=jest.fn();}
  global.Audio=TestAudio as unknown as typeof Audio;
  global.fetch=jest.fn().mockResolvedValue({status:429,ok:false,headers:new Headers({'Retry-After':'63378'}),json:async()=>({retryable:false,code:'TTS_DAILY_QUOTA_EXCEEDED'})});
 });

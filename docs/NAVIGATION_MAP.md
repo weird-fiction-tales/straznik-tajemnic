@@ -81,7 +81,7 @@ graph TD
     character_wizard -->|Zakończ i zapisz / Finish and save| manual_setup
     hot_seat -->|Rozpocznij tryb / Start mode| session_zero
     session_zero -->|Zatwierdź i przygotuj sesję / Confirm and prepare session| loading_screen
-    loading_screen -->|Rozpocznij przygodę (bramka CTA) / Begin adventure (CTA gate)| game
+    loading_screen -->|Rozpocznij po przygotowaniu pełnego tekstu i włączonej narracji audio / Begin when the full text and any enabled narration audio are ready| game
     loading_screen -->|Wróć do wyboru (błąd startu) / Back to selection (start error)| home
     loading_screen -->|Ustawienia API (błąd startu) / API settings (start error)| api_keys
     game -->|Karta postaci / Character sheet| character_sheet
@@ -163,7 +163,7 @@ graph TD
 | Kreator postaci | Zakończ i zapisz / Finish and save | Ręczne ustawianie gry | `src/components/ui/character-wizard.tsx` |
 | Wybór trybu gry | Rozpocznij tryb / Start mode | Sesja Zero (Briefing śledczy) | `src/components/ui/hot-seat-setup.tsx` |
 | Sesja Zero (Briefing śledczy) | Zatwierdź i przygotuj sesję / Confirm and prepare session | Ekran ładowania (Dark Art Déco) | `src/components/ui/session-zero-modal.tsx` |
-| Ekran ładowania (Dark Art Déco) | Rozpocznij przygodę (bramka CTA) / Begin adventure (CTA gate) | Aktywna sesja | `src/components/chat/chat-window/components/tts-hard-loading-screen.tsx` |
+| Ekran ładowania (Dark Art Déco) | Rozpocznij po przygotowaniu pełnego tekstu i włączonej narracji audio / Begin when the full text and any enabled narration audio are ready | Aktywna sesja | `src/components/chat/chat-window/components/tts-hard-loading-screen.tsx` |
 | Ekran ładowania (Dark Art Déco) | Wróć do wyboru (błąd startu) / Back to selection (start error) | Strona główna | `src/components/chat/chat-window/components/tts-hard-loading-screen.tsx` |
 | Ekran ładowania (Dark Art Déco) | Ustawienia API (błąd startu) / API settings (start error) | Klucze API | `src/components/chat/chat-window/components/tts-hard-loading-screen.tsx` |
 | Aktywna sesja | Karta postaci / Character sheet | Karta badacza (Dark Art Déco d100 Weird Fiction) | `src/components/sidebar/CthulhuSidebar.tsx` |

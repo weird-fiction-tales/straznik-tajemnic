@@ -194,6 +194,7 @@ export const TTSHardLoadingScreen: React.FC<TTSHardLoadingScreenProps> = ({
   }, [adventureContext, eraContext, locale]);
 
   const handleConfirm = () => {
+    if (!isReadyToEnter || startError) return;
     stopBriefingAudio();
     if (onConfirmEnterGame) {
       onConfirmEnterGame();
@@ -205,8 +206,8 @@ export const TTSHardLoadingScreen: React.FC<TTSHardLoadingScreenProps> = ({
 
   if (!shouldRender) return null;
 
-  const isCompleted = !startError && (isReadyToEnter || startProgress >= 100);
-  const displayProgress = Math.min(100, Math.max(startProgress, 5));
+  const isCompleted = !startError && isReadyToEnter;
+  const displayProgress = isCompleted ? 100 : Math.min(99, Math.max(startProgress, 5));
 
   return (
     <div
