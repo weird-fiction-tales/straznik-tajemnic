@@ -9,6 +9,50 @@ import {
   STREFA_11_CHARACTERS,
 } from '@/lib/immersion/strefa-11-characters';
 
+describe.each(['pl', 'en'] as const)('Prabuty preset selection (%s)', (locale) => {
+  const previousLocale = process.env.NEXT_INTL_TEST_LOCALE;
+  beforeEach(() => { process.env.NEXT_INTL_TEST_LOCALE = locale; });
+  afterEach(() => {
+    if (previousLocale === undefined) delete process.env.NEXT_INTL_TEST_LOCALE;
+    else process.env.NEXT_INTL_TEST_LOCALE = previousLocale;
+  });
+
+  it.each([
+    ['strefa11_tomasz_nowicki', 'Tomasz Nowicki', '1931'],
+    ['strefa11_helena_krawczyk', 'Helena Krawczyk', '1935'],
+    ['strefa11_barbara_zawadzka', 'Dr Barbara Zawadzka', '1928'],
+    ['strefa11_ryszard_klucznik', 'Ryszard "Klucznik" Kaczmarek', '1918'],
+  ])('passes the same period equipment shown for %s', (id, name, birthYear) => {
+    const onSelect = jest.fn();
+    const characters = getStrefa11CharactersForAdventure('cien-nad-prabutami');
+    const preset = characters.find(character => character.id === id)!;
+    render(<PredefinedCharactersSelector isOpen onClose={jest.fn()} onSelectCharacter={onSelect}
+      characters={characters} currentEra="prl-1970s" filterByEra={false} />);
+    fireEvent.click(screen.getByText(name));
+    const firstName = name.replace(/^Dr /, '').split(' ')[0];
+    expect(screen.getByText(new RegExp(`^${firstName}.*${birthYear}`))).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/komórk|mobile phone|NightVision|1990s|1989|Niva|Polonez/i);
+    const equipmentIds = preset.equipment!.map(item => item.id);
+    if (id === 'strefa11_helena_krawczyk') {
+      expect(screen.getByAltText(locale === 'pl' ? 'Teczka z przepustkami RTV i dokumentami wyjazdowymi' : 'Folder of RTV passes and travel papers')).toBeVisible();
+    }
+    if (id === 'strefa11_barbara_zawadzka') {
+      expect(screen.getByAltText(locale === 'pl' ? 'Analogowy aparat fotograficzny' : 'Analogue film camera'))
+        .toHaveAttribute('src', '/equipment/catalog/camera-prl-1970s.webp');
+    }
+    if (id === 'strefa11_ryszard_klucznik') {
+      expect(screen.getByText(locale === 'pl' ? /Samochód Warszawa/ : /The Warszawa car/)).toBeVisible();
+    }
+    fireEvent.click(screen.getByRole('button', { name: locale === 'pl' ? /wybierz tę postać/i : /choose this character/i }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    const selected = onSelect.mock.calls[0][0];
+    expect(selected.sourcePresetId).toBe(id);
+    expect(selected.equipment.map((item: { id: string }) => item.id)).toEqual(equipmentIds);
+    expect(selected.skills).toEqual(preset.skills);
+    expect(selected.backstory).toContain('1973');
+  });
+});
+
 const renderSelector = (
   currentEra: 'classic' | 'gaslight' | 'modern' | 'custom' = 'classic'
 ) =>

@@ -1,4 +1,7 @@
 import type { Character } from '@/lib/types';
+import { STREFA_11_CHARACTERS } from '@/lib/immersion/strefa-11-characters';
+import { buildPredefinedEquipment } from '@/lib/immersion/predefined-equipment';
+import enMessages from '../../../messages/en.json';
 
 /**
  * Nakładka tłumaczeń presetów postaci (SSOT: messages/*.json ->
@@ -63,32 +66,46 @@ export function applyPresetTranslation(
   if (!dict) return character;
 
   const data = dict.data ?? {};
-  const pick = (translated: string | undefined, current: string | undefined) =>
-    translated ?? current ?? '';
+  // The 1973 correction applies to new Prabuty investigators. An older save or
+  // a player's edit is authoritative even in the display-only translation layer.
+  const canonical = STREFA_11_CHARACTERS.find(preset =>
+    preset.id === presetId && preset.scenarioIds?.includes('cien-nad-prabutami'));
+  const canonicalEquipment = canonical ? buildPredefinedEquipment(canonical, 'prl-1970s') : [];
+  const english = (enMessages as MessagesBag).PredefinedCharacters?.characters?.[presetId];
+  type TextField = Exclude<keyof NonNullable<PresetTranslation['data']>, 'traits' | 'skills'>;
+  const pick = (field: TextField, translated: string | undefined, current: string | undefined) => {
+    if (canonical && current !== canonical[field] && current !== english?.data?.[field]) {
+      return current ?? '';
+    }
+    return translated ?? current ?? '';
+  };
 
   return {
     ...character,
-    occupation: pick(dict.occupation ?? data.occupation, character.occupation),
-    background: pick(data.background, character.background),
-    backstory: pick(data.backstory, character.backstory),
-    birthplace: pick(data.birthplace, character.birthplace),
-    residence: pick(data.residence, character.residence),
-    characterConcept: pick(data.characterConcept, character.characterConcept),
-    ideology: pick(data.ideology, character.ideology),
+    occupation: pick('occupation', dict.occupation ?? data.occupation, character.occupation),
+    background: pick('background', data.background, character.background),
+    backstory: pick('backstory', data.backstory, character.backstory),
+    birthplace: pick('birthplace', data.birthplace, character.birthplace),
+    residence: pick('residence', data.residence, character.residence),
+    characterConcept: pick('characterConcept', data.characterConcept, character.characterConcept),
+    ideology: pick('ideology', data.ideology, character.ideology),
     significantPerson: pick(
+      'significantPerson',
       data.significantPerson,
       character.significantPerson
     ),
     meaningfulLocation: pick(
+      'meaningfulLocation',
       data.meaningfulLocation,
       character.meaningfulLocation
     ),
     treasuredPossession: pick(
+      'treasuredPossession',
       data.treasuredPossession,
       character.treasuredPossession
     ),
-    description: pick(data.description, character.description),
-    tacticalNotes: pick(data.tacticalNotes, character.tacticalNotes),
+    description: pick('description', data.description, character.description),
+    tacticalNotes: pick('tacticalNotes', data.tacticalNotes, character.tacticalNotes),
     traits:
       Array.isArray(data.traits) && data.traits.length > 0
         ? data.traits
@@ -96,6 +113,19 @@ export function applyPresetTranslation(
     equipment: Array.isArray(character.equipment) ? character.equipment.map((item) => {
       const system = localizeSystemEquipment(item, messages);
       const personal = dict.equipment?.[item.id];
+      if (canonical) {
+        const original = canonicalEquipment.find(candidate => candidate.id === item.id);
+        if (!original) return item;
+        const englishItem = english?.equipment?.[item.id] ??
+          (enMessages as MessagesBag).PredefinedCharacters?.systemEquipment?.[item.id];
+        return {
+          ...item,
+          name: item.name === original.name || item.name === englishItem?.name
+            ? personal?.name ?? system.name : item.name,
+          description: item.description === original.description || item.description === englishItem?.description
+            ? personal?.description ?? system.description : item.description,
+        };
+      }
       return { ...system, name: personal?.name ?? system.name, description: personal?.description ?? system.description };
     }) : [],
   };
