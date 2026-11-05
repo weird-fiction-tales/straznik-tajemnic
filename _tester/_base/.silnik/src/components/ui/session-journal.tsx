@@ -31,6 +31,7 @@ import {
 } from '@/lib/journal/public-journal';
 import { cn } from '@/lib/utils';
 import { SafeImage } from './safe-image';
+import { ChronicleView } from './journal/chronicle-view';
 import { RuntimeDossierHandout } from '@/components/chat/narrative/runtime-dossier-handout';
 import type { DossierHandoutBinding } from '@/lib/adventure-dossier/local-handouts';
 import {
@@ -145,20 +146,49 @@ function CardArt({
   const publishedImage = useJournalPublishedImage(card.imageCacheKey);
   const Icon = icons[card.kind];
   const image = card.imageUrl || publishedImage || materialImage;
-  if (!image) return (
-    <div data-testid="journal-card-symbol" aria-hidden="true" className={cn('flex items-center px-5 pt-5 text-brass/70', large && 'px-0 pt-0')}>
-      <Icon className="h-8 w-8" />
-    </div>
-  );
+  if (!image)
+    return (
+      <div
+        data-testid="journal-card-symbol"
+        aria-hidden="true"
+        className={cn(
+          'flex items-center px-5 pt-5 text-brass/70',
+          large && 'px-0 pt-0'
+        )}
+      >
+        <Icon className="h-8 w-8" />
+      </div>
+    );
   return (
     <div
       data-testid="journal-card-art"
       className={cn(
-        'flex aspect-[4/3] w-full items-center justify-center overflow-hidden border-b border-brass/30 bg-brass/5',
-        large && 'max-h-80 border border-brass/30'
+        'flex items-center justify-center overflow-hidden bg-brass/5',
+        card.kind === 'person'
+          ? cn(
+              'aspect-[3/4] max-w-full shrink-0 border border-brass/30',
+              large ? 'w-44 md:w-52' : 'mx-5 mt-5 w-28'
+            )
+          : large
+            ? 'w-full max-w-3xl border border-brass/30'
+            : 'aspect-[4/3] w-full border-b border-brass/30'
       )}
+      data-art-layout={
+        card.kind === 'person'
+          ? 'portrait'
+          : card.kind === 'place'
+            ? 'landscape'
+            : 'document'
+      }
     >
-      <SafeImage src={image} alt={card.title} className="h-full w-full object-contain" />
+      <SafeImage
+        src={image}
+        alt={card.title}
+        className={cn(
+          'w-full object-contain',
+          large && card.kind !== 'person' ? 'h-auto max-h-96' : 'h-full'
+        )}
+      />
     </div>
   );
 }
@@ -247,7 +277,7 @@ export function SessionJournal({
       if (event.key === 'Tab') {
         const targets = [
           ...(dialogRef.current?.querySelectorAll<HTMLElement>(
-            'button:not([disabled]), input, a[href], audio[controls], [tabindex="0"]'
+            'button:not([disabled]), input, summary, a[href], audio[controls], [tabindex="0"]'
           ) ?? []),
         ];
         const first = targets[0];
@@ -289,6 +319,34 @@ export function SessionJournal({
     else titleRef.current?.focus({ preventScroll: true });
   }, [page]);
   const card = model.cards.find((item) => item.id === page.cardId);
+  const archivedParagraphs =
+    card?.kind === 'person'
+      ? card.paragraphs.filter(
+          (paragraph) =>
+            paragraph.text !== card.publicDescription &&
+            paragraph.provenance !== 'testimony' &&
+            !card.sources[paragraph.sourceIndex]?.witness
+        )
+      : [];
+  const frontParagraphs =
+    card?.paragraphs.filter(
+      (paragraph) =>
+        paragraph.text !== card.publicDescription &&
+        !archivedParagraphs.includes(paragraph)
+    ) ?? [];
+  const sourceIndexes =
+    card?.sources
+      .map((_, index) => index)
+      .filter((index) => {
+        const origin = card.sources[index];
+        return (
+          origin.witness ||
+          origin.materialId ||
+          !card.sources.some(
+            (other) => other.messageId === origin.messageId && other.witness
+          )
+        );
+      }) ?? [];
   const source =
     page.sourceIndex !== undefined
       ? card?.sources[page.sourceIndex]
@@ -299,9 +357,17 @@ export function SessionJournal({
   const name = (item: JournalCard) => item.title || t('untitledMaterial');
   const sourceName = (item: JournalCard, index: number) => {
     const origin = item.sources[index];
-    const material = origin?.materialId && model.cards.find(candidate => candidate.material?.recordId === origin.materialId);
-    return origin?.witness || (material ? name(material) : undefined) ||
-      (item.learnedIn ? t('sourceFromScene', { name: item.learnedIn }) : t('playSource'));
+    const material =
+      origin?.materialId &&
+      model.cards.find(
+        (candidate) => candidate.material?.recordId === origin.materialId
+      );
+    return (
+      origin?.witness ||
+      (material ? name(material) : undefined) ||
+      item.learnedIn ||
+      t('playSource')
+    );
   };
   const unread = (item: JournalCard) =>
     localReads[item.id] === item.revision ? undefined : item.unread;
@@ -330,7 +396,9 @@ export function SessionJournal({
   );
   if (page.section === 'scene' && !needle && model.scene) {
     const scenePlaceId = model.cards.find(
-      (item) => item.kind === 'place' && item.id === journalCardId('place', model.scene!.location)
+      (item) =>
+        item.kind === 'place' &&
+        item.id === journalCardId('place', model.scene!.location)
     )?.id;
     visible.sort(
       (a, b) => Number(b.id === scenePlaceId) - Number(a.id === scenePlaceId)
@@ -341,7 +409,7 @@ export function SessionJournal({
     : needle
       ? t('searchResults')
       : page.section === 'scene'
-        ? model.scene?.title || t('currentScene')
+        ? t('chronicleHeading')
         : t(sectionKeys[page.section]);
   const tile = (item: JournalCard) => (
     <button
@@ -354,6 +422,7 @@ export function SessionJournal({
       onClick={() => openCard(item)}
       className={cn(
         'group min-w-0 overflow-hidden border border-brass/30 bg-card text-left shadow-deco transition-colors hover:border-brass',
+        item.kind === 'person' && 'flex flex-col items-start',
         focusClass
       )}
     >
@@ -379,7 +448,8 @@ export function SessionJournal({
           </span>
         )}
         <span className="mt-3 block line-clamp-2 font-serif text-base leading-7 text-muted-foreground">
-        {item.publicDescription || item.paragraphs[0]?.text ||
+          {item.publicDescription ||
+            item.paragraphs[0]?.text ||
             t(
               item.kind === 'material' ? 'materialCaption' : 'recordedKnowledge'
             )}
@@ -460,7 +530,13 @@ export function SessionJournal({
                       aria-hidden="true"
                       className="h-5 w-5 shrink-0 text-brass"
                     />
-                    <span>{t(sectionKeys[section])}</span>
+                    <span>
+                      {t(
+                        section === 'scene'
+                          ? 'chronicleHeading'
+                          : sectionKeys[section]
+                      )}
+                    </span>
                     {count > 0 && (
                       <span className="ml-auto text-sm text-brass">
                         {count}
@@ -536,7 +612,7 @@ export function SessionJournal({
                 <h2
                   ref={titleRef}
                   tabIndex={-1}
-                  className="deco-separator mb-6 mt-2 break-words font-display text-3xl font-semibold leading-tight text-foreground focus:outline-none"
+                  className="mb-6 mt-2 break-words font-display text-3xl font-semibold leading-tight text-foreground focus:outline-none"
                 >
                   {heading}
                 </h2>
@@ -569,60 +645,66 @@ export function SessionJournal({
                     data-testid="journal-card-detail"
                     className="space-y-7"
                   >
-                    {card.kind !== 'material' && <CardArt card={card} large />}
-                    {card.publicDescription && (
-                      <section data-testid="journal-public-profile" aria-label={t('publicProfileHeading')}>
-                        <h3 className="mb-2 font-display text-lg text-brass">{t('publicProfileHeading')}</h3>
-                        <p className="font-serif text-lg leading-8">{card.publicDescription}</p>
-                      </section>
-                    )}
+                    <div
+                      className={cn(
+                        card.kind === 'person' &&
+                          'flex flex-col items-start gap-6 sm:flex-row'
+                      )}
+                    >
+                      {card.kind !== 'material' && (
+                        <CardArt card={card} large />
+                      )}
+                      {card.publicDescription && (
+                        <section
+                          data-testid="journal-public-profile"
+                          aria-label={t('publicProfileHeading')}
+                        >
+                          <p className="font-serif text-lg leading-8">
+                            {card.publicDescription}
+                          </p>
+                        </section>
+                      )}
+                    </div>
                     {card.mentioned && (
                       <p className="text-base italic text-muted-foreground">
                         {t('knownFromMention')}
                       </p>
                     )}
-                    {card.kind === 'event' && (
+                    {card.kind === 'event' && card.occurredAt && (
                       <p className="text-base text-muted-foreground">
-                        {t('eventDate')}: {card.occurredAt || t('dateUnknown')}
-                      </p>
-                    )}
-                    {card.kind === 'event' && (
-                      <p className="text-base text-muted-foreground">
-                        {t('learnedAt')}:{' '}
-                        {card.learnedAt || card.learnedIn || t('dateUnknown')}
+                        {card.occurredAt}
                       </p>
                     )}
                     <div className="space-y-5">
-                      {card.paragraphs.map((paragraph, index) => (
+                      {frontParagraphs.map((paragraph, index) => (
                         <div key={`${index}:${paragraph.sourceIndex}`}>
-                          {paragraph.provenance && (
-                            <p className="mb-1 text-sm text-brass">
-                              {t(`provenance_${paragraph.provenance}`)}
-                            </p>
-                          )}
                           <p className="whitespace-pre-line font-serif text-lg leading-8">
                             {paragraph.text}
                           </p>
-                          {card.sources[paragraph.sourceIndex] && (
-                            <button
-                              type="button"
-                              data-testid="journal-source-link"
-                              className={cn(actionClass, 'mt-2')}
-                              onClick={() =>
-                                go({
-                                  ...page,
-                                  sourceIndex: paragraph.sourceIndex,
-                                  scrollTop: 0,
-                                })
-                              }
-                            >
-                              {t('openSource', {
-                                name: sourceName(card, paragraph.sourceIndex),
-                              })}
-                            </button>
-                          )}
                         </div>
                       ))}
+                      {archivedParagraphs.length > 0 && (
+                        <details className="border-l border-brass/30 pl-4">
+                          <summary
+                            className={cn(
+                              'cursor-pointer py-2 text-base text-brass',
+                              focusClass
+                            )}
+                          >
+                            {t('showRecordedScene')}
+                          </summary>
+                          <div className="space-y-4">
+                            {archivedParagraphs.map((paragraph, index) => (
+                              <p
+                                key={index}
+                                className="whitespace-pre-line font-serif text-lg leading-8"
+                              >
+                                {paragraph.text}
+                              </p>
+                            ))}
+                          </div>
+                        </details>
+                      )}
                     </div>
                     {card.material?.recordId && card.material.binding ? (
                       <div data-testid="journal-observed-handout">
@@ -664,39 +746,48 @@ export function SessionJournal({
                         </div>
                       )
                     )}
-                    <section aria-label={t('sourcesHeading')}>
-                      <h3 className="mb-3 font-display text-xl text-brass">
-                        {t('sourcesHeading')}
-                      </h3>
-                      {card.sources.length ? (
-                        <div className="flex flex-wrap gap-3">
-                          {card.sources.map((item, index) => (
-                            <button
-                              type="button"
-                              key={`${item.messageId}:${index}`}
-                              data-testid="journal-source-link"
-                              data-nav-id={`source-${index}`}
-                              onClick={() =>
-                                go({
-                                  ...page,
-                                  sourceIndex: index,
-                                  scrollTop: 0,
-                                })
-                              }
-                              className={actionClass}
-                            >
-                              {t('openSource', {
-                                name: sourceName(card, index),
-                              })}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-base text-muted-foreground">
-                          {t('sourceUnavailable')}
-                        </p>
-                      )}
-                    </section>
+                    {card.sources.length > 0 && (
+                      <section aria-label={t('conversationsHeading')}>
+                        {card.sources.length ? (
+                          <div className="flex flex-wrap gap-3">
+                            {sourceIndexes.map((index) => {
+                              const item = card.sources[index];
+                              return (
+                                <button
+                                  type="button"
+                                  key={`${item.messageId}:${index}`}
+                                  data-testid="journal-source-link"
+                                  data-nav-id={`source-${index}`}
+                                  onClick={() =>
+                                    go({
+                                      ...page,
+                                      sourceIndex: index,
+                                      scrollTop: 0,
+                                    })
+                                  }
+                                  className={actionClass}
+                                >
+                                  {t(
+                                    item.witness
+                                      ? 'showConversation'
+                                      : item.materialId
+                                        ? 'showMaterial'
+                                        : 'showScene',
+                                    {
+                                      name: sourceName(card, index),
+                                    }
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-base text-muted-foreground">
+                            {t('sourceUnavailable')}
+                          </p>
+                        )}
+                      </section>
+                    )}
                     {card.relatedIds.length > 0 && (
                       <section aria-label={t('relatedCards')}>
                         <h3 className="mb-3 font-display text-xl text-brass">
@@ -734,9 +825,18 @@ export function SessionJournal({
                     }
                   >
                     {!needle && page.section === 'scene' && (
-                      <p className="mb-6 max-w-3xl font-serif text-lg leading-8 text-muted-foreground">
-                        {model.scene?.inGameDate || t('sceneIntroduction')}
-                      </p>
+                      <>
+                        <ChronicleView entries={model.chronicle ?? []} />
+                        <h3 className="mb-2 font-display text-xl text-foreground">
+                          {model.scene?.title || t('currentScene')}
+                        </h3>
+                        <p className="mb-3 text-sm text-brass">
+                          {t('sceneInProgress')}
+                        </p>
+                        <p className="mb-6 max-w-3xl font-serif text-lg leading-8 text-muted-foreground">
+                          {model.scene?.inGameDate || t('sceneIntroduction')}
+                        </p>
+                      </>
                     )}
                     {visible.length ? (
                       <div className="grid items-start gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -749,7 +849,13 @@ export function SessionJournal({
                             ? 'noSearchResults'
                             : page.section === 'scene'
                               ? 'emptyCurrentScene'
-                              : 'emptyCategory'
+                              : page.section === 'person'
+                                ? 'emptyPeople'
+                                : page.section === 'place'
+                                  ? 'emptyPlaces'
+                                  : page.section === 'material'
+                                    ? 'emptyMaterials'
+                                    : 'emptyCategory'
                         )}
                       </div>
                     )}

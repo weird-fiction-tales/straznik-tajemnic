@@ -117,3 +117,7 @@ HDMI dostarcza wyłącznie obraz. Aplikacja steruje Ambilight przez LAN niezale�
 ### Dostawa 0.9.6
 
 Zweryfikowany commit -> kompilacja lokalna -> pakiet z własnym Node i potwierdzeniem buildu -> podpis aplikacji -> dotychczasowy profil gracza na 127.0.0.1:4050. Kopia poprzedniej aplikacji i danych umożliwia powrót. Archiwizacja katalogów roboczych zachowuje osobno historię Git i niezapisane pliki.
+
+### Dziennik i głosy postaci
+
+Zaakceptowana widoczna narracja -> wspólny `dialogue-parser` -> dialog z profilem/portretem NPC oraz segmenty głosu w `useTTS`. Bieżące ustawienia presetu -> narratorOnly w kolejce; nazwa postaci -> stałe przypisanie głosu. `sceneCards` i lokalne podsumowania -> publiczna projekcja kroniki -> `ChronicleView`; znane informacje -> `SessionJournal` -> pojedyncza rozmowa/materiał. Rzeczywiste rozpoczęcie odtwarzania -> `scene-soundscape`; pauza/stop/koniec kolejki/zmiana sceny zamykają albo wstrzymują tło.

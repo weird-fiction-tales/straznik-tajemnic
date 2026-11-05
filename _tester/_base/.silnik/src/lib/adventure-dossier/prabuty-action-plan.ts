@@ -218,16 +218,14 @@ export function applyPrabutyPlanToText(text:string,plan:NonNullable<ReturnType<t
   // This cleaner preserves paragraph boundaries, unlike stripAITags.
   const publicNarrative=sanitizeDiegeticProse(parseRevealedTags(narrative).text,{normalizeDialogues:false});
   const spoken=extractAttributedDialogueSpans(publicNarrative);
-  // A paragraph is the smallest safe fallback when the narrator gives no signed
-  // dialogue. Sentence splitting at periods cuts titles and quoted speech.
-  const paragraphs=publicNarrative.split(/\n+/)
-    .map(paragraph=>stripAITags(sanitizeDiegeticProse(paragraph,{normalizeDialogues:false})).trim()).filter(Boolean);
   const people=plan.presentActorNames.flatMap(name=>{
     const profile=resolveNpcPublicProfile('cien-nad-prabutami',name,locale);
     const dialogue=spoken.find(span=>profile && resolveNpcPublicProfile('cien-nad-prabutami',span.speaker,locale)?.id===profile.id);
-    const tokens=normalize(name).replace(/^(?:dr|ojciec|o)\.?\s+/,'').split(/\s+/).filter(token=>token.length>3);
+    const visibleName = normalize(publicNarrative);
+    const nameTokens = normalize(name).replace(/^(?:dr|ojciec|o)\.?\s+/, '').split(/\s+/).filter(token => token.length > 3);
+    const visible = nameTokens.some(token => new RegExp('(?:^|[^a-z])'+token+'(?:$|[^a-z])').test(visibleName));
     const fragment=dialogue ? stripAITags(sanitizeDiegeticProse(publicNarrative.slice(dialogue.start,dialogue.end),{normalizeDialogues:false})).trim()
-      : paragraphs.find(paragraph=>tokens.some(token=>new RegExp('(?:^|[^a-z])'+token+'(?:$|[^a-z])').test(normalize(paragraph))));
+      : visible ? profile?.description : undefined;
     return fragment ? [`[DZIENNIK:npc:${name}${dialogue?'|witness:'+name:''}]${fragment}[/DZIENNIK]`] : [];
   });
   const confirmed=[describePrabutyInventory(plan,locale),...extractJournalTags(plan.journalText).map(entry=>entry.content)].filter(Boolean).join('\n\n');

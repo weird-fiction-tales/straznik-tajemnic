@@ -108,12 +108,22 @@ export interface PublicJournal {
   scopeKey: string;
   title?: string;
   cards: JournalCard[];
+  chronicle?: JournalChronicleScene[];
   scene?: {
     title: string;
     location: string;
     inGameDate?: string;
     relatedIds: string[];
   };
+}
+export interface JournalChronicleScene {
+  id: string;
+  title: string;
+  location: string;
+  people: string[];
+  summary?: string;
+  inGameDate?: string;
+  sessionNumber?: number;
 }
 export const journalCardId = (kind: JournalCardKind, name: string) =>
   `${kind}:${normalizeEntityTitle(name)}`;
@@ -423,8 +433,11 @@ export function buildPublicJournal({
   messages?: Message[];
   locale: 'pl' | 'en';
 }): PublicJournal {
-  const displayPlace = (reference: string) => resolveCanonicalAdventureLocation(
-    chapter?.adventureId ?? binding?.adventureId ?? '', reference)?.name ?? reference;
+  const displayPlace = (reference: string) =>
+    resolveCanonicalAdventureLocation(
+      chapter?.adventureId ?? binding?.adventureId ?? '',
+      reference
+    )?.name ?? reference;
   const scopeKey = `${chapter?.playthroughId ?? 'current'}:${chapter?.adventureId ?? binding?.adventureId ?? 'current'}:${binding?.editionFingerprint ?? ''}`;
   const rows = new Map<string, JournalEntry>();
   for (const character of characters)
@@ -450,7 +463,8 @@ export function buildPublicJournal({
       card = {
         id: record.cardId,
         kind: record.kind,
-        title: record.kind === 'place' ? displayPlace(record.title) : record.title,
+        title:
+          record.kind === 'place' ? displayPlace(record.title) : record.title,
         paragraphs: [],
         sources: [],
         relatedIds: [],
@@ -462,7 +476,11 @@ export function buildPublicJournal({
       };
       cards.set(card.id, card);
     }
-    card.title = record.title ? (record.kind === 'place' ? displayPlace(record.title) : record.title) : card.title;
+    card.title = record.title
+      ? record.kind === 'place'
+        ? displayPlace(record.title)
+        : record.title
+      : card.title;
     const sourceIndex = card.sources.findIndex(
       (source) =>
         source.messageId === record.source.messageId &&
@@ -470,7 +488,9 @@ export function buildPublicJournal({
         source.excerpt === record.source.excerpt
     );
     const index =
-      sourceIndex < 0 ? card.sources.push({ ...record.source }) - 1 : sourceIndex;
+      sourceIndex < 0
+        ? card.sources.push({ ...record.source }) - 1
+        : sourceIndex;
     if (record.text) {
       const paragraph = card.paragraphs.find(
         (p) =>
@@ -495,7 +515,9 @@ export function buildPublicJournal({
     card.mentioned = card.mentioned && Boolean(record.mentioned);
     card.occurredAt = record.occurredAt ?? card.occurredAt;
     card.learnedAt = card.learnedAt ?? record.learnedAt;
-    card.learnedIn = card.learnedIn ?? (record.sceneLocation ? displayPlace(record.sceneLocation) : undefined);
+    card.learnedIn =
+      card.learnedIn ??
+      (record.sceneLocation ? displayPlace(record.sceneLocation) : undefined);
     if (record.material?.imageUrl) card.imageUrl = record.material.imageUrl;
     if (record.visual && !record.mentioned) {
       card.imageUrl = record.visual.imageUrl;
@@ -549,14 +571,37 @@ export function buildPublicJournal({
       );
       if (illustration?.imageUrl && !card.mentioned)
         card.imageUrl = illustration.imageUrl;
-      if (message && card.kind === 'person' && sameBinding(message.dossierHandoutBinding, binding)) {
+      if (
+        message &&
+        card.kind === 'person' &&
+        sameBinding(message.dossierHandoutBinding, binding)
+      ) {
         const adventureId = chapter?.adventureId ?? binding?.adventureId;
-        const profile = resolveNpcPublicProfile(adventureId, card.title, locale);
-        const visible = stripAITags(sanitizeDiegeticProse(parseRevealedTags(message.content).text, { normalizeDialogues: false }));
-        const spoken = extractAttributedDialogueSpans(visible).find(span => {
-          const speaker = resolveNpcPublicProfile(adventureId, span.speaker, locale);
-          const sameSpeaker = profile ? speaker?.id === profile.id : normalizeEntityTitle(span.speaker) === normalizeEntityTitle(card.title);
-          return sameSpeaker && Boolean(source.excerpt) && visible.slice(span.start, span.end).startsWith(source.excerpt);
+        const profile = resolveNpcPublicProfile(
+          adventureId,
+          card.title,
+          locale
+        );
+        const visible = stripAITags(
+          sanitizeDiegeticProse(parseRevealedTags(message.content).text, {
+            normalizeDialogues: false,
+          })
+        );
+        const spoken = extractAttributedDialogueSpans(visible).find((span) => {
+          const speaker = resolveNpcPublicProfile(
+            adventureId,
+            span.speaker,
+            locale
+          );
+          const sameSpeaker = profile
+            ? speaker?.id === profile.id
+            : normalizeEntityTitle(span.speaker) ===
+              normalizeEntityTitle(card.title);
+          return (
+            sameSpeaker &&
+            Boolean(source.excerpt) &&
+            visible.slice(span.start, span.end).startsWith(source.excerpt)
+          );
         });
         if (spoken) {
           const quotation = visible.slice(spoken.start, spoken.end);
@@ -564,7 +609,10 @@ export function buildPublicJournal({
           // accepted source message can restore its missing words.
           if (source.excerpt && quotation.startsWith(source.excerpt)) {
             for (const paragraph of card.paragraphs) {
-              if (card.sources[paragraph.sourceIndex] === source && quotation.startsWith(paragraph.text))
+              if (
+                card.sources[paragraph.sourceIndex] === source &&
+                quotation.startsWith(paragraph.text)
+              )
                 paragraph.text = quotation;
             }
             source.excerpt = quotation;
@@ -574,10 +622,16 @@ export function buildPublicJournal({
       }
     }
     if (!card.mentioned && (card.kind === 'person' || card.kind === 'place')) {
-      const prepared = resolvePreparedPublicProfile(chapter?.adventureId ?? binding?.adventureId, card.kind, card.title, locale);
+      const prepared = resolvePreparedPublicProfile(
+        chapter?.adventureId ?? binding?.adventureId,
+        card.kind,
+        card.title,
+        locale
+      );
       if (prepared) {
         card.publicDescription = prepared.description;
-        if (!card.imageUrl && !card.imageCacheKey) card.imageUrl = prepared.imageUrl;
+        if (!card.imageUrl && !card.imageCacheKey)
+          card.imageUrl = prepared.imageUrl;
       }
     }
   }
@@ -609,18 +663,42 @@ export function buildPublicJournal({
           inGameDate: undefined,
         }
       : undefined);
-  // Sealed summaries already contain player-facing narration; the dossier's nextStep and secrets are never consulted.
+  // Project only persisted, public scene fields. Never consult nextStep or keeper dossiers.
+  const chronicle = new Map<
+    string,
+    { scene: JournalChronicleScene; timestamp: number; sceneNumber: number }
+  >();
   for (const character of characters)
     for (const scene of character.sceneCards ?? []) {
       if (
         !scene.isSealed ||
         !sameBinding(scene.dossierBinding, binding) ||
-        !scene.chronicleSummaryByLocale?.[locale] ||
         (chapter &&
-          (scene.chronicleChapter?.playthroughId !== chapter.playthroughId ||
-            scene.chronicleChapter.adventureId !== chapter.adventureId))
+          scene.chronicleChapter &&
+          (scene.chronicleChapter.playthroughId !== chapter.playthroughId ||
+            scene.chronicleChapter.adventureId !== chapter.adventureId)) ||
+        (chapter &&
+          !scene.chronicleChapter &&
+          (character.chronicleSession?.playthroughId !==
+            chapter.playthroughId ||
+            character.chronicleSession.adventureId !== chapter.adventureId) &&
+          !character.isActive)
       )
         continue;
+      chronicle.set(scene.id, {
+        timestamp: time(scene.timestamp),
+        sceneNumber: scene.sceneNumber,
+        scene: {
+          id: scene.id,
+          title: scene.title || displayPlace(scene.location),
+          location: displayPlace(scene.location),
+          people: [...scene.people],
+          summary: scene.chronicleSummaryByLocale?.[locale],
+          inGameDate: scene.inGameDate,
+          sessionNumber: scene.chronicleChapter?.sessionNumber,
+        },
+      });
+      if (!scene.chronicleSummaryByLocale?.[locale]) continue;
       const id = `event:scene:${scene.id}`;
       if (!cards.has(id))
         cards.set(id, {
@@ -669,6 +747,11 @@ export function buildPublicJournal({
     cards: [...cards.values()].sort(
       (a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id)
     ),
+    chronicle: [...chronicle.values()]
+      .sort(
+        (a, b) => b.timestamp - a.timestamp || b.sceneNumber - a.sceneNumber
+      )
+      .map((entry) => entry.scene),
     ...(active
       ? {
           scene: {

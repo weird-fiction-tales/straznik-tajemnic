@@ -39,6 +39,7 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
   let createdAudio: Array<{
     playbackRate: number;
     onplaying?: (() => void) | null;
+    onended?: (() => void) | null;
   }>;
 
   beforeEach(() => {
@@ -130,6 +131,123 @@ describe('useTTS First-Chunk Streaming & Buffering', () => {
     global.fetch = originalFetch;
     global.Audio = originalAudio;
     jest.clearAllMocks();
+  });
+
+  it('uses the current Ultra settings immediately after switching from narrator-only High', async () => {
+    currentMockSettings.voiceSettings.narratorOnly = true;
+    const { result } = renderHook(() => useTTS('pl'));
+    currentMockSettings = {
+      ...currentMockSettings,
+      qualityPreset: 'ultra',
+      voiceSettings: {
+        ...currentMockSettings.voiceSettings,
+        narratorOnly: false,
+      },
+    };
+    await act(async () => {
+      result.current.addToQueue(
+        'Helena: „Proszę przeczytać raport. Potem porozmawiamy.”',
+        'ultra-switch',
+        true
+      );
+    });
+    const payloads = jest
+      .mocked(fetch)
+      .mock.calls.filter(([, init]) => init?.method === 'POST')
+      .map(
+        ([, init]) =>
+          JSON.parse(String(init?.body)) as { text: string; voice: string }
+      );
+    expect(payloads.length).toBeGreaterThan(0);
+    expect(payloads.every((payload) => payload.voice !== 'Kore')).toBe(true);
+  });
+
+  it.each(['pl', 'en'] as const)(
+    'shares inline signed dialogue boundaries with the chat (%s)',
+    async (locale) => {
+      currentMockSettings.qualityPreset = 'ultra';
+      const { result } = renderHook(() => useTTS(locale));
+      const line =
+        locale === 'pl'
+          ? 'W gabinecie Helena: „Zaczekaj. Przeczytaj raport.” Za oknem pada deszcz.'
+          : 'In the office Helena: "Wait. Read the report." Rain falls outside.';
+      await act(async () => {
+        result.current.addToQueue(line, 'inline-speaker-' + locale, true);
+      });
+      const payloads = jest
+        .mocked(fetch)
+        .mock.calls.filter(([, init]) => init?.method === 'POST')
+        .map(
+          ([, init]) =>
+            JSON.parse(String(init?.body)) as { text: string; voice: string }
+        );
+      const speech = payloads.filter((payload) =>
+        /Zaczekaj|Przeczytaj|Wait|Read the report/.test(payload.text)
+      );
+      expect(speech.length).toBeGreaterThan(0);
+      expect(speech.every((payload) => payload.voice !== 'Kore')).toBe(true);
+      const tail = payloads.find((payload) =>
+        /Za oknem|Rain falls/.test(payload.text)
+      );
+      expect(tail?.voice).toBe('Kore');
+      const introduction = payloads.find((payload) =>
+        /W gabinecie|In the office/.test(payload.text)
+      );
+      expect(introduction?.voice).toBe('Kore');
+      expect(introduction?.text).not.toContain('Helena');
+    }
+  );
+
+  it.each(['dr Jarosław Skrzyński', 'Dr. Skrzyński'])(
+    'preserves the doctor identity and narrator boundaries while streaming %s', async speaker => {
+      currentMockSettings.qualityPreset = 'ultra';
+      const { result } = renderHook(() => useTTS('pl'));
+      const first = `W gabinecie ${speaker}: „Zaczekaj. `;
+      await act(async () => { result.current.addToQueue(first, 'doctor-stream', false); });
+      await act(async () => { result.current.addToQueue(first + 'Raport jest gotowy.” Za oknem pada deszcz.', 'doctor-stream', true); });
+      const payloads = jest.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST')
+        .map(([, init]) => JSON.parse(String(init?.body)) as { text: string; voice: string });
+      expect(payloads.filter(payload => /Zaczekaj|Raport jest/.test(payload.text)).every(payload => payload.voice === 'Puck')).toBe(true);
+      expect(payloads.find(payload => /W gabinecie/.test(payload.text))?.voice).toBe('Kore');
+      expect(payloads.find(payload => /Za oknem/.test(payload.text))?.voice).toBe('Kore');
+      expect(payloads.map(payload => payload.text).join(' ').match(/Zaczekaj/g)).toHaveLength(1);
+    }
+  );
+
+  it.each(Array.from({ length: 'Dr. Skrzyński: „'.length + 1 }, (_, index) => index))('preserves the first sentence when streaming splits doctor label at %s', async split => {
+    currentMockSettings.qualityPreset = 'ultra';
+    const { result } = renderHook(() => useTTS('pl'));
+    await act(async () => { result.current.addToQueue('W gabinecie zapada cisza. ' + 'Dr. Skrzyński: „'.slice(0, split), 'split-title', false); });
+    await act(async () => { result.current.addToQueue('W gabinecie zapada cisza. Dr. Skrzyński: „Zaczekaj. Raport jest gotowy.” Za oknem pada deszcz.', 'split-title', true); });
+    const payloads = jest.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST')
+      .map(([, init]) => JSON.parse(String(init?.body)) as { text: string; voice: string });
+    expect(payloads.map(payload => payload.text).join(' ').match(/Zaczekaj/g)).toHaveLength(1);
+    expect(payloads.find(payload => /Zaczekaj/.test(payload.text))?.voice).toBe('Puck');
+    expect(payloads.find(payload => /Raport jest/.test(payload.text))?.voice).toBe('Puck');
+    expect(payloads.some(payload => payload.text === 'Dr.')).toBe(false);
+  });
+
+  it('starts scene ambience only on real playback and releases it after the final speech segment', async () => {
+    const { sceneSoundscape } = await import('@/lib/audio/scene-soundscape');
+    const { immersion } = await import('@/lib/hardware/hue/immersion');
+    const play = jest.spyOn(sceneSoundscape, 'play').mockImplementation(() => {});
+    const stop = jest.spyOn(sceneSoundscape, 'stop');
+    const snapshot = jest.spyOn(immersion, 'snapshot').mockReturnValue({ sceneId: 'scene-warszawa-redakcja' });
+    localStorage.setItem('adventure_context', JSON.stringify({ id: 'cien-nad-prabutami' }));
+    currentMockSettings.qualityPreset = 'ultra';
+    try {
+      const { result } = renderHook(() => useTTS('pl'));
+      await act(async () => { result.current.addToQueue('Helena: „Proszę przeczytać raport.”', 'ambience-playback', true); });
+      expect(play).not.toHaveBeenCalled();
+      await act(async () => { createdAudio[0]?.onplaying?.(); });
+      expect(play).toHaveBeenCalledWith('cien-nad-prabutami', 'scene-warszawa-redakcja');
+      const stops = stop.mock.calls.length;
+      await act(async () => { createdAudio[0]?.onended?.(); });
+      expect(stop.mock.calls.length).toBeGreaterThan(stops);
+    } finally {
+      localStorage.removeItem('adventure_context');
+      play.mockRestore(); stop.mockRestore(); snapshot.mockRestore();
+    }
   });
 
   it.each([true, false])(

@@ -16,6 +16,14 @@ it.each(['Helena', 'Helena Krawczyk'])('wybiera istniejący portret dla jawnego 
   expect(screen.getByText('Helena Krawczyk')).toBeVisible();
 });
 
+it('shows the same Helena portrait for a legacy @ dialogue label', () => {
+  const sections = parseIntoSections('@Helena: „Przeczytaj raport. Potem porozmawiamy.”');
+  render(<>{sections.map((section, index) => renderSection(section, index, undefined, undefined,
+    { id: 'cien-nad-prabutami' } as AnyAdventureContext))}</>);
+  expect(screen.getByRole('img', { name: 'Helena Krawczyk' })).toHaveAttribute('src', '/adventure-packs/cien-nad-prabutami/npc-helena-krawczyk.png');
+  expect(screen.getByTestId('npc-dialogue-quote')).toHaveTextContent('Przeczytaj raport. Potem porozmawiamy.');
+});
+
 it.each([
   ['Helena', undefined], ['Helena', 'englewood-murder-castle-1893'], ['Nieznana Osoba', 'cien-nad-prabutami'],
 ])('pokazuje inicjały bez zgadywania URL dla %s w kontekście %s', (name, adventureId) => {

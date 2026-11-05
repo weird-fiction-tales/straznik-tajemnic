@@ -24,6 +24,46 @@ const turn = (party: Character[], text: string, id: string) =>
 const view = (characters: Character[]) =>
   buildPublicJournal({ characters, chapter, locale: 'pl' });
 
+it('projects only saved sealed scenes in the current run, without next-step advice or duplicate party copies', () => {
+  const pc = person();
+  pc.sceneCards = [
+    {
+      id: 'closed',
+      sceneNumber: 1,
+      title: 'Archiwum',
+      location: 'Archiwum',
+      timestamp: '2026-11-01',
+      isSealed: true,
+      people: ['Dozorca'],
+      findings: [],
+      keyTakeaways: [],
+      chronicleChapter: chapter,
+      chronicleSummaryByLocale: {
+        pl: 'Dozorca twierdził, że list zaginął.',
+        en: 'The caretaker claimed the letter was missing.',
+      },
+      nextStep: 'PRIVATE_ADVICE',
+    },
+  ];
+  const result = view([pc, { ...pc, id: 'two' }]);
+  expect(result.chronicle).toHaveLength(1);
+  expect(result.chronicle?.[0].summary).toBe(
+    'Dozorca twierdził, że list zaginął.'
+  );
+  expect(JSON.stringify(result.chronicle)).not.toContain('PRIVATE_ADVICE');
+  expect(
+    view([
+      {
+        ...pc,
+        sceneCards: pc.sceneCards.map((scene) => ({
+          ...scene,
+          chronicleChapter: { ...chapter, playthroughId: 'other-run' },
+        })),
+      },
+    ]).chronicle
+  ).toEqual([]);
+});
+
 it('shares source-backed knowledge, keeps contradictory accounts and deduplicates a repeated turn', () => {
   let party = turn(
     [person(), person('two')],

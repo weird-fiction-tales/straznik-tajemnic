@@ -22,7 +22,7 @@ function acceptedFixture(locale: 'pl' | 'en', legacyInventory = false) {
     : 'Read Dr. Skrzynski’s report. Then we can discuss the evidence.';
   const before = locale === 'pl' ? 'Helena odsuwa teczkę.' : 'Helena sets the folder aside.';
   const after = locale === 'pl' ? 'Za oknem pada deszcz.' : 'Rain falls outside.';
-  const content = `${before} Helena Krawczyk: „${quote}” ${after}\n` +
+  const content = `${before} @Helena: „${quote}” ${after}\n` +
     `[LOKACJA:${place}:${before}]` +
     `[JOURNAL:npc:Helena Krawczyk|witness:Helena Krawczyk|source_quote:${quote}]${quote}[/JOURNAL]` +
     `[JOURNAL:event:${locale === 'pl' ? 'Początek śledztwa' : 'Beginning of the investigation'}]${before}[/JOURNAL]`;
@@ -37,6 +37,7 @@ function acceptedFixture(locale: 'pl' | 'en', legacyInventory = false) {
     activeScene: { sceneNumber: 1, location: place, startedAt: new Date().toISOString(),
       people: ['Helena Krawczyk'], findings: [], notes: [], chronicleChapter: scope, dossierBinding: binding },
   };
+  character.sceneCards = [{ id: 'earlier-newsroom', sceneNumber: 1, title: locale === 'pl' ? 'Rozmowa w redakcji' : 'At the newsroom', location: place, timestamp: '2026-11-01T12:00:00Z', isSealed: true, people: ['Helena Krawczyk'], findings: [], keyTakeaways: [], dossierBinding: binding, chronicleChapter: scope, chronicleSummaryByLocale: { pl: 'Helena poprosiła o przeczytanie raportu.', en: 'Helena asked us to read the report.' } }];
   const publication = appendJournalToParty([character], character, content, 'accepted-opening', undefined, [], { scope, binding });
   const messages: Message[] = [{ id: 'accepted-opening', role: 'assistant', content, timestamp: new Date() }];
   return { character: publication.characters[0], messages, scope, binding, quote, before, after, locale,
@@ -75,6 +76,7 @@ for (const locale of ['pl', 'en'] as const) {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+    page.on('response', response => { if (response.status() >= 400) console.log('FAILED_RESOURCE', response.status(), response.url()); });
     const fixture = await seed(page, locale);
     await page.goto(`/${locale}`);
     const dialogue = page.getByTestId('npc-dialogue');
@@ -86,7 +88,9 @@ for (const locale of ['pl', 'en'] as const) {
     await page.screenshot({ path: `test-results/player-fixes/dialogue-${locale}.png` });
 
     await page.getByTestId('btn-open-journal').click();
-    await expect(page.getByTestId('journal-current-scene')).toBeVisible();
+    await expect(page.getByTestId('journal-chronicle')).toContainText(locale === 'pl' ? 'Helena poprosiła o przeczytanie raportu.' : 'Helena asked us to read the report.');
+    await page.screenshot({ path: `test-results/player-fixes/chronicle-${locale}.png` });
+    await expect(page.getByTestId('journal-current-scene')).toContainText(locale === 'pl' ? 'W toku' : 'In progress');
     const personCard = page.getByRole('button', { name: `${locale === 'pl' ? 'Otwórz' : 'Open'}: Helena Krawczyk`, exact: true });
     await expect(personCard).toBeVisible();
     await personCard.click();
@@ -95,8 +99,13 @@ for (const locale of ['pl', 'en'] as const) {
     await expect(detail.getByTestId('journal-public-profile')).toContainText(locale === 'pl'
       ? 'Redaktorka programu „Sygnały Nieznanego” w Telewizji Polskiej.'
       : 'Editor of the Polish Television programme “Signals of the Unknown”.');
-    await expect(detail.getByRole('button', { name: `${locale === 'pl' ? 'Źródło' : 'Source'}: Helena Krawczyk`, exact: true }).first()).toBeVisible();
+    await expect(detail.getByRole('button', { name: `${locale === 'pl' ? 'Zobacz rozmowę' : 'View conversation'}: Helena Krawczyk`, exact: true })).toHaveCount(1);
     await expect(detail).toContainText(fixture.quote);
+    await expect(detail).not.toContainText(/Materiał źródłowy|Przebieg sceny|Źródła/);
+    const portraitBox = await detail.locator('[data-art-layout=portrait]').boundingBox();
+    expect(portraitBox!.width).toBeLessThanOrEqual(240);
+    expect(portraitBox!.height).toBeGreaterThan(portraitBox!.width);
+    await expect.poll(() => detail.locator('img').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
     await expect(detail.locator('img')).toHaveAttribute('src', portrait);
     await expect(detail).not.toContainText(/PRIVATE_|keeperSecret|authoredPortrayal/);
     const heading = page.getByRole('dialog').getByRole('heading', { level: 2 });
@@ -116,6 +125,13 @@ for (const locale of ['pl', 'en'] as const) {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.getByRole('dialog').getByRole('heading', { level: 2 })).toBeInViewport();
     await page.screenshot({ path: `test-results/player-fixes/journal-event-narrow-${locale}.png` });
+    await page.getByTestId('journal-contents').getByRole('button', { name: locale === 'pl' ? /^Postacie/ : /^People/ }).click();
+    const gallery = page.getByTestId('journal-gallery');
+    await expect(gallery.getByRole('button', { name: `${locale === 'pl' ? 'Otwórz' : 'Open'}: Helena Krawczyk`, exact: true })).toBeVisible();
+    expect(await gallery.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await expect.poll(() => gallery.getByRole('img', { name: 'Helena Krawczyk' }).evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    await expect(gallery.getByRole('img', { name: 'Helena Krawczyk' })).toHaveCSS('opacity', '1');
+    await page.screenshot({ path: `test-results/player-fixes/journal-people-narrow-${locale}.png` });
     await page.reload();
     await page.getByTestId('btn-open-journal').click();
     await expect(page.getByRole('button', { name: `${locale === 'pl' ? 'Otwórz' : 'Open'}: Helena Krawczyk`, exact: true })).toBeVisible();
