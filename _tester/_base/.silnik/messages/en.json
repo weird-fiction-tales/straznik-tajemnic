@@ -5759,17 +5759,17 @@
         },
         "data": {
           "occupation": "Investigative Journalist / Host",
-          "background": "The host of the program \"The Unknown Signals\", known for its gloomy voice and cold analysis of supernatural phenomena on television. He used to work in the criminal department of a big journal.",
+          "background": "Host of the state television programme “Signals from the Unknown”. He previously wrote crime reports for a Warsaw newspaper and knows how to examine files and interview witnesses under censorship.",
           "birthplace": "Warsaw, Poland",
           "residence": "Warsaw, Poland",
-          "characterConcept": "A skeptical journalist who has already seen too many unexplained phenomena to completely deny the existence of the unknown.",
-          "ideology": "There's always a logical explanation - and if it's not there, it means that science has a lot to learn.",
-          "significantPerson": "The ex-wife who left him because of his obsession with \"these strange things.\"",
-          "meaningfulLocation": "The television recording studio, the only place that feels like it's in full control.",
-          "treasuredPossession": "An old field recorder on which he once captured an EVP voice.",
-          "description": "He wears a distinctive black leather jacket with dark glasses hanging on his collar.",
-          "backstory": "Tomasz grew up in the shadow of the concrete blocks of grey Warsaw, which early developed an instinct of inquisitiveness and a cold, almost cynical distance to reality. As the star of the criminal department of a large capital journal, he gained the fame of an objective analyst seeking truth hidden in militia records. He always said, \"Every phenomenon has a logical explanation, and ignorance is just proof of gaps in science\". The breach of this barrier became for him a case of disappearances in the outskirts of Kampino Forest. There, alone at three in the morning, he captured a chilling EVP crackle on his field recorder, a voice uttering the name of a being that should never be in the woods. This violent collision with the unknown ruined not only him a conventional career, but above all a marriage - the wife left, unable to withstand nostrils extended from fear and his obsessive nightly search for further \"Signals\". Today, he feels safe only in a cable surrounded, dark television studio, in his famous black leather coat with a raised collar, behind dark glasses. Despite the mastery and skepticism of the exposer swindlers and esoteric magicians, Thomas struggles every day to prove to himself that what he heard years ago on the tape was not the result of early insanity.",
-          "tacticalNotes": "Good at collecting information, making contacts and interviewing witnesses.",
+          "characterConcept": "A sceptical journalist who has witnessed too many unexplained events to dismiss the unknown entirely.",
+          "ideology": "There is always a logical explanation. If we cannot find it, science still has something to learn.",
+          "significantPerson": "His former wife, who left because of his obsession with unexplained cases.",
+          "meaningfulLocation": "The television recording studio, where he feels in control of his work.",
+          "treasuredPossession": "His field recorder and a tape carrying an unexplained voice recorded in Kampinos Forest.",
+          "description": "He wears a distinctive black leather jacket, with dark glasses hanging from the collar.",
+          "backstory": "Tomasz was born in Warsaw in 1931. He spent his childhood in pre-war tenements, survived the occupation and watched the city rebuild after the war. In the 1950s he joined a Warsaw newspaper. Crime reporting taught him to distinguish witness statements from the official account. On a later trip to Kampinos Forest, he recorded a voice on tape whose origin he could not explain. His fixation on the case and repeated night trips broke up his marriage. In autumn 1973 he hosts “Signals from the Unknown”, preparing reports under editorial supervision and censorship. He remains sceptical: documents and recordings come first, extraordinary explanations later. He keeps the forest tape as a personal memento and an unresolved mystery.",
+          "tacticalNotes": "Skilled at gathering information, making contacts and interviewing witnesses.",
           "traits": [
             "Composed",
             "Skeptical",
@@ -5796,17 +5796,17 @@
         "occupation": "TV Producer",
         "data": {
           "occupation": "Television Producer",
-          "background": "With an iron hand, he manages the Unknown Signal team. He arranges for entrances, finances, and he can convince the police to turn a blind eye to enter the restricted area.",
-          "birthplace": "Krakow, Poland",
+          "background": "Organises the “Signals from the Unknown” crew at state television. She arranges travel, RTV passes and filming permissions, negotiating with officials and the Citizens’ Militia.",
+          "birthplace": "Kraków, Poland",
           "residence": "Warsaw, Poland",
-          "characterConcept": "A calculating organizer for whom ratings and a well told story are important.",
-          "ideology": "TV is an illusion, and people want to believe in amazing things.",
-          "significantPerson": "Tomasz Nowicki - although they often fight, they form an undefeated team.",
-          "meaningfulLocation": "Transmission truck, mobile command center.",
-          "treasuredPossession": "A notebook with contacts to almost every official in the state.",
-          "description": "Always blamelessly dressed (usually in matching women's suits and coats), with a cell phone \"brick\" still in hand.",
-          "backstory": "Helena's career in the media began on Krakow's corridors of television centres, where she quickly realized that viewers did not crave dry truth, but breathtaking illusions and secrets. Uncompromising and determined, she defeated the rungs from the assistant to the lead producer of \"The Unknown Signals\", building a position with iron firmness and personal charm. Her world revolves around The contact notebook - it's thanks to him that gets the entrances where the police would rather close the door. Always dressed in a blameless suit, with an inherent cell attached to his ear in the form of a \"brick\", he can conduct people's staff without raising his voice. Helena loves the adrenaline of field work, treating the transmission truck like her asylum and mobile command center. Though he confesses that \"TV is just an illusion\", hers collisions with inexplicable phenomena while filming materials in abandoned monasteries and haunted hospitals filled her with dark seeds of doubt. He will never admit his fear of the camera, relying on a duet with Tomasz Nowicki. Although their working methods lead to continuous and loud arguments, they both know that they have formed a team that is the only one in the country to bear the burden of documenting the truth lurking in the darkness of free Poland.",
-          "tacticalNotes": "Excellent in handling official matters and personal charms.",
+          "characterConcept": "A calculating organiser who cares about the audience and a well-told story.",
+          "ideology": "Television creates illusions, and people want to believe in extraordinary things.",
+          "significantPerson": "Tomasz Nowicki. They argue often, but trust one another when work gets difficult.",
+          "meaningfulLocation": "The television outside broadcast van, her travelling command post.",
+          "treasuredPossession": "An address book containing contacts throughout the state administration.",
+          "description": "She wears a fitted suit and coat, carrying a folder of RTV passes under her arm. Appointments and telephone numbers go in her address book.",
+          "backstory": "Helena was born in Kraków in 1935. She started in television in the 1950s as an editorial assistant, eventually taking charge of filming arrangements and travel. In autumn 1973 she runs the “Signals from the Unknown” crew. She knows which office to call and whose signature to obtain before the crew car leaves. She uses landline telephones in the newsroom, hotels and government offices, keeping numbers in her address book and RTV passes and travel papers in a folder. Censorship and official scrutiny are everyday constraints on her work. She often argues with Tomasz Nowicki over how to present a report, but trusts his persistence. After several unexplained incidents during filming, she finds it harder to dismiss every mystery as a cleverly told story.",
+          "tacticalNotes": "Excels at dealing with officials, arranging access and persuading people.",
           "traits": [
             "Ambitious",
             "Charming",
@@ -5820,12 +5820,22 @@
             "Spostrzegawczość": "Visibility"
           },
           "equipment": {
-            "eq_hel_telefon": {
-              "name": "Mobile phone (large)"
-            },
             "eq_hel_notes": {
-              "name": "Contact Notes"
+              "name": "Contact address book"
+            },
+            "eq_hel_przepustki": {
+              "name": "Folder of RTV passes and travel papers",
+              "description": "Television crew passes, filming permissions and travel papers."
             }
+          }
+        },
+        "equipment": {
+          "eq_hel_przepustki": {
+            "name": "Folder of RTV passes and travel papers",
+            "description": "Television crew passes, filming permissions and travel papers."
+          },
+          "eq_hel_notes": {
+            "name": "Contact address book"
           }
         }
       },
@@ -5833,17 +5843,17 @@
         "occupation": "Ethnographer / Parapsychologist",
         "data": {
           "occupation": "Ethnograph / Parapsychologist",
-          "background": "Scientist at the University of Warsaw. Regular expert on \"The Unknown Signs\" program, assessing video footage and traces of phenomena.",
+          "background": "A University of Warsaw ethnographer and expert for “Signals from the Unknown”. She examines witness accounts, film photographs, sound recordings and folk traditions.",
           "birthplace": "Lublin, Poland",
           "residence": "Warsaw, Poland",
-          "characterConcept": "A rational mind in contact with the inexplicable. It analyses cults, demonology and folk legends in Polish villages.",
-          "ideology": "Behind each legend and superstition lies the distorted grain of true history and physics.",
-          "significantPerson": "Her college mentor, who went insane in his study of Podlasie folklore.",
-          "meaningfulLocation": "The department library, among the old ludicrous records.",
-          "treasuredPossession": "Infrared Camera and Electromagnetic Field Measurement Equipment (EMF).",
-          "description": "He wears loose woollen sweaters, glasses on the chain, often with a briefcase full of prints and engravings.",
-          "backstory": "As a respected academic at the University of Warsaw, Barbara assumed for decades that behind every folk, legend or curse there was a distorted seed of historical truth. Methodical for pain, she organized her world in smells of old paper in the department library, pretending to be a specialist in demonology and folk beliefs from Lublin. Her academic, safe The perception of the world broke during a research expedition on the Podlase, in which she assisted her longtime mentor. While trying to cataloguate phenomena in a forgotten village, her mentor lost his mind, staring at the darkness of the old barn. From that day on, Barbara abandoned classical ethnography for the benefit of parapsychology. Equipped with modern - for the 1990s - equipment: infrared camera and its valuable EMF meter, joined the Unknown Signals team to find scientific evidence of what she saw. Behind the mask of calm, dressed in thick wool sweaters and glasses on the teacher's chain lies the mind hungering for proof of the existence of another physics. Barbara believes that it is not the spirits who attack people, but the ununderstanded echoes of energy, and any deviation from the standard on her standard brings her closer to saving the good name locked in a mentor mental institution.",
-          "tacticalNotes": "Necessary to analyze occultism, history, and strange objects.",
+          "characterConcept": "A rational investigator of the unexplained, studying cults, demonology and village legends.",
+          "ideology": "Every legend and superstition contains a distorted fragment of history or physics.",
+          "significantPerson": "Her university mentor, who suffered a mental breakdown while studying Podlasie folklore.",
+          "meaningfulLocation": "The faculty library, surrounded by old ethnographic records.",
+          "treasuredPossession": "An analogue film camera and an analogue electromagnetic field meter with a moving needle.",
+          "description": "She wears woollen sweaters and glasses on a chain. Her case holds typescripts, photographic prints and handwritten field notes.",
+          "backstory": "Barbara was born in Lublin in 1928. After the war she studied ethnography and joined the University of Warsaw. During fieldwork in Podlasie, her mentor suffered a breakdown after encountering something he could not describe. Since then, Barbara has compared folk accounts with observations and measurements. In 1973 she works with the “Signals from the Unknown” crew while remaining wary of sensational explanations. In the field she uses a film camera and an analogue electromagnetic field meter with a moving needle, noting readings, times and conditions by hand. A needle deflection is not proof of a ghost to her. She seeks repeatable observations that might explain her mentor’s fate and restore his reputation.",
+          "tacticalNotes": "Essential for studying occult accounts, historical sources and unusual objects.",
           "traits": [
             "Methodological",
             "An Open Mind",
@@ -5859,11 +5869,23 @@
           },
           "equipment": {
             "eq_barb_emf": {
-              "name": "Electromagnetic field meter"
+              "name": "Analogue electromagnetic field meter",
+              "description": "A moving-needle instrument. Barbara records the measurements by hand."
             },
-            "eq_barb_camera": {
-              "name": "NightVision mode camera"
+            "eq_barb_aparat": {
+              "name": "Analogue film camera",
+              "description": "A film camera for documenting field research."
             }
+          }
+        },
+        "equipment": {
+          "eq_barb_emf": {
+            "name": "Analogue electromagnetic field meter",
+            "description": "A moving-needle instrument. Barbara records the measurements by hand."
+          },
+          "eq_barb_aparat": {
+            "name": "Analogue film camera",
+            "description": "A film camera for documenting field research."
           }
         }
       },
@@ -5871,17 +5893,17 @@
         "occupation": "Ex-SB Officer / Security Tech",
         "data": {
           "occupation": "B. Officer SB / Protection technician",
-          "background": "The security guard and the \"sucker\" for the TV crew. A former security officer from the PRL period who has contacts in the militia/police and can open any door.",
-          "birthplace": "Gdansk, Poland",
+          "background": "A former Security Service officer, now the television crew’s driver and bodyguard. He knows official procedures, retains contacts in the Citizens’ Militia and can pick locks.",
+          "birthplace": "Gdańsk, Poland",
           "residence": "Warsaw, Poland",
-          "characterConcept": "Tough guy who saw the worst faces of people and systems. It provides physical safety for researchers.",
-          "ideology": "Safety first. Sometimes violent force is the only argument.",
-          "significantPerson": "His daughter, for whom she seeks to redeem past guilt in SB.",
-          "meaningfulLocation": "Its old Lada Niva (or Polonez Caro), serving as a base and equipment storage.",
-          "treasuredPossession": "Legally registered P-64 gun, in a holster under his armpit.",
-          "description": "Massive posture, always slightly undershave. He's wearing hot jeans, heavy shoes and a military jacket.",
-          "backstory": "Richard was a system man, a security officer shaped by the violent realities of the Cold War and the PRL. Raised in Gdansk, he quickly learned that loyalty and uncompromising strength are far more effective currencies than promises. In the 1980s, he was involved in surveillance, opening locks without a trace and discreetly solving problems. The system collapsed, and after 1989 Richard remained a man of competences that do not fit into the new world. Tarnished by remorse for past actions that have hit his daughter, he decided to use his paranoid habits to protect those who are too naive to take care of themselves. Today he is hired by the TV crew \"The Unknown Signals\". Behind the rudders of his old Lady Niva acts as a bodyguard, driver, and \"the locksmith\". Never part with legal A P-64 gun hidden under a military jacket, and for every smile a suspicious wink of a wink. Richard absolutely does not believe in ghosts, cults, or curses; he believes that the worst monsters have two arms, two legs and a financial motive. As long as he has his set of lockets and weapons, he is able to protect \"egghead\" journalists from violent encounters in stale cellars and abandoned bunkers.",
-          "tacticalNotes": "Master of survival, combat and discreet opening of doors.",
+          "characterConcept": "A hardened man who has seen the worst of people and institutions. He keeps the investigators physically safe.",
+          "ideology": "Safety comes first. Sometimes force is the only argument people understand.",
+          "significantPerson": "His daughter, for whom he is trying to make amends for his Security Service work.",
+          "meaningfulLocation": "The Warszawa car he uses to carry the crew and its equipment, treating it as his base during field trips.",
+          "treasuredPossession": "His licensed P-64 pistol in a shoulder holster.",
+          "description": "Broadly built and usually unshaven, he wears faded jeans, heavy boots and a military jacket.",
+          "backstory": "Ryszard was born in Gdańsk in 1918. War taught him distrust, and post-war service reinforced his belief that safety must be secured through his own efforts. In the 1960s he worked in Security Service surveillance and operations. He left before 1973 after the consequences of a case reached his daughter. The system he served has not fallen: his former superiors still hold their posts, and he must reckon with their influence. In autumn 1973 he works for the “Signals from the Unknown” crew as a driver, bodyguard and negotiator in difficult situations. He drives a Warszawa car and carries lockpicks and a P-64 pistol. He believes the greatest danger to the investigators comes from people guarding secrets. Protecting journalists is his attempt to make amends for deeds he rarely discusses.",
+          "tacticalNotes": "Experienced in survival, fighting and discreetly opening locked doors.",
           "traits": [
             "Suspect",
             "Loyalty",
@@ -7246,8 +7268,8 @@
         "description": "Paper wallet."
       },
       "eq_strefa11-tomasz-nowicki_aparat-fotograficzny": {
-        "name": "Camera",
-        "description": "He documents places, people and traces for the investigation."
+        "name": "Film camera",
+        "description": "Documents places, people and traces during the investigation."
       },
       "eq_strefa11-tomasz-nowicki_koperty-na-dowody": {
         "name": "Evidence envelopes",
@@ -7273,11 +7295,11 @@
       },
       "eq_strefa11-helena-krawczyk_drobne-narzedzia": {
         "name": "Small tools",
-        "description": "Pocket set of universal tools."
+        "description": "A pocket set of general-purpose tools."
       },
       "eq_strefa11-helena-krawczyk_fa-szywe-dokumenty": {
-        "name": "False Documents",
-        "description": "Well prepared false references."
+        "name": "Forged papers",
+        "description": "Carefully prepared false references."
       },
       "eq_barb_emf": {
         "name": "Electromagnetic field meter"
@@ -7302,8 +7324,8 @@
         "description": "Index of sources, quotes and research hypotheses."
       },
       "eq_strefa11-barbara-zawadzka_lupa-terenowa": {
-        "name": "Field magnifier",
-        "description": "Folding glass for viewing printing, signs and artifacts."
+        "name": "Field magnifying glass",
+        "description": "A folding magnifier for examining print, markings and artefacts."
       },
       "eq_rysz_gun": {
         "name": "P-64 pistol with spare magazine"
@@ -7324,12 +7346,12 @@
         "description": "Paper wallet."
       },
       "eq_strefa11-ryszard-klucznik_mocna-lina": {
-        "name": "Strong rope",
-        "description": "Fifteen meters of carabinian rope."
+        "name": "Sturdy rope",
+        "description": "Fifteen metres of rope with a carabiner."
       },
       "eq_strefa11-ryszard-klucznik_opatrunek-uciskowy": {
         "name": "Pressure dressing",
-        "description": "Basic dressing for field injuries."
+        "description": "A basic dressing for injuries sustained in the field."
       },
       "eq_mar_tools": {
         "name": "Set of tools in case"
@@ -7627,6 +7649,42 @@
       "eq_glogow-ufolog_lupa-terenowa": {
         "name": "Field magnifier",
         "description": "Folding glass for viewing printing, signs and artifacts."
+      },
+      "eq_strefa11-tomasz-nowicki_kieszonkowa-apteczka": {
+        "name": "Pocket first-aid kit",
+        "description": "Bandages, adhesive dressings and basic wound care supplies."
+      },
+      "eq_strefa11-tomasz-nowicki_kompas-kieszonkowy": {
+        "name": "Pocket compass",
+        "description": "A sturdy field compass for finding your way."
+      },
+      "eq_strefa11-helena-krawczyk_latarka-elektryczna": {
+        "name": "Electric flashlight",
+        "description": "A simple metal flashlight with a heavy battery."
+      },
+      "eq_strefa11-helena-krawczyk_kieszonkowa-apteczka": {
+        "name": "Pocket first-aid kit",
+        "description": "Bandages, adhesive dressings and basic wound care supplies."
+      },
+      "eq_strefa11-barbara-zawadzka_latarka-elektryczna": {
+        "name": "Electric flashlight",
+        "description": "A simple metal flashlight with a heavy battery."
+      },
+      "eq_strefa11-barbara-zawadzka_kieszonkowa-apteczka": {
+        "name": "Pocket first-aid kit",
+        "description": "Bandages, adhesive dressings and basic wound care supplies."
+      },
+      "eq_strefa11-barbara-zawadzka_kompas-kieszonkowy": {
+        "name": "Pocket compass",
+        "description": "A sturdy field compass for finding your way."
+      },
+      "eq_strefa11-ryszard-klucznik_latarka-elektryczna": {
+        "name": "Electric flashlight",
+        "description": "A simple metal flashlight with a heavy battery."
+      },
+      "eq_strefa11-ryszard-klucznik_kieszonkowa-apteczka": {
+        "name": "Pocket first-aid kit",
+        "description": "Bandages, adhesive dressings and basic wound care supplies."
       }
     }
   },

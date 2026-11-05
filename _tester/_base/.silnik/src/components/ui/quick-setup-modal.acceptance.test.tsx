@@ -23,6 +23,22 @@ describe.each(['pl', 'en'] as const)('Quick Setup desktop acceptance (%s)', (loc
     else process.env.NEXT_INTL_TEST_LOCALE = originalLocale;
   });
 
+  it('starts the 1973 Prabuty preset whose corrected biography was previewed', async () => {
+    // English Quick Setup intentionally has a separate American catalogue.
+    if (locale !== 'pl') return;
+    const user = userEvent.setup();
+    const start = jest.fn();
+    render(<QuickSetupModal open onQuickStart={start} onOpenChange={jest.fn()} />);
+    await user.click(screen.getAllByRole('button', { name: /Biografia/i })[3]);
+    expect(screen.getByText(/Ryszard urodził się w Gdańsku w 1918 roku/)).toBeVisible();
+    expect(screen.getByText(/Samochód Warszawa/)).toBeVisible();
+    expect(screen.queryByText(/po 1989 roku/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Zamknij' }));
+    await user.click(screen.getByRole('button', { name: /Ryszard.*Kaczmarek/ }));
+    await user.click(screen.getByRole('button', { name: /Rozpocznij przygodę/i }));
+    expect(start).toHaveBeenCalledWith('cien-nad-prabutami', 'strefa11_ryszard_klucznik', 'solo', undefined);
+  });
+
   it('shows the investigator introduction before play without the Keeper revelation', () => {
     render(<QuickSetupModal open onQuickStart={jest.fn()} onOpenChange={jest.fn()} />);
     const adventure=localizeStrefa11Adventure(getQuickSetupAdventures(locale)[0],locale);
