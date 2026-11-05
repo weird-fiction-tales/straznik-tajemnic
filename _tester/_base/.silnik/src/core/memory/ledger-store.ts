@@ -152,7 +152,7 @@ export class CampaignMemoryLedgerStore {
     if (!checkpointColumns.some((column) => column.name === 'source_message_ids_json')) {
       this.db.exec("ALTER TABLE compression_checkpoints ADD COLUMN source_message_ids_json TEXT NOT NULL DEFAULT '[]'");
     }
-    for (const column of ['source_hash', 'locale', 'model_id']) {
+    for (const column of ['source_hash', 'locale', 'model_id', 'knowledge_policy', 'knowledge_hash']) {
       if (!checkpointColumns.some(c => c.name === column)) this.db.exec(`ALTER TABLE compression_checkpoints ADD COLUMN ${column} TEXT`);
     }
     this.db.exec(`INSERT OR IGNORE INTO memory_runs SELECT playthrough_id, campaign_definition_id FROM memory_entries GROUP BY playthrough_id`);
@@ -552,6 +552,8 @@ export class CampaignMemoryLedgerStore {
       source_hash: string | null;
       locale: 'pl' | 'en' | null;
       model_id: string | null;
+      knowledge_policy: string | null;
+      knowledge_hash: string | null;
     } | undefined;
     if (!row) return null;
     const failure = this.getCompressionFailure(playthroughId);
@@ -569,6 +571,8 @@ export class CampaignMemoryLedgerStore {
       sourceHash: row.source_hash ?? undefined,
       locale: row.locale ?? undefined,
       modelId: row.model_id ?? undefined,
+      knowledgePolicy: row.knowledge_policy ?? undefined,
+      knowledgeHash: row.knowledge_hash ?? undefined,
     };
   }
 
@@ -577,8 +581,8 @@ export class CampaignMemoryLedgerStore {
       this.db.prepare(`
         INSERT OR IGNORE INTO compression_checkpoints (
           id, playthrough_id, version, source_start_sequence,
-          source_end_sequence, source_message_ids_json, summary, created_at, source_hash, locale, model_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          source_end_sequence, source_message_ids_json, summary, created_at, source_hash, locale, model_id, knowledge_policy, knowledge_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         input.id,
         input.playthroughId,
@@ -588,7 +592,7 @@ export class CampaignMemoryLedgerStore {
         JSON.stringify(input.sourceMessageIds),
         input.summary,
         input.createdAt,
-        input.sourceHash ?? null, input.locale ?? null, input.modelId ?? null
+        input.sourceHash ?? null, input.locale ?? null, input.modelId ?? null, input.knowledgePolicy ?? null, input.knowledgeHash ?? null
       );
       const sourceIds = new Set(input.sourceMessageIds);
       if (sourceIds.size > 0) {

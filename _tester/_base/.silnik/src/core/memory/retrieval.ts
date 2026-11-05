@@ -17,34 +17,13 @@ export interface MemoryRetrievalOptions {
   sceneEntityIds?:string[];
 }
 
-/** The archive flag describes compression, never whether a fact remains true. */
-export function currentMemoryEntries(entries:MemoryLedgerEntry[]):MemoryLedgerEntry[] {
-  const latest = new Map<string,MemoryLedgerEntry>();
-  for (const entry of entries) if(entry.entityId) {
-    const key = JSON.stringify([entry.entityId,[...(entry.recipients??[])].sort()]);
-    const old = latest.get(key);
-    if (!old || old.sequence < entry.sequence) latest.set(key,entry);
-  }
-  const obsoleteMessages = new Set<string>();
-  for (const entry of entries) if(entry.entityId) {
-    const current = latest.get(JSON.stringify([entry.entityId,[...(entry.recipients??[])].sort()]));
-    if(current?.id !== entry.id) entry.sourceMessageIds.forEach(id=>obsoleteMessages.add(id));
-  }
-  return entries.filter(e=>e.entityId
-    ? latest.get(JSON.stringify([e.entityId,[...(e.recipients??[])].sort()]))?.id === e.id
-    : e.kind !== 'conversation' || !e.sourceMessageIds.some(id=>obsoleteMessages.has(id)));
-}
+import { sharedKnowledge } from './knowledge-policy';
+export { currentMemoryEntries } from './knowledge-policy';
 
 export async function searchCampaignMemory(scope:CampaignMemoryScope,query:string,
   ledger:CampaignMemoryLedgerStore=getCampaignMemoryLedgerStore(),options:MemoryRetrievalOptions={}):Promise<CampaignMemoryRetrieval> {
   const en=options.locale==='en';
-  const audience=new Set(options.recipientIds??[]);
-  const entries = ledger.list(scope);
-  const forbiddenMessages = new Set(entries.filter(e => e.kind !== 'conversation' &&
-    e.recipients?.length && !e.recipients.some(id => audience.has(id))).flatMap(e => e.sourceMessageIds));
-  const allowed=currentMemoryEntries(entries).filter(e=>
-    (!e.recipients?.length || e.recipients.some(id=>audience.has(id))) &&
-    (e.kind !== 'conversation' || !e.sourceMessageIds.some(id => forbiddenMessages.has(id))));
+  const allowed = sharedKnowledge(ledger.list(scope));
   const canonical=new Map(allowed.map(e=>[e.id,e]));
   const lexical=ledger.search(scope,query,80).filter(e=>canonical.has(e.id));
   const embedding=options.queryEmbedding!==undefined?options.queryEmbedding:
@@ -67,7 +46,7 @@ export async function searchCampaignMemory(scope:CampaignMemoryScope,query:strin
   semantic.forEach((e,i)=>add(e,i,'semantic'));
   const entities=new Set(options.sceneEntityIds??[]);
   for(const {entry} of [...ranked.values()].slice(0,8)) if(entry.entityId)entities.add(entry.entityId);
-  ledger.related(scope,[...entities],8).forEach((e,i)=>{if(canonical.has(e.id)&&!ranked.has(e.id))add(e,80+i,'fts');});
+  ledger.related(scope,[...entities],8).forEach((e,i)=>{if(canonical.has(e.id)&&!ranked.has(e.id))add(canonical.get(e.id)!,80+i,'fts');});
   // Corrections are context constraints even when the query matches old wording.
   allowed.filter(e=>e.status==='disproven'||e.status==='superseded').slice(-8)
     .forEach((e,i)=>{if(!ranked.has(e.id))add(e,80+i,'fts');});

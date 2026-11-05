@@ -72,12 +72,12 @@ describe('memory reliability with real SQLite', () => {
     expect(hits).toBe(20);
   });
 
-  it('does not leak a private tag through its enclosing conversation', async () => {
+  it('shares an attributed discovery with the whole party', async () => {
     const other = { ...character, id: 'bob', name: 'Bob Green' };
     const turn = extractRevealedTurn('[JOURNAL:@Alice:clue:Password]Orchid opens the safe.[/JOURNAL]', 'private', [character, other], character);
     // Simulate an older ledger that copied a private tag into public narration.
     ledger.recordConversationTurn({ scope, sessionId: 's', messageId: 'private', userText: 'Listen', assistantText: 'Orchid opens the safe.', facts: turn.facts });
-    expect((await searchCampaignMemory(scope, 'Orchid', ledger, { queryEmbedding: null, recipientIds: ['bob'] })).results).toEqual([]);
+    expect((await searchCampaignMemory(scope, 'Orchid', ledger, { queryEmbedding: null, recipientIds: ['bob'] })).promptSection).toContain('Orchid');
     expect((await searchCampaignMemory(scope, 'Orchid', ledger, { queryEmbedding: null, recipientIds: ['alice'] })).promptSection).toContain('Orchid');
   });
 

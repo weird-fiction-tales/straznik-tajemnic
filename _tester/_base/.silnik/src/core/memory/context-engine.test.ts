@@ -42,6 +42,12 @@ describe('CampaignContextEngine', () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'campaign-context-'));
     ledger = new CampaignMemoryLedgerStore(path.join(dir, 'memory.sqlite3'));
     jest.clearAllMocks();
+    // Compression now selects canonical evidence instead of inventing prose.
+    ledger.append({ id: 'door-fact', scope, sessionId: 's', sequence: 9999,
+      kind: 'clue', role: 'assistant', text: 'Odkryto zamknięte drzwi.',
+      status: 'confirmed', recipients: ['alice'], sourceMessageIds: ['m-5'],
+      tags: [], revealedAt: new Date(0).toISOString(), active: true });
+
   });
 
   afterEach(() => {
@@ -200,7 +206,7 @@ describe('CampaignContextEngine', () => {
     return { engine, initial, checkpoint, read, generateContent, save };
   }
 
-  it.each(['edited text', 'id', 'role', 'locale', 'model', 'rewind', 'legacy checkpoint', 'different playthrough'])(
+  it.each(['edited text', 'id', 'role', 'locale', 'model', 'rewind', 'legacy checkpoint', 'knowledge policy', 'different playthrough'])(
     'rejects checkpoint reuse after %s', async (change) => {
       const fixture = await checkpointFixture();
       const input = { ...base, messages: fixture.initial.map((message) => ({ ...message })), locale: 'pl' as 'pl' | 'en' };
@@ -212,6 +218,7 @@ describe('CampaignContextEngine', () => {
       if (change === 'model') input.modelId = 'other-model';
       if (change === 'rewind') input.messages = input.messages.slice(0, 10);
       if (change === 'legacy checkpoint') fixture.read.mockReturnValue({ ...fixture.checkpoint, sourceHash: undefined, locale: undefined, modelId: undefined });
+      if (change === 'knowledge policy') fixture.read.mockReturnValue({ ...fixture.checkpoint, knowledgePolicy: undefined });
       if (change === 'different playthrough') fixture.read.mockReturnValue({ ...fixture.checkpoint, playthroughId: 'another-run' });
       await fixture.engine.compactIfNeeded(input);
       expect(fixture.generateContent).toHaveBeenCalledTimes(2);
@@ -359,7 +366,7 @@ describe('CampaignContextEngine', () => {
 
       expect(result.compacted).toBe(true);
       expect(result.summarySection).toContain('PODSUMOWANIE KONTEKSTU KAMPANII');
-      expect(result.summarySection).toContain('Rozpoczęto śledztwo w Arkham.');
+      expect(result.summarySection).toContain('Odkryto zamknięte drzwi.');
       expect(getGeminiClient).toHaveBeenCalledTimes(1);
 
       // Verify outbound messages are bounded
@@ -370,7 +377,7 @@ describe('CampaignContextEngine', () => {
       // Verify checkpoint saved in SQLite ledger
       const checkpoint = ledger.getLatestCheckpoint(scope.playthroughId);
       expect(checkpoint).not.toBeNull();
-      expect(checkpoint?.summary).toContain('Rozpoczęto śledztwo w Arkham.');
+      expect(checkpoint?.summary).toContain('Odkryto zamknięte drzwi.');
       expect(checkpoint?.sourceStartSequence).toBeGreaterThanOrEqual(1);
       expect(checkpoint?.sourceEndSequence).toBeLessThan(43);
     });
@@ -402,7 +409,7 @@ describe('CampaignContextEngine', () => {
       });
 
       expect(result.compacted).toBe(true);
-      expect(result.summarySection).toContain('Długa naracja o rytuale.');
+      expect(result.summarySection).toContain('Odkryto zamknięte drzwi.');
       expect(getGeminiClient).toHaveBeenCalledTimes(1);
     });
 
@@ -444,7 +451,7 @@ describe('CampaignContextEngine', () => {
       expect(second.compacted).toBe(true);
       // generateContent should NOT be called again - checkpoint must be reused!
       expect(generateContent).toHaveBeenCalledTimes(1);
-      expect(second.summarySection).toContain('Przeszukanie archiwum.');
+      expect(second.summarySection).toContain('Odkryto zamknięte drzwi.');
       expect(second.messages.at(-1)?.id).toBe('m-45');
     });
 
@@ -476,7 +483,7 @@ describe('CampaignContextEngine', () => {
       });
 
       expect(result.compacted).toBe(true);
-      expect(result.summarySection).toContain('Wczesne podsumowanie po 8 turach.');
+      expect(result.summarySection).toContain('Odkryto zamknięte drzwi.');
       expect(getGeminiClient).toHaveBeenCalledTimes(1);
     });
 
@@ -524,7 +531,7 @@ describe('CampaignContextEngine', () => {
       });
 
       expect(result.compacted).toBe(true);
-      expect(result.summarySection).toContain('Podsumowanie z dostępnym budżetem tokenów.');
+      expect(result.summarySection).toContain('Odkryto zamknięte drzwi.');
       expect(getGeminiClient).toHaveBeenCalledTimes(1);
     });
 
@@ -599,7 +606,7 @@ describe('CampaignContextEngine', () => {
       expect(second.compacted).toBe(true);
       // Checkpoint must NOT be blindly reused; it must refresh!
       expect(generateContent).toHaveBeenCalledTimes(2);
-      expect(second.summarySection).toContain('Podsumowanie #2');
+      expect(second.summarySection).toContain('Odkryto zamknięte drzwi.');
     });
   });
 });

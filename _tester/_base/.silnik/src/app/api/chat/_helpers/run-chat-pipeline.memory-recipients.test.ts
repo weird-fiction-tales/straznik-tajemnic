@@ -355,7 +355,7 @@ describe('chat pipeline campaign-memory recipients', () => {
     it('recalls the active investigator fact when the NPC is named', async () => {
       const { context, recipients } = await ask({ locale, character: alice });
       expect(context).toContain(markers.alice);
-      expect(context).not.toContain(markers.bob);
+      expect(context).toContain(markers.bob);
       expect(context).not.toContain(markers.otherRun);
       expect(context).toContain(markers.public);
       expect(recipients).toEqual([alice.id]);
@@ -368,7 +368,7 @@ describe('chat pipeline campaign-memory recipients', () => {
         named: false,
       });
       expect(context).toContain(markers.alice);
-      expect(context).not.toContain(markers.bob);
+      expect(context).toContain(markers.bob);
       expect(recipients).toEqual([alice.id]);
     });
 
@@ -380,7 +380,7 @@ describe('chat pipeline campaign-memory recipients', () => {
         named: false,
       });
       expect(context).toContain(markers.alice);
-      expect(context).not.toContain(markers.bob);
+      expect(context).toContain(markers.bob);
       expect(recipients).toEqual([alice.id]);
     });
 
@@ -391,16 +391,16 @@ describe('chat pipeline campaign-memory recipients', () => {
         hotSeat: true,
       });
       expect(context).toContain(markers.bob);
-      expect(context).not.toContain(markers.alice);
+      expect(context).toContain(markers.alice);
       expect(context).not.toContain(markers.otherRun);
       expect(recipients).toEqual([bob.id]);
     });
 
-    it('keeps public facts without guessing a private audience when no investigator is active', async () => {
+    it('keeps shared party facts when no investigator is active', async () => {
       const { context, recipients } = await ask({ locale, character: null });
       expect(context).toContain(markers.public);
-      expect(context).not.toContain(markers.alice);
-      expect(context).not.toContain(markers.bob);
+      expect(context).toContain(markers.alice);
+      expect(context).toContain(markers.bob);
       expect(recipients).toEqual([]);
     });
 
