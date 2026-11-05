@@ -643,8 +643,8 @@
       "source": "loading-screen",
       "target": "game",
       "label": {
-        "pl": "Rozpocznij przygodę (bramka CTA)",
-        "en": "Begin adventure (CTA gate)"
+        "pl": "Rozpocznij po przygotowaniu pełnego tekstu i włączonej narracji audio",
+        "en": "Begin when the full text and any enabled narration audio are ready"
       },
       "component": "src/components/chat/chat-window/components/tts-hard-loading-screen.tsx"
     },
